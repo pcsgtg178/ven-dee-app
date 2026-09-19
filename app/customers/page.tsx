@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Search,
   UserPlus,
+  Pencil,
   Phone,
   CalendarPlus,
   ChevronRight,
@@ -16,27 +17,48 @@ import {
 import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
 import ModalAddTodo from "../components/ModalAddTodo";
+import ModalEditCustomer from "../components/ModalEditCustomer";
 import { Customer } from "../../types/vendee";
-import { getCustomers, saveCustomer, subscribeToStorage } from "../../lib/storage";
+import { getCustomers, saveCustomer, subscribeToStorage, syncAllDataFromApi } from "../../lib/storage";
+import { customersApi } from "../../lib/api";
+import { RefreshCw } from "lucide-react";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Modals
   const [openAddServiceModal, setOpenAddServiceModal] = useState(false);
   const [selectedCustomerIdForService, setSelectedCustomerIdForService] = useState<string | undefined>(undefined);
 
   const [openNewCustomerModal, setOpenNewCustomerModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [openEditCustomerModal, setOpenEditCustomerModal] = useState(false);
   const [newCustName, setNewCustName] = useState("");
   const [newCustPhone, setNewCustPhone] = useState("");
   const [newCustNote, setNewCustNote] = useState("");
   const [newCustAddress, setNewCustAddress] = useState("");
   const [newCustError, setNewCustError] = useState("");
 
-  // Load customers
-  const reloadData = useCallback(() => {
+  // Load customers with live API sync
+  const reloadData = useCallback(async () => {
+    // 1. Initial fast local read
     setCustomers(getCustomers());
+
+    // 2. Fetch live customers from API (http://localhost:8080/api/v1/customers)
+    try {
+      setIsSyncing(true);
+      const apiCusts = await customersApi.getAll();
+      if (apiCusts && Array.isArray(apiCusts) && apiCusts.length > 0) {
+        setCustomers(apiCusts);
+        localStorage.setItem("vendee_customers_v1", JSON.stringify(apiCusts));
+      }
+    } catch (err) {
+      console.warn("API customer fetch warning:", err);
+    } finally {
+      setIsSyncing(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -67,19 +89,28 @@ export default function CustomersPage() {
   };
 
   // Save new customer
-  const handleCreateCustomer = (e: React.FormEvent) => {
+  const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCustName.trim()) {
       setNewCustError("กรุณากรอกชื่อลูกค้า");
       return;
     }
 
-    saveCustomer({
+    // Create via API first
+    const payload = {
       name: newCustName.trim(),
       phone: newCustPhone.trim() || "-",
       note: newCustNote.trim() || "ลูกค้าทั่วไป",
       address: newCustAddress.trim() || undefined,
-    });
+    };
+
+    try {
+      const created = await customersApi.create(payload);
+      saveCustomer(created);
+    } catch (err) {
+      console.warn("API customer create error, saving locally:", err);
+      saveCustomer(payload);
+    }
 
     setOpenNewCustomerModal(false);
     setNewCustName("");
@@ -91,7 +122,7 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 pb-20">
+    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 pb-32">
       {/* Header */}
       <AppBar
         title="รายชื่อลูกค้า"
@@ -238,21 +269,53 @@ export default function CustomersPage() {
                     <span className="text-xs text-text-muted">ไม่มีเบอร์โทร</span>
                   )}
 
-                  {/* ปุ่มเพิ่มนัดหมายลูกค้า: เปิด ModalAddTodo ในส่วน [ บริการลูกค้า ] พร้อมกับส่ง id ลูกค้าไปให้ด้วย */}
-                  <button
-                    type="button"
-                    onClick={(e) => handleOpenAddService(cust.id, e)}
-                    className="inline-flex items-center gap-1 rounded-xl bg-primary-light px-3 py-1.5 text-xs font-bold text-primary-dark hover:bg-emerald-100 active:scale-95 dark:bg-primary-dark/40 dark:text-primary-light transition-all shadow-2xs border border-primary/20"
-                  >
-                    <CalendarPlus className="h-3.5 w-3.5" />
-                    <span>+ นัดหมายบริการ</span>
-                  </button>
+                  {/* Actions: ปุ่มแก้ไขลูกค้า + ปุ่มเพิ่มนัดหมาย */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setEditingCustomer(cust);
+                        setOpenEditCustomerModal(true);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-xl bg-surface-subtle px-2.5 py-1.5 text-xs font-bold text-text-main hover:bg-slate-200 active:scale-95 dark:bg-zinc-800 dark:text-zinc-200 transition-all border border-surface-subtle dark:border-zinc-700"
+                      title="แก้ไขข้อมูลลูกค้า"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-secondary" />
+                      <span>แก้ไข</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenAddService(cust.id, e)}
+                      className="inline-flex items-center gap-1 rounded-xl bg-primary-light px-3 py-1.5 text-xs font-bold text-primary-dark hover:bg-emerald-100 active:scale-95 dark:bg-primary-dark/40 dark:text-primary-light transition-all shadow-2xs border border-primary/20"
+                    >
+                      <CalendarPlus className="h-3.5 w-3.5" />
+                      <span>+ นัดหมายบริการ</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
+        {/* Bottom Navigation Spacer */}
+        <div className="h-20 sm:h-24 pb-safe pointer-events-none" aria-hidden="true" />
       </main>
+
+      {/* Modal Edit Customer */}
+      <ModalEditCustomer
+        customer={editingCustomer}
+        isOpen={openEditCustomerModal}
+        onClose={() => {
+          setOpenEditCustomerModal(false);
+          setEditingCustomer(null);
+        }}
+        onSuccess={() => {
+          reloadData();
+        }}
+      />
 
       {/* Modal Add Todo (Customer Service with preselected ID) */}
       <ModalAddTodo

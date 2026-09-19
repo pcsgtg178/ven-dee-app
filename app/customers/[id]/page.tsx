@@ -8,6 +8,7 @@ import "moment/locale/th";
 
 import {
   Phone,
+  Pencil,
   CalendarPlus,
   Clock,
   Syringe,
@@ -28,9 +29,14 @@ import {
 import AppBar from "../../components/AppBar";
 import BottomNav from "../../components/BottomNav";
 import ModalAddTodo from "../../components/ModalAddTodo";
+import ModalEditCustomer from "../../components/ModalEditCustomer";
+import ModalEditService from "../../components/ModalEditService";
 import { Customer, CustomerServiceRecord, SERVICE_CONFIG } from "../../../types/vendee";
+import { customersApi, servicesApi } from "../../../lib/api";
+import { RefreshCw } from "lucide-react";
 import {
   getCustomerById,
+  canEditService,
   getServices,
   saveService,
   deleteService,
@@ -44,19 +50,51 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<Customer | undefined>(undefined);
   const [services, setServices] = useState<CustomerServiceRecord[]>([]);
   const [activeTab, setActiveTab] = useState<"upcoming" | "history">("upcoming");
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  // Modal
+  // Modals
   const [openAddModal, setOpenAddModal] = useState(false);
+  const [openEditCustomerModal, setOpenEditCustomerModal] = useState(false);
+  const [editingService, setEditingService] = useState<CustomerServiceRecord | null>(null);
+  const [openEditServiceModal, setOpenEditServiceModal] = useState(false);
 
-  // Load data
-  const loadData = useCallback(() => {
+  const handleEditService = (srv: CustomerServiceRecord) => {
+    setEditingService(srv);
+    setOpenEditServiceModal(true);
+  };
+
+  // Live API load for customer detail
+  const loadData = useCallback(async () => {
     if (!customerId) return;
-    const cust = getCustomerById(customerId);
-    setCustomer(cust);
 
-    const allServices = getServices();
-    const customerServices = allServices.filter((s) => s.customerId === customerId);
-    setServices(customerServices);
+    // 1. Initial fast local read
+    const localCust = getCustomerById(customerId);
+    if (localCust) {
+      setCustomer(localCust);
+      const allServices = getServices();
+      const customerServices = allServices.filter((s) => s.customerId === customerId);
+      setServices(customerServices);
+    }
+
+    // 2. Fetch live data from backend API (http://localhost:8080/api/v1/customers/:id)
+    try {
+      setIsSyncing(true);
+      const apiCust = await customersApi.getById(customerId);
+      if (apiCust) {
+        setCustomer(apiCust);
+        const combined = [
+          ...(apiCust.upcomingServices || []),
+          ...(apiCust.historyServices || []),
+        ];
+        if (combined.length > 0) {
+          setServices(combined);
+        }
+      }
+    } catch (err) {
+      console.warn("API customer detail fetch warning:", err);
+    } finally {
+      setIsSyncing(false);
+    }
   }, [customerId]);
 
   useEffect(() => {
@@ -87,13 +125,29 @@ export default function CustomerDetailPage() {
       });
   }, [services]);
 
-  // Toggle status between upcoming and completed
-  const handleToggleStatus = (srv: CustomerServiceRecord) => {
+  const handleDeleteService = async (serviceId: string) => {
+    try {
+      await servicesApi.delete(serviceId);
+    } catch (err) {
+      console.warn("API delete service error, deleting locally:", err);
+    }
+    deleteService(serviceId);
+    loadData();
+  };
+
+  // Toggle status between upcoming and completed with API sync
+  const handleToggleStatus = async (srv: CustomerServiceRecord) => {
     const nextStatus = srv.status === "completed" ? "upcoming" : "completed";
+    try {
+      await servicesApi.updateStatus(srv.id, nextStatus);
+    } catch (err) {
+      console.warn("API status update error, saving locally:", err);
+    }
     saveService({
       ...srv,
       status: nextStatus,
     });
+    loadData();
   };
 
   if (!customer) {
@@ -118,7 +172,7 @@ export default function CustomerDetailPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 pb-20">
+    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 pb-32">
       {/* Header with back button */}
       <AppBar
         title={customer.name}
@@ -253,7 +307,8 @@ export default function CustomerDetailPage() {
                   key={srv.id}
                   service={srv}
                   onToggleStatus={() => handleToggleStatus(srv)}
-                  onDelete={() => deleteService(srv.id)}
+                  onDelete={() => handleDeleteService(srv.id)}
+                  onEdit={() => handleEditService(srv)}
                 />
               ))
             )}
@@ -279,13 +334,39 @@ export default function CustomerDetailPage() {
                   key={srv.id}
                   service={srv}
                   onToggleStatus={() => handleToggleStatus(srv)}
-                  onDelete={() => deleteService(srv.id)}
+                  onDelete={() => handleDeleteService(srv.id)}
+                  onEdit={() => handleEditService(srv)}
                 />
               ))
             )}
           </div>
         )}
+        {/* Bottom Navigation Spacer */}
+        <div className="h-20 sm:h-24 pb-safe pointer-events-none" aria-hidden="true" />
       </main>
+
+      {/* Modal Edit Customer */}
+      <ModalEditCustomer
+        customer={customer}
+        isOpen={openEditCustomerModal}
+        onClose={() => setOpenEditCustomerModal(false)}
+        onSuccess={() => {
+          loadData();
+        }}
+      />
+
+      {/* Modal Edit Service */}
+      <ModalEditService
+        service={editingService}
+        isOpen={openEditServiceModal}
+        onClose={() => {
+          setOpenEditServiceModal(false);
+          setEditingService(null);
+        }}
+        onSuccess={() => {
+          loadData();
+        }}
+      />
 
       {/* Modal Add Todo (Customer Service with this customer preselected) */}
       <ModalAddTodo
@@ -315,14 +396,17 @@ interface ServiceDetailCardProps {
   service: CustomerServiceRecord;
   onToggleStatus: () => void;
   onDelete: () => void;
+  onEdit?: () => void;
 }
 
 function ServiceDetailCard({
   service,
   onToggleStatus,
   onDelete,
+  onEdit,
 }: ServiceDetailCardProps) {
   const isCompleted = service.status === "completed";
+  const canEdit = canEditService(service);
 
   return (
     <div
@@ -412,15 +496,27 @@ function ServiceDetailCard({
           </div>
         </div>
 
-        {/* Delete */}
-        <button
-          type="button"
-          onClick={onDelete}
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 transition-colors"
-          title="ลบรายการนี้"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {/* Action Buttons: Edit + Delete */}
+        <div className="flex items-center gap-1 shrink-0">
+          {canEdit && onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-teal-600 active:scale-95 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300 transition-all"
+              title="แก้ไขนัดหมายนี้"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onDelete}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-950/40 transition-colors"
+            title="ลบรายการนี้"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

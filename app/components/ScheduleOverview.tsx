@@ -52,10 +52,14 @@ import {
   undoSwapShift,
   restoreShift,
   getMonthlyBlackShiftStats,
+  syncAllDataFromApi,
 } from "../../lib/storage";
+import { RefreshCw, Wifi } from "lucide-react";
 import ModalAddTodo from "./ModalAddTodo";
 import ModalShiftSwap from "./ModalShiftSwap";
 import ModalSwapTrail from "./ModalSwapTrail";
+import ModalEditShift from "./ModalEditShift";
+import ModalEditService from "./ModalEditService";
 import BottomSheet from "./BottomModalSheet";
 import BottomNav from "./BottomNav";
 import ThemeToggle from "./ThemeToggle";
@@ -108,6 +112,23 @@ export default function ScheduleOverview() {
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [openDateDetailSheet, setOpenDateDetailSheet] = useState(false);
 
+  // Edit Shift & Edit Service state
+  const [editingShift, setEditingShift] = useState<ShiftRecord | null>(null);
+  const [openEditShiftModal, setOpenEditShiftModal] = useState(false);
+
+  const [editingService, setEditingService] = useState<CustomerServiceRecord | null>(null);
+  const [openEditServiceModal, setOpenEditServiceModal] = useState(false);
+
+  const handleEditShift = useCallback((shift: ShiftRecord) => {
+    setEditingShift(shift);
+    setOpenEditShiftModal(true);
+  }, []);
+
+  const handleEditService = useCallback((service: CustomerServiceRecord) => {
+    setEditingService(service);
+    setOpenEditServiceModal(true);
+  }, []);
+
   // Alert/Notification banner state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -115,12 +136,30 @@ export default function ScheduleOverview() {
   const [confirmActionState, setConfirmActionState] =
     useState<ConfirmModalState>(null);
 
+  // Live API Sync states
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [apiConnected, setApiConnected] = useState<boolean | null>(null);
+
   // Reference month for Quota Widget (e.g. 2026-09)
   const currentMonthKey = "2026-09";
 
-  // Load activities
-  const reloadData = useCallback(() => {
+  // Load activities with live API sync
+  const reloadData = useCallback(async () => {
+    // 1. Initial fast local load
     setActivities(getAllActivities());
+
+    // 2. Background sync with backend API (http://localhost:8080/api/v1)
+    try {
+      setIsSyncing(true);
+      const res = await syncAllDataFromApi();
+      setApiConnected(res.isOnline);
+      setActivities(getAllActivities());
+    } catch (err) {
+      console.warn("API sync warning:", err);
+      setApiConnected(false);
+    } finally {
+      setIsSyncing(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -661,9 +700,21 @@ export default function ScheduleOverview() {
                   Care
                 </span>
               </h1>
-              <p className="text-[10px] text-text-muted dark:text-zinc-400 leading-none">
-                บันทึกเวรและบริการลูกค้า
-              </p>
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <p className="text-[10px] text-text-muted dark:text-zinc-400 leading-none">
+                  บันทึกเวรและบริการลูกค้า
+                </p>
+                <button
+                  type="button"
+                  onClick={reloadData}
+                  disabled={isSyncing}
+                  title="คลิกเพื่อรีเฟรชข้อมูลจาก API เซิร์ฟเวอร์ (พอร์ต 8080)"
+                  className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 transition-colors border border-emerald-200/60 dark:border-emerald-800/60"
+                >
+                  <RefreshCw className={`h-2.5 w-2.5 ${isSyncing ? "animate-spin text-teal-600" : "text-emerald-600"}`} />
+                  <span>{isSyncing ? "กำลังซิงค์..." : "API Live"}</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -707,7 +758,7 @@ export default function ScheduleOverview() {
         className={`w-full flex-1 ${
           viewMode === "calendar"
             ? "flex flex-col h-[calc(100dvh-3.5rem)] overflow-hidden p-1 sm:p-2.5 max-w-5xl mx-auto"
-            : "max-w-lg mx-auto p-3 sm:p-4 space-y-3.5"
+            : "max-w-lg mx-auto p-3 sm:p-4 space-y-3.5 pb-20 sm:pb-24"
         }`}
       >
         {/* Toast feedback */}
@@ -744,6 +795,8 @@ export default function ScheduleOverview() {
             onViewTrail={handleViewTrail}
             onRequestUndoSwap={handleRequestUndoSwap}
             onRequestRestore={handleRequestRestore}
+            onEditShift={handleEditShift}
+            onEditService={handleEditService}
           />
         ) : (
           <ScheduleCalendarView
@@ -753,23 +806,6 @@ export default function ScheduleOverview() {
           />
         )}
       </main>
-
-      {/* Floating Action Button (FAB) at Bottom-Right */}
-      {/* <div className="fixed bottom-20 right-4 z-40">
-        <button
-          type="button"
-          onClick={() => {
-            setModalDefaultDate(new Date().toISOString().split("T")[0]);
-            setModalInitialTab("shift");
-            setOpenAddModal(true);
-          }}
-          className="group flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-emerald-600 text-white shadow-xl shadow-emerald-600/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
-          aria-label="บันทึกงานใหม่"
-          title="บันทึกงานใหม่"
-        >
-          <Plus className="h-7 w-7 transition-transform group-hover:rotate-90 duration-200" />
-        </button>
-      </div> */}
 
       {/* Bottom Sheet: แสดงรายละเอียดของวันที่เลือกบนปฏิทิน */}
       <BottomSheet
@@ -802,6 +838,8 @@ export default function ScheduleOverview() {
                 onViewTrail={(shift) => handleViewTrail(shift)}
                 onUndoSwap={(shift) => handleRequestUndoSwap(shift)}
                 onRestoreShift={(shift) => handleRequestRestore(shift)}
+                onEditShift={handleEditShift}
+                onEditService={handleEditService}
               />
             ))
           )}
@@ -855,6 +893,36 @@ export default function ScheduleOverview() {
           setTargetTrailShift(null);
         }}
         shift={targetTrailShift}
+      />
+
+      {/* Modal Edit Shift */}
+      <ModalEditShift
+        shift={editingShift}
+        isOpen={openEditShiftModal}
+        onClose={() => {
+          setOpenEditShiftModal(false);
+          setEditingShift(null);
+        }}
+        onSuccess={() => {
+          setToastMessage("บันทึกการแก้ไขเวรเรียบร้อยแล้ว");
+          setTimeout(() => setToastMessage(null), 3500);
+          reloadData();
+        }}
+      />
+
+      {/* Modal Edit Customer Service */}
+      <ModalEditService
+        service={editingService}
+        isOpen={openEditServiceModal}
+        onClose={() => {
+          setOpenEditServiceModal(false);
+          setEditingService(null);
+        }}
+        onSuccess={() => {
+          setToastMessage("บันทึกการแก้ไขนัดหมายเรียบร้อยแล้ว");
+          setTimeout(() => setToastMessage(null), 3500);
+          reloadData();
+        }}
       />
 
       {/* Bottom Navigation */}

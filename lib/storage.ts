@@ -1,5 +1,7 @@
 "use client";
 
+import { shiftsApi, customersApi, servicesApi, analyticsApi } from "./api";
+
 import {
   Customer,
   CustomerServiceRecord,
@@ -75,6 +77,42 @@ export function isShiftInPast(dateStr: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function isDateInPast(dateStr: string): boolean {
+  try {
+    const todayStr = "2026-09-19";
+    return dateStr < todayStr;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Conditional Visibility Rule for Shift Editing:
+ * - Hide completely if shift cannot be edited.
+ * - Do NOT display if:
+ *   1. Shift is already past/locked (isLocked === true or historical date).
+ *   2. Shift has been swapped out (status === 'swapped_out').
+ *   3. Shift is cancelled (status === 'cancelled').
+ * - Only shifts with status === 'active' and future/unlocked dates (today or future) can be edited.
+ */
+export function canEditShift(shift: ShiftRecord): boolean {
+  if (shift.status !== "active") return false;
+  if (shift.swapMeta?.isLocked) return false;
+  if (isShiftInPast(shift.date)) return false;
+  return true;
+}
+
+/**
+ * Conditional Visibility Rule for Customer Service / Appointment Editing:
+ * - Hide the edit button if service record is already completed or locked in the past.
+ * - Show edit button for pending/upcoming appointments and editable today's service entries.
+ */
+export function canEditService(service: CustomerServiceRecord): boolean {
+  if (service.status === "completed" || service.status === "cancelled") return false;
+  if (isDateInPast(service.date)) return false;
+  return true;
 }
 
 export const initialShifts: ShiftRecord[] = [
@@ -360,6 +398,68 @@ export const initialServices: CustomerServiceRecord[] = [
   },
 ];
 
+
+/**
+ * Synchronize local storage with live backend REST API (http://localhost:8080/api/v1)
+ */
+export async function syncAllDataFromApi(): Promise<{
+  shifts: ShiftRecord[];
+  customers: Customer[];
+  services: CustomerServiceRecord[];
+  isOnline: boolean;
+}> {
+  if (typeof window === "undefined") {
+    return { shifts: initialShifts, customers: initialCustomers, services: initialServices, isOnline: false };
+  }
+
+  try {
+    const [shiftsRes, customersRes, servicesRes] = await Promise.allSettled([
+      shiftsApi.getAll(),
+      customersApi.getAll(),
+      servicesApi.getAll(),
+    ]);
+
+    let shifts = getShifts();
+    let customers = getCustomers();
+    let services = getServices();
+    let isOnline = false;
+
+    if (shiftsRes.status === "fulfilled" && Array.isArray(shiftsRes.value) && shiftsRes.value.length > 0) {
+      shifts = shiftsRes.value;
+      localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
+      isOnline = true;
+    }
+
+    if (customersRes.status === "fulfilled" && Array.isArray(customersRes.value) && customersRes.value.length > 0) {
+      customers = customersRes.value;
+      localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+      isOnline = true;
+    }
+
+    if (servicesRes.status === "fulfilled" && Array.isArray(servicesRes.value) && servicesRes.value.length > 0) {
+      services = servicesRes.value;
+      localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+      isOnline = true;
+    }
+
+    triggerSync();
+    return { shifts, customers, services, isOnline };
+  } catch (err) {
+    console.warn("[VenDee Storage] Failed to sync with backend API:", err);
+    return { shifts: getShifts(), customers: getCustomers(), services: getServices(), isOnline: false };
+  }
+}
+
+export async function fetchMonthlyQuotaFromApi(yearMonth: string = "2026-09") {
+  try {
+    const data = await analyticsApi.getMonthlyQuota(yearMonth);
+    return data;
+  } catch (err) {
+    console.warn("[VenDee Storage] Failed to fetch quota from API:", err);
+    return null;
+  }
+}
+
 export function triggerSync() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(SYNC_EVENT));
@@ -411,7 +511,64 @@ export function saveCustomer(customer: Omit<Customer, "id"> & { id?: string }): 
   }
 
   localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(updated));
+
+  // Sync updated customer details to any services referencing this customerId
+  try {
+    const rawServices = localStorage.getItem(STORAGE_KEYS.SERVICES);
+    if (rawServices) {
+      const servicesList: CustomerServiceRecord[] = JSON.parse(rawServices);
+      let anyChanged = false;
+      const updatedServices = servicesList.map((srv) => {
+        if (srv.customerId === id) {
+          anyChanged = true;
+          return {
+            ...srv,
+            customerName: newCustomer.name,
+            customerPhone: newCustomer.phone,
+            customerNote: newCustomer.note,
+          };
+        }
+        return srv;
+      });
+      if (anyChanged) {
+        localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updatedServices));
+      }
+    }
+  } catch (_) {}
+
   triggerSync();
+
+  // API Async Sync: saveCustomer
+  if (typeof window !== "undefined") {
+    if (existingIdx >= 0) {
+      customersApi.update(newCustomer.id, {
+        name: newCustomer.name,
+        phone: newCustomer.phone,
+        note: newCustomer.note,
+        address: newCustomer.address,
+        avatarColor: newCustomer.avatarColor,
+      }).catch((e) => console.warn("customersApi.update error:", e));
+    } else {
+      customersApi.create({
+        name: newCustomer.name,
+        phone: newCustomer.phone,
+        note: newCustomer.note,
+        address: newCustomer.address,
+        avatarColor: newCustomer.avatarColor,
+      }).then((created) => {
+        if (created?.id && created.id !== newCustomer.id) {
+          const list = getCustomers();
+          const cIdx = list.findIndex((c) => c.id === newCustomer.id);
+          if (cIdx >= 0) {
+            list[cIdx] = { ...list[cIdx], id: created.id };
+            localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(list));
+            triggerSync();
+          }
+        }
+      }).catch((e) => console.warn("customersApi.create error:", e));
+    }
+  }
+
   return newCustomer;
 }
 
@@ -439,6 +596,8 @@ export function saveShift(
   shift: Omit<ShiftRecord, "id" | "type" | "createdAt" | "status"> & {
     id?: string;
     status?: ShiftRecord["status"];
+    createdAt?: string;
+    swapMeta?: any;
   }
 ): ShiftRecord {
   const current = getShifts();
@@ -477,16 +636,19 @@ export function saveShift(
       ? "green"
       : shift.category || "black";
 
+  const existingIdx = current.findIndex((s) => s.id === id);
+  const existingShift = existingIdx >= 0 ? current[existingIdx] : undefined;
+
   const newShift: ShiftRecord = {
+    ...existingShift,
     ...shift,
     category: resolvedCategory,
     id,
     type: "shift",
     status: targetStatus,
-    createdAt: new Date().toISOString(),
+    createdAt: existingShift?.createdAt || shift.createdAt || new Date().toISOString(),
   };
 
-  const existingIdx = current.findIndex((s) => s.id === id);
   let updated: ShiftRecord[];
   if (existingIdx >= 0) {
     updated = [...current];
@@ -497,6 +659,35 @@ export function saveShift(
 
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
+
+  // API Async Sync: saveShift
+  if (typeof window !== "undefined") {
+    if (existingIdx >= 0) {
+      shiftsApi.update(newShift.id, {
+        department: newShift.department || undefined,
+        note: newShift.note || undefined,
+      }).catch((e) => console.warn("shiftsApi.update error:", e));
+    } else {
+      shiftsApi.create({
+        date: newShift.date,
+        shiftType: newShift.shiftType,
+        category: newShift.category,
+        department: newShift.department || undefined,
+        note: newShift.note || undefined,
+      }).then((created) => {
+        if (created?.id && created.id !== newShift.id) {
+          const list = getShifts();
+          const sIdx = list.findIndex((s) => s.id === newShift.id);
+          if (sIdx >= 0) {
+            list[sIdx] = { ...list[sIdx], id: created.id };
+            localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(list));
+            triggerSync();
+          }
+        }
+      }).catch((e) => console.warn("shiftsApi.create error:", e));
+    }
+  }
+
   return newShift;
 }
 
@@ -526,6 +717,12 @@ export function deleteShift(id: string): { restoredParentId?: string } {
 
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
+
+  // API Async Sync: deleteShift
+  if (typeof window !== "undefined") {
+    shiftsApi.delete(id).catch((e) => console.warn("shiftsApi.delete error:", e));
+  }
+
   return { restoredParentId };
 }
 
@@ -542,6 +739,12 @@ export function restoreShift(shiftId: string): ShiftRecord {
   target.status = "active";
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(current));
   triggerSync();
+
+  // API Async Sync: restoreShift
+  if (typeof window !== "undefined") {
+    shiftsApi.restore(shiftId).catch((e) => console.warn("shiftsApi.restore error:", e));
+  }
+
   return target;
 }
 
@@ -649,6 +852,28 @@ export function swapShift(params: {
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
 
+  // API Async Sync: swapShift
+  if (typeof window !== "undefined") {
+    shiftsApi.swap(oldShift.id, {
+      newDate: params.newDate,
+      newShiftType: params.newShiftType,
+      newCategory: params.newCategory,
+      swappedWith: params.swappedWith,
+      originalOwner: params.originalOwner || undefined,
+      swapReason: params.swapReason || undefined,
+    }).then((res) => {
+      if (res?.newShift?.id && res.newShift.id !== newShift.id) {
+        const list = getShifts();
+        const sIdx = list.findIndex((s) => s.id === newShift.id);
+        if (sIdx >= 0) {
+          list[sIdx] = { ...list[sIdx], id: res.newShift.id };
+          localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(list));
+          triggerSync();
+        }
+      }
+    }).catch((e) => console.warn("shiftsApi.swap error:", e));
+  }
+
   return { newShift, oldShift };
 }
 
@@ -681,6 +906,12 @@ export function undoSwapShift(shiftId: string): boolean {
 
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
+
+  // API Async Sync: undoSwapShift
+  if (typeof window !== "undefined") {
+    shiftsApi.undoSwap(shiftId).catch((e) => console.warn("shiftsApi.undoSwap error:", e));
+  }
+
   return true;
 }
 
@@ -774,7 +1005,10 @@ export function getServices(): CustomerServiceRecord[] {
 }
 
 export function saveService(
-  service: Omit<CustomerServiceRecord, "id" | "type" | "createdAt"> & { id?: string }
+  service: Omit<CustomerServiceRecord, "id" | "type" | "createdAt"> & {
+    id?: string;
+    createdAt?: string;
+  }
 ): CustomerServiceRecord {
   // Prevent booking service during an active shift's working hours
   const conflictingShift = findConflictingShift(service.date, service.time);
@@ -787,14 +1021,16 @@ export function saveService(
 
   const current = getServices();
   const id = service.id || `srv-${Date.now()}`;
+  const existingIdx = current.findIndex((s) => s.id === id);
+  const existingService = existingIdx >= 0 ? current[existingIdx] : undefined;
+
   const newService: CustomerServiceRecord = {
+    ...existingService,
     ...service,
     id,
     type: "service",
-    createdAt: new Date().toISOString(),
+    createdAt: existingService?.createdAt || service.createdAt || new Date().toISOString(),
   };
-
-  const existingIdx = current.findIndex((s) => s.id === id);
   let updated: CustomerServiceRecord[];
   if (existingIdx >= 0) {
     updated = [...current];
@@ -805,6 +1041,39 @@ export function saveService(
 
   localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
   triggerSync();
+
+  // API Async Sync: saveService
+  if (typeof window !== "undefined") {
+    if (existingIdx >= 0) {
+      servicesApi.updateStatus(newService.id, newService.status).catch((e) => console.warn("servicesApi.updateStatus error:", e));
+    } else {
+      servicesApi.create({
+        customerId: newService.customerId,
+        customerName: newService.customerName,
+        customerPhone: newService.customerPhone,
+        customerNote: newService.customerNote,
+        date: newService.date,
+        time: newService.time,
+        services: newService.services,
+        otherServiceText: newService.otherServiceText,
+        medications: newService.medications,
+        note: newService.note,
+        price: newService.price,
+        status: newService.status,
+      }).then((created) => {
+        if (created?.id && created.id !== newService.id) {
+          const list = getServices();
+          const svIdx = list.findIndex((s) => s.id === newService.id);
+          if (svIdx >= 0) {
+            list[svIdx] = { ...list[svIdx], id: created.id };
+            localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(list));
+            triggerSync();
+          }
+        }
+      }).catch((e) => console.warn("servicesApi.create error:", e));
+    }
+  }
+
   return newService;
 }
 
@@ -813,6 +1082,11 @@ export function deleteService(id: string): void {
   const updated = current.filter((s) => s.id !== id);
   localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
   triggerSync();
+
+  // API Async Sync: deleteService
+  if (typeof window !== "undefined") {
+    servicesApi.delete(id).catch((e) => console.warn("servicesApi.delete error:", e));
+  }
 }
 
 // All Activities combined sorted latest first

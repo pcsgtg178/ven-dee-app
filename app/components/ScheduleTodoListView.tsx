@@ -9,6 +9,7 @@ import {
   Clock,
   LayoutGrid,
   List,
+  Pencil,
 } from "lucide-react";
 import moment from "moment";
 import "moment/locale/th";
@@ -21,6 +22,7 @@ import {
   SERVICE_CONFIG,
 } from "../../types/vendee";
 import ActivityCard from "./ActivityCard";
+import { canEditShift, canEditService } from "../../lib/storage";
 import MonthlyQuotaWidget from "./MonthlyQuotaWidget";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -63,6 +65,9 @@ export interface ScheduleTodoListViewProps {
   onRequestRestore: (shift: ShiftRecord) => void;
   /** Optional: callback when user edits quota from MonthlyQuotaWidget */
   onQuotaChange?: (newQuota: number) => void;
+  /** Edit callbacks */
+  onEditShift?: (shift: ShiftRecord) => void;
+  onEditService?: (service: CustomerServiceRecord) => void;
 }
 
 // ─── Helper: Group activities by date ────────────────────────────────
@@ -103,7 +108,15 @@ function getEventTime(item: ActivityItem): string {
 
 // ─── Timeline Row Component ──────────────────────────────────────────
 
-function TimelineRow({ item }: { item: ActivityItem }) {
+function TimelineRow({
+  item,
+  onEditShift,
+  onEditService,
+}: {
+  item: ActivityItem;
+  onEditShift?: (shift: ShiftRecord) => void;
+  onEditService?: (service: CustomerServiceRecord) => void;
+}) {
   if (item.type === "shift") {
     const shift = item as ShiftRecord;
     const shiftConf = SHIFT_CONFIG[shift.shiftType];
@@ -148,6 +161,19 @@ function TimelineRow({ item }: { item: ActivityItem }) {
             แลกแล้ว
           </span>
         )}
+        {canEditShift(shift) && onEditShift && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditShift(shift);
+            }}
+            className="ml-auto rounded-lg p-1 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-sky-300 transition-all"
+            title="แก้ไขเวรนี้"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
     );
   }
@@ -189,6 +215,19 @@ function TimelineRow({ item }: { item: ActivityItem }) {
           ✓
         </span>
       )}
+      {canEditService(service) && onEditService && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditService(service);
+          }}
+          className="ml-auto rounded-lg p-1 text-text-muted hover:bg-emerald-50 hover:text-primary active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-emerald-300 transition-all"
+          title="แก้ไขนัดหมายนี้"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }
@@ -212,6 +251,8 @@ export default function ScheduleTodoListView({
   quotaStats,
   currentMonthKey,
   onQuotaChange,
+  onEditShift,
+  onEditService,
 }: ScheduleTodoListViewProps) {
   const [subView, setSubView] = useState<SubViewMode>("card");
 
@@ -237,7 +278,7 @@ export default function ScheduleTodoListView({
   const todayStr = moment().format("YYYY-MM-DD");
 
   return (
-    <div className="space-y-3.5">
+    <div className="space-y-3.5 pb-16 sm:pb-20">
       {/* MONTHLY QUOTA WIDGET */}
       <MonthlyQuotaWidget
         currentMonthStr={currentMonthKey}
@@ -382,6 +423,8 @@ export default function ScheduleTodoListView({
                     onViewTrail={(shift) => onViewTrail(shift)}
                     onUndoSwap={(shift) => onRequestUndoSwap(shift)}
                     onRestoreShift={(shift) => onRequestRestore(shift)}
+                    onEditShift={onEditShift}
+                    onEditService={onEditService}
                   />
                 ))}
               </div>
@@ -421,6 +464,8 @@ export default function ScheduleTodoListView({
                     onViewTrail={(shift) => onViewTrail(shift)}
                     onUndoSwap={(shift) => onRequestUndoSwap(shift)}
                     onRestoreShift={(shift) => onRequestRestore(shift)}
+                    onEditShift={onEditShift}
+                    onEditService={onEditService}
                   />
                 ))}
               </div>
@@ -497,7 +542,7 @@ export default function ScheduleTodoListView({
                     {/* Right Column: Events */}
                     <div className="flex-1 py-2.5 space-y-1.5 min-w-0">
                       {group.items.map((item) => (
-                        <TimelineRow key={item.id} item={item} />
+                        <TimelineRow key={item.id} item={item} onEditShift={onEditShift} onEditService={onEditService} />
                       ))}
                     </div>
                   </div>
@@ -542,7 +587,7 @@ export default function ScheduleTodoListView({
                     {/* Right Column: Events */}
                     <div className="flex-1 py-2.5 space-y-1.5 min-w-0">
                       {group.items.map((item) => (
-                        <TimelineRow key={item.id} item={item} />
+                        <TimelineRow key={item.id} item={item} onEditShift={onEditShift} onEditService={onEditService} />
                       ))}
                     </div>
                   </div>
@@ -552,6 +597,9 @@ export default function ScheduleTodoListView({
           )}
         </div>
       )}
+
+      {/* Bottom Navigation Spacer - ensures all cards and action buttons scroll comfortably above BottomNav & FAB */}
+      <div className="h-24 sm:h-28 pb-safe pointer-events-none" aria-hidden="true" />
     </div>
   );
 }

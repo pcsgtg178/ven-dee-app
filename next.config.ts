@@ -3,6 +3,19 @@
 const nextConfig: NextConfig = {
   output: "standalone",
   allowedDevOrigins: ["spotless-twisty-spilt.ngrok-free.dev"],
+  async rewrites() {
+    const apiTarget = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${apiTarget}/api/v1/:path*`,
+      },
+      {
+        source: "/api/:path*",
+        destination: `${apiTarget}/api/:path*`,
+      },
+    ];
+  },
   async headers() {
     return [
       {

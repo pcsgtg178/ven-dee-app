@@ -23,7 +23,9 @@ import {
   Sparkles,
   Package,
   MoreHorizontal,
+  Pencil,
 } from "lucide-react";
+import { canEditShift, canEditService } from "../../lib/storage";
 import {
   ActivityItem,
   CustomerServiceRecord,
@@ -41,6 +43,8 @@ export interface ActivityCardProps {
   onViewTrail?: (shift: ShiftRecord) => void;
   onUndoSwap?: (shift: ShiftRecord) => void;
   onRestoreShift?: (shift: ShiftRecord) => void;
+  onEditShift?: (shift: ShiftRecord) => void;
+  onEditService?: (service: CustomerServiceRecord) => void;
 }
 
 export default function ActivityCard({
@@ -51,6 +55,8 @@ export default function ActivityCard({
   onViewTrail,
   onUndoSwap,
   onRestoreShift,
+  onEditShift,
+  onEditService,
 }: ActivityCardProps) {
   const isShift = item.type === "shift";
 
@@ -61,6 +67,7 @@ export default function ActivityCard({
     const isSwapped = Boolean(shift.swapMeta);
     const isLocked = shift.swapMeta?.isLocked ?? false;
     const isSwappedOut = shift.status === "swapped_out";
+    const canEdit = canEditShift(shift);
 
     const ShiftIcon =
       shift.shiftType === "night"
@@ -265,9 +272,19 @@ export default function ActivityCard({
               </p>
             </div>
 
-            {/* Action: ปุ่ม "แลกเวร" (เปิด Shift Swap Modal) */}
-            {!isSwappedOut && onSwapShift && (
-              <div className="pt-1">
+            {/* Actions: ปุ่ม "แก้ไขเวร" และ "แลกเวร" */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              {canEdit && onEditShift && (
+                <button
+                  type="button"
+                  onClick={() => onEditShift(shift)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-text-main hover:bg-sky-50 hover:text-secondary active:scale-95 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-sky-950/40 dark:hover:text-sky-300 transition-all shadow-2xs border border-surface-subtle dark:border-zinc-700"
+                >
+                  <Pencil className="h-3.5 w-3.5 text-secondary" />
+                  <span>แก้ไขเวร</span>
+                </button>
+              )}
+              {!isSwappedOut && onSwapShift && (
                 <button
                   type="button"
                   onClick={() => onSwapShift(shift)}
@@ -276,8 +293,8 @@ export default function ActivityCard({
                   <ArrowLeftRight className="h-3.5 w-3.5 text-secondary" />
                   <span>แลกเวรนี้</span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Action: ปุ่ม "กู้คืนเวรนี้" เมื่อเวรถูกแลกออกไปแล้ว */}
             {isSwappedOut && onRestoreShift && (
@@ -297,15 +314,27 @@ export default function ActivityCard({
             )}
           </div>
 
-          {/* Delete Button */}
-          <button
-            type="button"
-            onClick={onDelete}
-            className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red dark:hover:bg-rose-950/40 transition-colors"
-            title="ลบเวรนี้"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {/* Action Buttons: Edit + Delete */}
+          <div className="flex items-center gap-1 shrink-0">
+            {canEdit && onEditShift && (
+              <button
+                type="button"
+                onClick={() => onEditShift(shift)}
+                className="rounded-lg p-1.5 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 dark:hover:bg-sky-950/40 dark:hover:text-sky-300 transition-all"
+                title="แก้ไขเวรนี้"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red active:scale-95 dark:hover:bg-rose-950/40 transition-colors"
+              title="ลบเวรนี้"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -314,6 +343,7 @@ export default function ActivityCard({
   /* Customer Service Card */
   const service = item as CustomerServiceRecord;
   const isCompleted = service.status === "completed";
+  const canEdit = canEditService(service);
 
   return (
     <div
@@ -446,15 +476,27 @@ export default function ActivityCard({
           )}
         </div>
 
-        {/* Delete */}
-        <button
-          type="button"
-          onClick={onDelete}
-          className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red dark:hover:bg-rose-950/40 transition-colors"
-          title="ลบนัดหมายนี้"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {/* Action Buttons: Edit + Delete */}
+        <div className="flex items-center gap-1 shrink-0">
+          {canEdit && onEditService && (
+            <button
+              type="button"
+              onClick={() => onEditService(service)}
+              className="rounded-lg p-1.5 text-text-muted hover:bg-emerald-50 hover:text-primary active:scale-95 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300 transition-all"
+              title="แก้ไขนัดหมายนี้"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onDelete}
+            className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red active:scale-95 dark:hover:bg-rose-950/40 transition-colors"
+            title="ลบนัดหมายนี้"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

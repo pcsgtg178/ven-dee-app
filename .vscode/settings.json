@@ -1,0 +1,12 @@
+{
+  "editor.fontSize": 16,
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.formatOnSave": true,
+  "editor.minimap.enabled": false,
+  "terminal.integrated.fontSize": 14,
+  "workbench.colorTheme": "Default Dark Modern",
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}

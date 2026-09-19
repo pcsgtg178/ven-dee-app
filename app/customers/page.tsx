@@ -1,0 +1,383 @@
+"use client";
+
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
+import {
+  Search,
+  UserPlus,
+  Phone,
+  CalendarPlus,
+  ChevronRight,
+  MapPin,
+  Tag,
+  Users,
+  X,
+} from "lucide-react";
+import AppBar from "../components/AppBar";
+import BottomNav from "../components/BottomNav";
+import ModalAddTodo from "../components/ModalAddTodo";
+import { Customer } from "../../types/vendee";
+import { getCustomers, saveCustomer, subscribeToStorage } from "../../lib/storage";
+
+export default function CustomersPage() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Modals
+  const [openAddServiceModal, setOpenAddServiceModal] = useState(false);
+  const [selectedCustomerIdForService, setSelectedCustomerIdForService] = useState<string | undefined>(undefined);
+
+  const [openNewCustomerModal, setOpenNewCustomerModal] = useState(false);
+  const [newCustName, setNewCustName] = useState("");
+  const [newCustPhone, setNewCustPhone] = useState("");
+  const [newCustNote, setNewCustNote] = useState("");
+  const [newCustAddress, setNewCustAddress] = useState("");
+  const [newCustError, setNewCustError] = useState("");
+
+  // Load customers
+  const reloadData = useCallback(() => {
+    setCustomers(getCustomers());
+  }, []);
+
+  useEffect(() => {
+    reloadData();
+    const unsubscribe = subscribeToStorage(reloadData);
+    return () => unsubscribe();
+  }, [reloadData]);
+
+  // Search filter across Name, Phone, and Note
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery.trim()) return customers;
+    const q = searchQuery.toLowerCase().trim();
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phone && c.phone.replace(/[^0-9]/g, "").includes(q.replace(/[^0-9]/g, ""))) ||
+        (c.note && c.note.toLowerCase().includes(q)) ||
+        (c.address && c.address.toLowerCase().includes(q))
+    );
+  }, [customers, searchQuery]);
+
+  // Open Add Service modal with specific customer preselected
+  const handleOpenAddService = (customerId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedCustomerIdForService(customerId);
+    setOpenAddServiceModal(true);
+  };
+
+  // Save new customer
+  const handleCreateCustomer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustName.trim()) {
+      setNewCustError("กรุณากรอกชื่อลูกค้า");
+      return;
+    }
+
+    saveCustomer({
+      name: newCustName.trim(),
+      phone: newCustPhone.trim() || "-",
+      note: newCustNote.trim() || "ลูกค้าทั่วไป",
+      address: newCustAddress.trim() || undefined,
+    });
+
+    setOpenNewCustomerModal(false);
+    setNewCustName("");
+    setNewCustPhone("");
+    setNewCustNote("");
+    setNewCustAddress("");
+    setNewCustError("");
+    reloadData();
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 pb-20">
+      {/* Header */}
+      <AppBar
+        title="รายชื่อลูกค้า"
+        showBack={false}
+        rightAction={
+          <button
+            type="button"
+            onClick={() => setOpenNewCustomerModal(true)}
+            className="flex items-center gap-1 rounded-full bg-gradient-to-r from-sky-500 to-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            <span>เพิ่มลูกค้า</span>
+          </button>
+        }
+      />
+
+      {/* Main Container */}
+      <main className="mx-auto w-full max-w-lg flex-1 p-4 space-y-4">
+        {/* Search Bar */}
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ค้นหาชื่อ, เบอร์โทร หรือ Note จำแนก..."
+            className="w-full rounded-2xl border border-surface-subtle bg-card-bg py-3 pl-11 pr-10 text-sm text-text-main shadow-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
+          />
+          <Search className="pointer-events-none absolute left-3.5 top-3.5 h-4 w-4 text-text-muted" />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3.5 top-3.5 text-text-muted hover:text-text-main dark:hover:text-zinc-200"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Customer Count Badge */}
+        <div className="flex items-center justify-between text-xs text-text-muted dark:text-zinc-400 px-1">
+          <span>
+            พบทั้งหมด <strong className="text-text-main dark:text-white">{filteredCustomers.length}</strong> ท่าน
+          </span>
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="text-primary hover:underline font-medium dark:text-emerald-400"
+            >
+              ล้างการค้นหา
+            </button>
+          )}
+        </div>
+
+        {/* Customer Card List */}
+        {filteredCustomers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-surface-subtle bg-card-bg/60 p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/40">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-subtle text-text-muted dark:bg-zinc-800 dark:text-zinc-500 mb-3">
+              <Users className="h-6 w-6" />
+            </div>
+            <h3 className="font-semibold text-text-main dark:text-zinc-300">
+              {searchQuery ? "ไม่พบข้อมูลลูกค้าที่ค้นหา" : "ยังไม่มีรายชื่อลูกค้า"}
+            </h3>
+            <p className="text-xs text-text-muted dark:text-zinc-400 mt-1 max-w-xs">
+              {searchQuery
+                ? "ลองตรวจสอบคำค้นหา หรือกดปุ่มเพิ่มลูกค้าใหม่"
+                : "เพิ่มรายชื่อลูกค้าเพื่อบันทึกประวัติการดูแลและนัดหมายบริการ"}
+            </p>
+            <button
+              type="button"
+              onClick={() => setOpenNewCustomerModal(true)}
+              className="mt-4 flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:brightness-105"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>เพิ่มลูกค้าใหม่</span>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredCustomers.map((cust) => (
+              <div
+                key={cust.id}
+                className="group relative overflow-hidden rounded-2xl border border-surface-subtle bg-card-bg p-4 shadow-xs transition-all hover:border-primary/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+              >
+                {/* Clickable entire card to /customers/[id] */}
+                <Link
+                  href={`/customers/${cust.id}`}
+                  className="block space-y-2.5"
+                >
+                  {/* Top Row: Avatar + Name + Note Tag */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-3">
+                      {/* Avatar with Initials */}
+                      <div
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-xs ${
+                          cust.avatarColor || "bg-primary"
+                        }`}
+                      >
+                        {cust.name.substring(0, 2)}
+                      </div>
+
+                      <div className="space-y-1">
+                        <h3 className="text-sm font-bold text-text-main dark:text-white group-hover:text-primary dark:group-hover:text-primary-light transition-colors">
+                          {cust.name}
+                        </h3>
+
+                        {/* Note จำแนกชัดเจนเพื่อกันสับสนกรณีชื่อซ้ำ */}
+                        {cust.note && (
+                          <div className="inline-flex items-center gap-1 rounded-lg bg-primary-light px-2 py-0.5 text-[11px] font-medium text-primary-dark border border-primary/20 dark:bg-primary-dark/30 dark:text-primary-light">
+                            <Tag className="h-3 w-3 shrink-0 text-primary" />
+                            <span>{cust.note}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <ChevronRight className="h-4 w-4 text-text-muted group-hover:text-primary dark:group-hover:text-primary-light transition-colors shrink-0" />
+                  </div>
+
+                  {/* Address if present */}
+                  {cust.address && (
+                    <div className="flex items-center gap-1.5 text-xs text-text-muted dark:text-zinc-400 pl-1">
+                      <MapPin className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                      <span className="truncate">{cust.address}</span>
+                    </div>
+                  )}
+                </Link>
+
+                {/* Bottom Action Bar */}
+                <div className="mt-3 flex items-center justify-between border-t border-surface-subtle pt-2.5 dark:border-zinc-800">
+                  {/* เบอร์โทร: มีปุ่มไอคอนกดโทรออกได้ `tel:` */}
+                  {cust.phone && cust.phone !== "-" ? (
+                    <a
+                      href={`tel:${cust.phone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-surface-subtle px-3 py-1 text-xs font-semibold text-text-main hover:bg-primary-light hover:text-primary-dark active:scale-95 dark:bg-zinc-800 dark:text-zinc-300 transition-all"
+                      title={`โทรออก ${cust.phone}`}
+                    >
+                      <Phone className="h-3 w-3 text-primary" />
+                      <span>{cust.phone}</span>
+                    </a>
+                  ) : (
+                    <span className="text-xs text-text-muted">ไม่มีเบอร์โทร</span>
+                  )}
+
+                  {/* ปุ่มเพิ่มนัดหมายลูกค้า: เปิด ModalAddTodo ในส่วน [ บริการลูกค้า ] พร้อมกับส่ง id ลูกค้าไปให้ด้วย */}
+                  <button
+                    type="button"
+                    onClick={(e) => handleOpenAddService(cust.id, e)}
+                    className="inline-flex items-center gap-1 rounded-xl bg-primary-light px-3 py-1.5 text-xs font-bold text-primary-dark hover:bg-emerald-100 active:scale-95 dark:bg-primary-dark/40 dark:text-primary-light transition-all shadow-2xs border border-primary/20"
+                  >
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                    <span>+ นัดหมายบริการ</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+
+      {/* Modal Add Todo (Customer Service with preselected ID) */}
+      <ModalAddTodo
+        openModal={openAddServiceModal}
+        toggleModal={() => setOpenAddServiceModal(false)}
+        initialTab="service"
+        initialCustomerId={selectedCustomerIdForService}
+        onSuccess={() => {
+          reloadData();
+        }}
+      />
+
+      {/* Modal Add New Customer */}
+      {openNewCustomerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setOpenNewCustomerModal(false)}
+          />
+          <div className="relative z-50 w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-zinc-800">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <UserPlus className="h-4 w-4 text-teal-600" />
+                <span>เพิ่มลูกค้าใหม่</span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => setOpenNewCustomerModal(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-zinc-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {newCustError && (
+              <div className="mt-3 rounded-xl bg-rose-50 p-2 text-xs text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200">
+                {newCustError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateCustomer} className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                  ชื่อ-นามสกุล หรือชื่อเรียก <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="เช่น คุณยายสมศรี สุขเกษม"
+                  value={newCustName}
+                  onChange={(e) => setNewCustName(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                  เบอร์โทรศัพท์ติดต่อ
+                </label>
+                <input
+                  type="tel"
+                  placeholder="เช่น 081-234-5678"
+                  value={newCustPhone}
+                  onChange={(e) => setNewCustPhone(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Note จำแนกป้องกันความสับสน <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-teal-600">สำคัญกรณีชื่อซ้ำ</span>
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="เช่น บ้านสวน ซ.ร่วมใจ 3 (คนไข้เบาหวาน)"
+                  value={newCustNote}
+                  onChange={(e) => setNewCustNote(e.target.value)}
+                  className="w-full rounded-xl border border-teal-200 bg-teal-50/30 px-3.5 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:bg-white dark:border-teal-800 dark:bg-zinc-800 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                  ที่อยู่ / สถานที่ให้บริการ
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="เช่น เลขที่ 99/12 หมู่บ้านพฤกษา..."
+                  value={newCustAddress}
+                  onChange={(e) => setNewCustAddress(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setOpenNewCustomerModal(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-400"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:from-teal-700 hover:to-emerald-700"
+                >
+                  บันทึกข้อมูลลูกค้า
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Navigation Bar */}
+      <BottomNav
+        onOpenAdd={() => {
+          setSelectedCustomerIdForService(undefined);
+          setOpenAddServiceModal(true);
+        }}
+      />
+    </div>
+  );
+}

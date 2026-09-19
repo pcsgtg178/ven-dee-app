@@ -1,0 +1,223 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+@import "@fullcalendar/react/skeleton.css";
+@import "@fullcalendar/react/themes/monarch/theme.css";
+@import "@fullcalendar/react/themes/monarch/palettes/blue.css";
+
+:root {
+  --background: #f8faf6;
+  --foreground: #0f172a;
+
+  /* FullCalendar Monarch - Permanent Crisp White Theme for Maximum Badge Contrast */
+  --fc-monarch-primary: #0284c7;
+  --fc-monarch-primary-foreground: #ffffff;
+  --fc-monarch-primary-over: #0369a1;
+  --fc-monarch-primary-down: #075985;
+  --fc-monarch-background: #ffffff;
+  --fc-monarch-foreground: #0f172a;
+  --fc-monarch-border: #e2e8f0;
+  --fc-monarch-strong-border: #cbd5e1;
+  --fc-monarch-faint: #ffffff;
+  --fc-monarch-muted: #f1f5f9;
+  --fc-monarch-highlight: rgba(2, 132, 199, 0.08);
+  --fc-monarch-selected: #0284c7;
+  --fc-monarch-selected-foreground: #ffffff;
+}
+
+.dark {
+  --background: #090d16;
+  --foreground: #f1f5f9;
+}
+
+@theme {
+  --color-app-bg: #f8faf6;
+  --color-card-bg: #ffffff;
+  --color-surface-subtle: #eef4ec;
+
+  --color-primary-light: #dcfce7;
+  --color-primary: #16a34a;
+  --color-primary-dark: #14532d;
+
+  --color-secondary-light: #e0f2fe;
+  --color-secondary: #0284c7;
+  --color-secondary-dark: #0369a1;
+
+  --color-shift-black: #1e293b;
+  --color-shift-black-badge: #f1f5f9;
+  --color-shift-black-text: #0f172a;
+  --color-shift-red: #ef4444;
+  --color-shift-red-badge: #fee2e2;
+  --color-shift-red-text: #b91c1c;
+
+  --color-text-main: #0f172a;
+  --color-text-muted: #64748b;
+}
+
+/* =========================================================================
+   Mobile PWA & Touch Optimizations
+   ========================================================================= */
+html, body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Touch manipulation: removes 300ms double-tap delay */
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
+/* iOS Safe Area Inset Helpers */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* =========================================================================
+   FullCalendar - ALWAYS Pure White Background for Crisp Shift Contrast
+   ========================================================================= */
+.fc {
+  width: 100% !important;
+  height: 100% !important;
+  font-family: inherit !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.fc-theme-monarch,
+.fc-view-harness,
+.fc-scrollgrid,
+.fc-daygrid,
+.fc-daygrid-body,
+.fc-daygrid-day,
+.fc-daygrid-day-frame,
+.fc-col-header,
+.fc-col-header-cell {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.fc-col-header-cell-cushion {
+  color: #334155 !important;
+  font-weight: 700 !important;
+}
+
+.fc-scrollgrid,
+.fc-scrollgrid td,
+.fc-scrollgrid th,
+.fc-theme-monarch td,
+.fc-theme-monarch th {
+  border-color: #e2e8f0 !important;
+}
+
+.fc .fc-view-harness {
+  height: 100% !important;
+  flex: 1 1 auto !important;
+}
+
+.fc-daygrid {
+  height: 100% !important;
+}
+
+.fc .fc-toolbar {
+  padding: 0.5rem 0.75rem !important;
+  margin-bottom: 0 !important;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  background-color: #ffffff !important;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+  color: #0f172a !important;
+}
+
+.fc .fc-button {
+  font-weight: 600 !important;
+  border-radius: 9999px !important;
+  padding: 0.3rem 0.65rem !important;
+  font-size: 0.8rem !important;
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.fc .fc-button:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0284c7 !important;
+}
+
+.fc-daygrid-day-number {
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  padding: 2px 4px !important;
+  color: #0f172a !important;
+}
+
+.fc-day-other .fc-daygrid-day-number {
+  color: #94a3b8 !important;
+}
+
+.fc-daygrid-day-frame {
+  min-height: 72px !important;
+}
+
+.fc-daygrid-event {
+  margin: 1.5px 2px !important;
+  border-radius: 6px !important;
+  padding: 1.5px 4px !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  border: none !important;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.fc-daygrid-dot-event {
+  background: transparent !important;
+}
+
+/* Hide extra clutter on mobile */
+@media (max-width: 640px) {
+  .fc-col-header-cell-cushion {
+    font-size: 0.75rem !important;
+    padding: 4px 2px !important;
+  }
+}
+
+/* =========================================================================
+   Prevent iOS Safari auto-zoom on input focus (font-size < 16px)
+   ========================================================================= */
+@media screen and (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

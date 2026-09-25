@@ -304,7 +304,7 @@ export default function ModalShiftSwap({
                 >
                   <Moon className="h-4 w-4 mb-1 text-indigo-600 dark:text-indigo-400" />
                   <span className="text-xs font-bold">เวรดึก</span>
-                  <span className="text-[10px] opacity-70">24:00 - 08:00</span>
+                  <span className="text-[10px] opacity-70">00:00 - 08:00</span>
                 </button>
 
                 <button
@@ -332,7 +332,7 @@ export default function ModalShiftSwap({
                 >
                   <Sunset className="h-4 w-4 mb-1 text-sky-600 dark:text-sky-400" />
                   <span className="text-xs font-bold">เวรบ่าย</span>
-                  <span className="text-[10px] opacity-70">16:00 - 24:00</span>
+                  <span className="text-[10px] opacity-70">16:00 - 00:00</span>
                 </button>
               </div>
 
@@ -398,6 +398,42 @@ export default function ModalShiftSwap({
                       {newShiftType === "r2" && <Check className="h-3.5 w-3.5 ml-auto" />}
                     </button>
                   </div>
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewShiftType("off")}
+                    className={`py-1.5 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
+                      newShiftType === "off"
+                        ? "border-slate-800 bg-slate-800 text-white shadow-xs"
+                        : "border-slate-200 bg-slate-50/60 text-slate-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                    }`}
+                  >
+                    Off (0)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewShiftType("ctm")}
+                    className={`py-1.5 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
+                      newShiftType === "ctm"
+                        ? "border-purple-600 bg-purple-600 text-white shadow-xs"
+                        : "border-slate-200 bg-slate-50/60 text-slate-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                    }`}
+                  >
+                    CTM
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewShiftType("cta")}
+                    className={`py-1.5 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
+                      newShiftType === "cta"
+                        ? "border-purple-600 bg-purple-600 text-white shadow-xs"
+                        : "border-slate-200 bg-slate-50/60 text-slate-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                    }`}
+                  >
+                    CTA
+                  </button>
                 </div>
               </div>
             </div>

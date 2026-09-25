@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pill } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 
 interface AppBarProps {
@@ -56,7 +56,7 @@ export default function AppBar({
       className={`sticky top-0 left-0 right-0 z-40 border-b border-surface-subtle bg-white/90 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90 pt-safe ${className}`}
     >
       <div className="flex h-14 items-center justify-between px-3">
-        {/* Left: Back Button (44x44px minimum touch target for iOS HIG & Android) */}
+        {/* Left: Back Button */}
         <div className="flex min-w-11 shrink-0 items-center justify-start">
           {shouldShowBack && (
             <Link
@@ -82,8 +82,15 @@ export default function AppBar({
           <div className="flex-1 pointer-events-none" />
         )}
 
-        {/* Right: Actions or Spacer + ThemeToggle */}
-        <div className="relative z-50 flex min-w-11 shrink-0 items-center justify-end gap-1.5">
+        {/* Right: Actions + Pill icon link + ThemeToggle */}
+        <div className="relative z-50 flex min-w-11 shrink-0 items-center justify-end gap-1">
+          <Link
+            href="/medications"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-zinc-800 dark:hover:text-emerald-300 transition-colors"
+            title="จัดการรายการยา"
+          >
+            <Pill className="h-4 w-4" />
+          </Link>
           <ThemeToggle size="sm" />
           {rightAction ?? null}
         </div>

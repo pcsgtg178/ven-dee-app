@@ -7,7 +7,6 @@ import moment from "moment";
 import "moment/locale/th";
 
 import {
-  Phone,
   Pencil,
   CalendarPlus,
   Clock,
@@ -63,11 +62,9 @@ export default function CustomerDetailPage() {
     setOpenEditServiceModal(true);
   };
 
-  // Live API load for customer detail
-  const loadData = useCallback(async () => {
+  // Load customer detail from local storage (fast, no network side-effects)
+  const loadLocalData = useCallback(() => {
     if (!customerId) return;
-
-    // 1. Initial fast local read
     const localCust = getCustomerById(customerId);
     if (localCust) {
       setCustomer(localCust);
@@ -75,8 +72,11 @@ export default function CustomerDetailPage() {
       const customerServices = allServices.filter((s) => s.customerId === customerId);
       setServices(customerServices);
     }
+  }, [customerId]);
 
-    // 2. Fetch live data from backend API (http://localhost:8080/api/v1/customers/:id)
+  // Fetch live data from backend API (http://localhost:8080/api/v1/customers/:id)
+  const syncApiData = useCallback(async () => {
+    if (!customerId) return;
     try {
       setIsSyncing(true);
       const apiCust = await customersApi.getById(customerId);
@@ -97,11 +97,17 @@ export default function CustomerDetailPage() {
     }
   }, [customerId]);
 
+  const loadData = useCallback(() => {
+    loadLocalData();
+    syncApiData();
+  }, [loadLocalData, syncApiData]);
+
   useEffect(() => {
-    loadData();
-    const unsubscribe = subscribeToStorage(loadData);
+    loadLocalData();
+    syncApiData();
+    const unsubscribe = subscribeToStorage(loadLocalData);
     return () => unsubscribe();
-  }, [loadData]);
+  }, [loadLocalData, syncApiData]);
 
   // Upcoming appointments (status === 'upcoming' or future date)
   const upcomingServices = useMemo(() => {
@@ -127,12 +133,11 @@ export default function CustomerDetailPage() {
 
   const handleDeleteService = async (serviceId: string) => {
     try {
-      await servicesApi.delete(serviceId);
-    } catch (err) {
-      console.warn("API delete service error, deleting locally:", err);
+      await deleteService(serviceId);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || "เกิดข้อผิดพลาดในการลบบริการ");
     }
-    deleteService(serviceId);
-    loadData();
   };
 
   // Toggle status between upcoming and completed with API sync
@@ -208,39 +213,11 @@ export default function CustomerDetailPage() {
               <h2 className="text-base font-bold text-text-main dark:text-white truncate">
                 {customer.name}
               </h2>
-
-              {/* Note จำแนกป้องกันความสับสน */}
-              {customer.note && (
-                <div className="flex items-center gap-1 text-xs text-primary dark:text-emerald-300">
-                  <Tag className="h-3.5 w-3.5 shrink-0 text-primary" />
-                  <span className="rounded-md bg-primary-light px-2 py-0.5 font-medium border border-primary/20 dark:bg-primary-dark/40 dark:border-primary/40">
-                    {customer.note}
-                  </span>
-                </div>
-              )}
-
-              {/* Address */}
-              {customer.address && (
-                <div className="flex items-center gap-1.5 text-xs text-text-muted dark:text-zinc-400">
-                  <MapPin className="h-3.5 w-3.5 shrink-0 text-text-muted" />
-                  <span className="truncate">{customer.address}</span>
-                </div>
-              )}
             </div>
           </div>
 
           {/* Quick Actions Row: Call button + Add Appointment */}
           <div className="mt-4 flex items-center gap-2 border-t border-surface-subtle pt-3 dark:border-zinc-800">
-            {customer.phone && customer.phone !== "-" ? (
-              <a
-                href={`tel:${customer.phone}`}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-surface-subtle py-2.5 text-xs font-bold text-text-main hover:bg-primary-light hover:text-primary-dark active:scale-95 dark:bg-zinc-800 dark:text-zinc-200 transition-all"
-              >
-                <Phone className="h-3.5 w-3.5 text-primary" />
-                <span>โทรออก ({customer.phone})</span>
-              </a>
-            ) : null}
-
             <button
               type="button"
               onClick={() => setOpenAddModal(true)}
@@ -446,16 +423,15 @@ function ServiceDetailCard({
 
           {/* Service Tags */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            {service.services.map((srv) => {
-              const conf = SERVICE_CONFIG[srv];
+            {service.services && service.services.map((srv) => {
+              const conf = SERVICE_CONFIG[srv as keyof typeof SERVICE_CONFIG];
+              if (!conf) return null;
               return (
                 <span
                   key={srv}
                   className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold ${conf.bg}`}
                 >
                   {srv === "injection" && <Syringe className="h-3.5 w-3.5" />}
-                  {srv === "drip" && <Sparkles className="h-3.5 w-3.5" />}
-                  {srv === "delivery" && <Package className="h-3.5 w-3.5" />}
                   {srv === "other" && <MoreHorizontal className="h-3.5 w-3.5" />}
                   {conf.label}
                 </span>

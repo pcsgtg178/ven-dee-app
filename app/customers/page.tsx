@@ -6,11 +6,8 @@ import {
   Search,
   UserPlus,
   Pencil,
-  Phone,
   CalendarPlus,
   ChevronRight,
-  MapPin,
-  Tag,
   Users,
   X,
 } from "lucide-react";
@@ -19,9 +16,8 @@ import BottomNav from "../components/BottomNav";
 import ModalAddTodo from "../components/ModalAddTodo";
 import ModalEditCustomer from "../components/ModalEditCustomer";
 import { Customer } from "../../types/vendee";
-import { getCustomers, saveCustomer, subscribeToStorage, syncAllDataFromApi } from "../../lib/storage";
+import { getCustomers, saveCustomer, subscribeToStorage } from "../../lib/storage";
 import { customersApi } from "../../lib/api";
-import { RefreshCw } from "lucide-react";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -36,17 +32,15 @@ export default function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [openEditCustomerModal, setOpenEditCustomerModal] = useState(false);
   const [newCustName, setNewCustName] = useState("");
-  const [newCustPhone, setNewCustPhone] = useState("");
-  const [newCustNote, setNewCustNote] = useState("");
-  const [newCustAddress, setNewCustAddress] = useState("");
   const [newCustError, setNewCustError] = useState("");
 
-  // Load customers with live API sync
-  const reloadData = useCallback(async () => {
-    // 1. Initial fast local read
+  // Load customers from local storage (fast, no network side-effects)
+  const loadLocalData = useCallback(() => {
     setCustomers(getCustomers());
+  }, []);
 
-    // 2. Fetch live customers from API (http://localhost:8080/api/v1/customers)
+  // Fetch live customers from API (http://localhost:8080/api/v1/customers)
+  const syncApiData = useCallback(async () => {
     try {
       setIsSyncing(true);
       const apiCusts = await customersApi.getAll();
@@ -61,22 +55,25 @@ export default function CustomersPage() {
     }
   }, []);
 
-  useEffect(() => {
-    reloadData();
-    const unsubscribe = subscribeToStorage(reloadData);
-    return () => unsubscribe();
-  }, [reloadData]);
+  const reloadData = useCallback(() => {
+    loadLocalData();
+    syncApiData();
+  }, [loadLocalData, syncApiData]);
 
-  // Search filter across Name, Phone, and Note
+  useEffect(() => {
+    loadLocalData();
+    syncApiData();
+    const unsubscribe = subscribeToStorage(loadLocalData);
+    return () => unsubscribe();
+  }, [loadLocalData, syncApiData]);
+
+  // Search filter across Name
   const filteredCustomers = useMemo(() => {
     if (!searchQuery.trim()) return customers;
     const q = searchQuery.toLowerCase().trim();
     return customers.filter(
       (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.phone && c.phone.replace(/[^0-9]/g, "").includes(q.replace(/[^0-9]/g, ""))) ||
-        (c.note && c.note.toLowerCase().includes(q)) ||
-        (c.address && c.address.toLowerCase().includes(q))
+        c.name.toLowerCase().includes(q)
     );
   }, [customers, searchQuery]);
 
@@ -99,9 +96,6 @@ export default function CustomersPage() {
     // Create via API first
     const payload = {
       name: newCustName.trim(),
-      phone: newCustPhone.trim() || "-",
-      note: newCustNote.trim() || "ลูกค้าทั่วไป",
-      address: newCustAddress.trim() || undefined,
     };
 
     try {
@@ -114,9 +108,6 @@ export default function CustomersPage() {
 
     setOpenNewCustomerModal(false);
     setNewCustName("");
-    setNewCustPhone("");
-    setNewCustNote("");
-    setNewCustAddress("");
     setNewCustError("");
     reloadData();
   };
@@ -224,51 +215,14 @@ export default function CustomersPage() {
                       >
                         {cust.name.substring(0, 2)}
                       </div>
-
-                      <div className="space-y-1">
-                        <h3 className="text-sm font-bold text-text-main dark:text-white group-hover:text-primary dark:group-hover:text-primary-light transition-colors">
-                          {cust.name}
-                        </h3>
-
-                        {/* Note จำแนกชัดเจนเพื่อกันสับสนกรณีชื่อซ้ำ */}
-                        {cust.note && (
-                          <div className="inline-flex items-center gap-1 rounded-lg bg-primary-light px-2 py-0.5 text-[11px] font-medium text-primary-dark border border-primary/20 dark:bg-primary-dark/30 dark:text-primary-light">
-                            <Tag className="h-3 w-3 shrink-0 text-primary" />
-                            <span>{cust.note}</span>
-                          </div>
-                        )}
-                      </div>
                     </div>
 
                     <ChevronRight className="h-4 w-4 text-text-muted group-hover:text-primary dark:group-hover:text-primary-light transition-colors shrink-0" />
                   </div>
-
-                  {/* Address if present */}
-                  {cust.address && (
-                    <div className="flex items-center gap-1.5 text-xs text-text-muted dark:text-zinc-400 pl-1">
-                      <MapPin className="h-3.5 w-3.5 text-text-muted shrink-0" />
-                      <span className="truncate">{cust.address}</span>
-                    </div>
-                  )}
                 </Link>
 
                 {/* Bottom Action Bar */}
                 <div className="mt-3 flex items-center justify-between border-t border-surface-subtle pt-2.5 dark:border-zinc-800">
-                  {/* เบอร์โทร: มีปุ่มไอคอนกดโทรออกได้ `tel:` */}
-                  {cust.phone && cust.phone !== "-" ? (
-                    <a
-                      href={`tel:${cust.phone}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-surface-subtle px-3 py-1 text-xs font-semibold text-text-main hover:bg-primary-light hover:text-primary-dark active:scale-95 dark:bg-zinc-800 dark:text-zinc-300 transition-all"
-                      title={`โทรออก ${cust.phone}`}
-                    >
-                      <Phone className="h-3 w-3 text-primary" />
-                      <span>{cust.phone}</span>
-                    </a>
-                  ) : (
-                    <span className="text-xs text-text-muted">ไม่มีเบอร์โทร</span>
-                  )}
-
                   {/* Actions: ปุ่มแก้ไขลูกค้า + ปุ่มเพิ่มนัดหมาย */}
                   <div className="flex items-center gap-1.5">
                     <button
@@ -367,49 +321,6 @@ export default function CustomersPage() {
                   placeholder="เช่น คุณยายสมศรี สุขเกษม"
                   value={newCustName}
                   onChange={(e) => setNewCustName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                  เบอร์โทรศัพท์ติดต่อ
-                </label>
-                <input
-                  type="tel"
-                  placeholder="เช่น 081-234-5678"
-                  value={newCustPhone}
-                  onChange={(e) => setNewCustPhone(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                    Note จำแนกป้องกันความสับสน <span className="text-rose-500">*</span>
-                  </label>
-                  <span className="text-[10px] text-teal-600">สำคัญกรณีชื่อซ้ำ</span>
-                </div>
-                <input
-                  type="text"
-                  required
-                  placeholder="เช่น บ้านสวน ซ.ร่วมใจ 3 (คนไข้เบาหวาน)"
-                  value={newCustNote}
-                  onChange={(e) => setNewCustNote(e.target.value)}
-                  className="w-full rounded-xl border border-teal-200 bg-teal-50/30 px-3.5 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:bg-white dark:border-teal-800 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                  ที่อยู่ / สถานที่ให้บริการ
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="เช่น เลขที่ 99/12 หมู่บ้านพฤกษา..."
-                  value={newCustAddress}
-                  onChange={(e) => setNewCustAddress(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                 />
               </div>

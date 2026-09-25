@@ -11,61 +11,53 @@ import {
   DEFAULT_BLACK_SHIFT_QUOTA,
   SwapTrailNode,
   SHIFT_CONFIG,
+  Medications,
+  ClinicWorkRecord,
+  ClinicPresetShift,
+  ActivityItem,
 } from "../types/vendee";
 
 const STORAGE_KEYS = {
   SHIFTS: "vendee_shifts_v2", // bumped to v2 for swap schema
   SERVICES: "vendee_services_v1",
   CUSTOMERS: "vendee_customers_v1",
+  MEDICATIONS: "vendee_medications_v1",
+  CLINIC_LOGS: "vendee_clinic_logs_v1",
 };
 
 const SYNC_EVENT = "vendee_storage_updated";
 
 export const initialCustomers: Customer[] = [
+  // 1. ลูกค้าที่มีการใช้บริการแล้ว และเวรยังไม่หมดอายุ (สถานะ active)
   {
-    id: "cust-1",
-    name: "คุณยายสมศรี สุขเกษม",
-    phone: "081-234-5678",
-    note: "บ้านสวน ซ.ร่วมใจ (คนไข้เบาหวาน เจาะน้ำตาล/ฉีดอินซูลิน)",
-    address: "99/12 ซอยร่วมใจ 3 ถนนสุขุมวิท กรุงเทพฯ",
-    avatarColor: "bg-emerald-500",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "cust-2",
-    name: "คุณแพรวพรรณ โสภณ",
-    phone: "089-876-5432",
-    note: "คอนโด Ashton อโศก ชั้น 18 (นัดดริปวิตามินผิวประจำสัปดาห์)",
-    address: "Ashton Asoke ห้อง 1804 สุขุมวิท 21 กรุงเทพฯ",
+    id: "cust-001",
+    name: "พี่สมหญิง",
     avatarColor: "bg-sky-500",
-    createdAt: "2026-09-03T10:00:00Z",
+    createdAt: "2026-09-18T08:00:00Z",
   },
+
+  // 2. ลูกค้าที่ยกเลิกบริการแล้ว (สถานะ cancelled)
   {
-    id: "cust-3",
-    name: "คุณเอกชัย วัฒนกุล",
-    phone: "084-555-1234",
-    note: "หมู่บ้านพฤกษา 3 บางใหญ่ (ฉีดยาปฏิชีวนะตามคำสั่งแพทย์)",
-    address: "45/88 หมู่บ้านพฤกษา 3 ซอย 5 นนทบุรี",
-    avatarColor: "bg-amber-500",
-    createdAt: "2026-09-05T12:00:00Z",
-  },
-  {
-    id: "cust-4",
-    name: "คุณหมอนิ่ม นิมิตรา",
-    phone: "086-777-9890",
-    note: "รพ.จุฬาฯ ตึก ภปร (ฝากนำส่งอุปกรณ์เวชภัณฑ์ปลอดเชื้อ)",
-    address: "อาคาร ภปร ชั้น 5 รพ.จุฬาลงกรณ์",
-    avatarColor: "bg-purple-500",
-    createdAt: "2026-09-07T09:30:00Z",
-  },
-  {
-    id: "cust-5",
-    name: "คุณสมศรี วรรณดี",
-    phone: "092-333-4455",
-    note: "ร้านขายยาหน้าหมู่บ้าน (คนละคนกับคุณยายสมศรี ซ.ร่วมใจ)",
-    address: "12/4 หน้าปากซอยมิตรภาพ",
+    id: "cust-002",
+    name: "คุณสมหญิง สวยเสมอ",
     avatarColor: "bg-rose-500",
-    createdAt: "2026-09-10T14:00:00Z",
+    createdAt: "2026-09-15T10:00:00Z",
+  },
+
+  // 3. ลูกค้าที่มีข้อมูลค้างชำระ (สถานะ pending)
+  {
+    id: "cust-003",
+    name: "พี่กานดา",
+    avatarColor: "bg-amber-500",
+    createdAt: "2026-09-17T11:00:00Z",
+  },
+
+  // 4. ลูกค้าปกติที่เพิ่งเพิ่ม (สถานะ active)
+  {
+    id: "cust-004",
+    name: "พี่ก้อย",
+    avatarColor: "bg-emerald-500",
+    createdAt: "2026-09-18T12:00:00Z",
   },
 ];
 
@@ -116,287 +108,10 @@ export function canEditService(service: CustomerServiceRecord): boolean {
 }
 
 export const initialShifts: ShiftRecord[] = [
-  // 1. เวรดำปกติ (ยังไม่แลก, active, isLocked false)
-  {
-    id: "shift-1",
-    type: "shift",
-    date: "2026-09-19",
-    shiftType: "night",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU ผู้ใหญ่",
-    note: "เวรดึกหลัก ดูแลเคส Post-Op",
-    createdAt: "2026-09-18T20:00:00Z",
-  },
-  // 2. เวรแดง (OT) ที่มาจากการแลกกับ พว.ก้อย (isLocked false)
-  {
-    id: "shift-2",
-    type: "shift",
-    date: "2026-09-20",
-    shiftType: "afternoon",
-    category: "red",
-    status: "active",
-    department: "ห้องฉุกเฉิน (ER)",
-    note: "ขึ้นเวร OT แทน ได้รับค่า OT",
-    swapMeta: {
-      swappedWith: "พว.ก้อย สุดา",
-      isLocked: false,
-      swapDate: "2026-09-18",
-      swapReason: "ขึ้นเวรแทนเพื่อรับค่าตอบแทน OT",
-    },
-    createdAt: "2026-09-18T20:30:00Z",
-  },
-  // 3. เวรดำที่แลกต่อยอด (Top-up): แลกกับ พว.กานดา โดยเวรเดิมเป็นของ พว.วิภา (มี Swap Trail Timeline)
-  {
-    id: "shift-3",
-    type: "shift",
-    date: "2026-09-21",
-    shiftType: "morning",
-    category: "black",
-    status: "active",
-    department: "อายุรกรรมหญิง ช.6",
-    note: "เวรเช้า (รับแลกต่อยอดมา)",
-    swapMeta: {
-      swappedWith: "พว.กานดา สุวรรณ",
-      originalOwner: "พว.วิภา มณีรัตน์",
-      isLocked: false,
-      swapDate: "2026-09-17",
-      swapReason: "พว.กานดาติดธุระด่วน จึงส่งต่อเวรให้ขึ้นแทน",
-      swapHistory: [
-        {
-          id: "trail-1",
-          fromPerson: "พว.วิภา มณีรัตน์ (เจ้าของเดิมตามตาราง)",
-          toPerson: "พว.กานดา สุวรรณ (คนกลาง)",
-          date: "2026-09-16",
-          shiftLabel: "เวรเช้า (08:00 - 16:00)",
-          note: "แลกเปลี่ยนเวรตามตารางประจำสัปดาห์",
-        },
-        {
-          id: "trail-2",
-          fromPerson: "พว.กานดา สุวรรณ",
-          toPerson: "ฉัน (พยาบาลผู้ใช้งาน)",
-          date: "2026-09-17",
-          shiftLabel: "เวรเช้า (08:00 - 16:00)",
-          note: "ส่งต่อแลกเวรต่อยอด (Top-up Swap)",
-        },
-      ],
-    },
-    createdAt: "2026-09-17T11:00:00Z",
-  },
-  // 4. เวรในอดีตที่ผ่านไปแล้ว (isLocked: true) -> ปุ่มยกเลิกถูก disable พร้อม tooltip
-  {
-    id: "shift-4",
-    type: "shift",
-    date: "2026-09-15",
-    shiftType: "morning",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU ผู้ใหญ่",
-    note: "เวรเช้าที่ผ่านมาแล้วในอดีต",
-    swapMeta: {
-      swappedWith: "พว.สมใจ อิ่มเอม",
-      isLocked: true,
-      swapDate: "2026-09-13",
-      swapReason: "แลกเวรล่วงหน้าเพื่อไปทำธุระ",
-    },
-    createdAt: "2026-09-13T15:00:00Z",
-  },
-  // 5. เวรแดง (OT) ปกติ
-  {
-    id: "shift-5",
-    type: "shift",
-    date: "2026-09-23",
-    shiftType: "night",
-    category: "red",
-    status: "active",
-    department: "วอร์ดกึ่งวิกฤต (Step Down)",
-    note: "เวร OT เพิ่มเติม",
-    createdAt: "2026-09-18T10:00:00Z",
-  },
-  // 6-15. เวรดำอื่นๆ ในเดือนกันยายน 2026 (รวมทั้งหมด 12 วันจากเป้าหมาย 14 วัน เพื่อจำลองสถานการณ์ขาด 2 วัน)
-  {
-    id: "shift-6",
-    type: "shift",
-    date: "2026-09-01",
-    shiftType: "morning",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "shift-7",
-    type: "shift",
-    date: "2026-09-03",
-    shiftType: "afternoon",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "shift-8",
-    type: "shift",
-    date: "2026-09-05",
-    shiftType: "night",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "shift-9",
-    type: "shift",
-    date: "2026-09-07",
-    shiftType: "morning",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "shift-10",
-    type: "shift",
-    date: "2026-09-09",
-    shiftType: "afternoon",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "shift-11",
-    type: "shift",
-    date: "2026-09-11",
-    shiftType: "night",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "shift-12",
-    type: "shift",
-    date: "2026-09-13",
-    shiftType: "morning",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "shift-13",
-    type: "shift",
-    date: "2026-09-17",
-    shiftType: "morning",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "shift-14",
-    type: "shift",
-    date: "2026-09-25",
-    shiftType: "r1",
-    category: "green",
-    status: "active",
-    department: "ทีม Refer (Ambulance)",
-    note: "เวร R1 (ทีม 1) ทั้งวัน",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
-  {
-    id: "shift-15",
-    type: "shift",
-    date: "2026-09-27",
-    shiftType: "morning",
-    category: "black",
-    status: "active",
-    department: "วอร์ด ICU",
-    createdAt: "2026-09-01T08:00:00Z",
-  },
+
 ];
 
-export const initialServices: CustomerServiceRecord[] = [
-  {
-    id: "srv-1",
-    type: "service",
-    customerId: "cust-1",
-    customerName: "คุณยายสมศรี สุขเกษม",
-    customerPhone: "081-234-5678",
-    customerNote: "บ้านสวน ซ.ร่วมใจ (คนไข้เบาหวาน เจาะน้ำตาล/ฉีดอินซูลิน)",
-    date: "2026-09-19",
-    time: "14:00",
-    services: ["injection"],
-    medications: ["Insulin Glargine 14 Units SC", "Vitamin B1-6-12 1 Amp IM"],
-    note: "เจาะน้ำตาลปลายนิ้วก่อนฉีด (เป้าหมาย < 140 mg/dL)",
-    status: "upcoming",
-    price: 450,
-    createdAt: "2026-09-18T09:00:00Z",
-  },
-  {
-    id: "srv-2",
-    type: "service",
-    customerId: "cust-2",
-    customerName: "คุณแพรวพรรณ โสภณ",
-    customerPhone: "089-876-5432",
-    customerNote: "คอนโด Ashton อโศก ชั้น 18 (นัดดริปวิตามินผิวประจำสัปดาห์)",
-    date: "2026-09-20",
-    time: "10:30",
-    services: ["drip"],
-    note: "สูตร Aura Mega Bright + วิตามินซีเข้มข้น 500mg 1 ขวด",
-    status: "upcoming",
-    price: 1500,
-    createdAt: "2026-09-18T11:20:00Z",
-  },
-  {
-    id: "srv-3",
-    type: "service",
-    customerId: "cust-3",
-    customerName: "คุณเอกชัย วัฒนกุล",
-    customerPhone: "084-555-1234",
-    customerNote: "หมู่บ้านพฤกษา 3 บางใหญ่ (ฉีดยาปฏิชีวนะตามคำสั่งแพทย์)",
-    date: "2026-09-18",
-    time: "16:00",
-    services: ["injection"],
-    medications: ["Ceftriaxone 1g IV Pushช้าๆ 5 นาที"],
-    note: "เข็มที่ 4 จากคอร์ส 5 วัน คนไข้ไม่มีอาการแพ้",
-    status: "completed",
-    price: 500,
-    createdAt: "2026-09-17T08:15:00Z",
-  },
-  {
-    id: "srv-4",
-    type: "service",
-    customerId: "cust-1",
-    customerName: "คุณยายสมศรี สุขเกษม",
-    customerPhone: "081-234-5678",
-    customerNote: "บ้านสวน ซ.ร่วมใจ (คนไข้เบาหวาน เจาะน้ำตาล/ฉีดอินซูลิน)",
-    date: "2026-09-15",
-    time: "16:30",
-    services: ["injection"],
-    medications: ["Insulin Glargine 14 Units SC"],
-    note: "เรียบร้อยดี ค่าน้ำตาล 124 mg/dL",
-    status: "completed",
-    price: 450,
-    createdAt: "2026-09-15T09:00:00Z",
-  },
-  {
-    id: "srv-5",
-    type: "service",
-    customerId: "cust-4",
-    customerName: "คุณหมอนิ่ม นิมิตรา",
-    customerPhone: "086-777-9890",
-    customerNote: "รพ.จุฬาฯ ตึก ภปร (ฝากนำส่งอุปกรณ์เวชภัณฑ์ปลอดเชื้อ)",
-    date: "2026-09-22",
-    time: "09:00",
-    services: ["delivery"],
-    note: "นำส่งกล่อง Sterile Dressings Set จำนวน 5 เซต",
-    status: "upcoming",
-    price: 300,
-    createdAt: "2026-09-18T14:30:00Z",
-  },
-];
+export const initialServices: CustomerServiceRecord[] = [];
 
 
 /**
@@ -467,7 +182,7 @@ export function triggerSync() {
 }
 
 export function subscribeToStorage(callback: () => void) {
-  if (typeof window === "undefined") return () => {};
+  if (typeof window === "undefined") return () => { };
   window.addEventListener(SYNC_EVENT, callback);
   window.addEventListener("storage", callback);
   return () => {
@@ -491,10 +206,10 @@ export function getCustomers(): Customer[] {
   }
 }
 
-export function saveCustomer(customer: Omit<Customer, "id"> & { id?: string }): Customer {
+export async function saveCustomer(customer: Omit<Customer, "id"> & { id?: string }): Promise<Customer> {
   const current = getCustomers();
   const id = customer.id || `cust-${Date.now()}`;
-  const newCustomer: Customer = {
+  let newCustomer: Customer = {
     ...customer,
     id,
     createdAt: customer.createdAt || new Date().toISOString(),
@@ -502,12 +217,39 @@ export function saveCustomer(customer: Omit<Customer, "id"> & { id?: string }): 
   };
 
   const existingIdx = current.findIndex((c) => c.id === id);
+
+  // 1. Sync with API if online
+  if (typeof window !== "undefined") {
+    try {
+      if (existingIdx >= 0) {
+        const res = await customersApi.update(newCustomer.id, {
+          name: newCustomer.name,
+          avatarColor: newCustomer.avatarColor,
+        });
+        if (res) newCustomer = { ...newCustomer, ...res };
+      } else {
+        const created = await customersApi.create({
+          name: newCustomer.name,
+          avatarColor: newCustomer.avatarColor,
+        });
+        if (created?.id) {
+          newCustomer = { ...newCustomer, ...created };
+        }
+      }
+    } catch (e) {
+      console.warn("API saveCustomer warning:", e);
+    }
+  }
+
+  // 2. Save locally
+  const latestList = getCustomers();
+  const idx = latestList.findIndex((c) => c.id === id || c.id === newCustomer.id);
   let updated: Customer[];
-  if (existingIdx >= 0) {
-    updated = [...current];
-    updated[existingIdx] = newCustomer;
+  if (idx >= 0) {
+    updated = [...latestList];
+    updated[idx] = newCustomer;
   } else {
-    updated = [newCustomer, ...current];
+    updated = [newCustomer, ...latestList];
   }
 
   localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(updated));
@@ -519,13 +261,12 @@ export function saveCustomer(customer: Omit<Customer, "id"> & { id?: string }): 
       const servicesList: CustomerServiceRecord[] = JSON.parse(rawServices);
       let anyChanged = false;
       const updatedServices = servicesList.map((srv) => {
-        if (srv.customerId === id) {
+        if (srv.customerId === id || srv.customerId === newCustomer.id) {
           anyChanged = true;
           return {
             ...srv,
+            customerId: newCustomer.id,
             customerName: newCustomer.name,
-            customerPhone: newCustomer.phone,
-            customerNote: newCustomer.note,
           };
         }
         return srv;
@@ -534,40 +275,9 @@ export function saveCustomer(customer: Omit<Customer, "id"> & { id?: string }): 
         localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updatedServices));
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 
   triggerSync();
-
-  // API Async Sync: saveCustomer
-  if (typeof window !== "undefined") {
-    if (existingIdx >= 0) {
-      customersApi.update(newCustomer.id, {
-        name: newCustomer.name,
-        phone: newCustomer.phone,
-        note: newCustomer.note,
-        address: newCustomer.address,
-        avatarColor: newCustomer.avatarColor,
-      }).catch((e) => console.warn("customersApi.update error:", e));
-    } else {
-      customersApi.create({
-        name: newCustomer.name,
-        phone: newCustomer.phone,
-        note: newCustomer.note,
-        address: newCustomer.address,
-        avatarColor: newCustomer.avatarColor,
-      }).then((created) => {
-        if (created?.id && created.id !== newCustomer.id) {
-          const list = getCustomers();
-          const cIdx = list.findIndex((c) => c.id === newCustomer.id);
-          if (cIdx >= 0) {
-            list[cIdx] = { ...list[cIdx], id: created.id };
-            localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(list));
-            triggerSync();
-          }
-        }
-      }).catch((e) => console.warn("customersApi.create error:", e));
-    }
-  }
 
   return newCustomer;
 }
@@ -592,14 +302,14 @@ export function getShifts(): ShiftRecord[] {
   }
 }
 
-export function saveShift(
+export async function saveShift(
   shift: Omit<ShiftRecord, "id" | "type" | "createdAt" | "status"> & {
     id?: string;
     status?: ShiftRecord["status"];
     createdAt?: string;
     swapMeta?: any;
   }
-): ShiftRecord {
+): Promise<ShiftRecord> {
   const current = getShifts();
   const id = shift.id || `shift-${Date.now()}`;
   const targetStatus = shift.status || "active";
@@ -639,7 +349,7 @@ export function saveShift(
   const existingIdx = current.findIndex((s) => s.id === id);
   const existingShift = existingIdx >= 0 ? current[existingIdx] : undefined;
 
-  const newShift: ShiftRecord = {
+  let newShift: ShiftRecord = {
     ...existingShift,
     ...shift,
     category: resolvedCategory,
@@ -649,57 +359,74 @@ export function saveShift(
     createdAt: existingShift?.createdAt || shift.createdAt || new Date().toISOString(),
   };
 
+  // 1. Sync with API if online
+  if (typeof window !== "undefined") {
+    try {
+      if (existingIdx >= 0) {
+        const res = await shiftsApi.update(newShift.id, {
+          department: newShift.department || undefined,
+          note: newShift.note || undefined,
+        });
+        if (res) newShift = { ...newShift, ...res };
+      } else {
+        const created = await shiftsApi.create({
+          date: newShift.date,
+          shiftType: newShift.shiftType,
+          category: newShift.category,
+          department: newShift.department || undefined,
+          note: newShift.note || undefined,
+        });
+        if (created?.id) {
+          newShift = { ...newShift, ...created };
+        }
+      }
+    } catch (e) {
+      console.warn("API saveShift warning:", e);
+    }
+  }
+
+  // 2. Save locally
+  const latestList = getShifts();
+  const idx = latestList.findIndex((s) => s.id === id || s.id === newShift.id);
   let updated: ShiftRecord[];
-  if (existingIdx >= 0) {
-    updated = [...current];
-    updated[existingIdx] = newShift;
+  if (idx >= 0) {
+    updated = [...latestList];
+    updated[idx] = newShift;
   } else {
-    updated = [newShift, ...current];
+    updated = [newShift, ...latestList];
   }
 
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
 
-  // API Async Sync: saveShift
-  if (typeof window !== "undefined") {
-    if (existingIdx >= 0) {
-      shiftsApi.update(newShift.id, {
-        department: newShift.department || undefined,
-        note: newShift.note || undefined,
-      }).catch((e) => console.warn("shiftsApi.update error:", e));
-    } else {
-      shiftsApi.create({
-        date: newShift.date,
-        shiftType: newShift.shiftType,
-        category: newShift.category,
-        department: newShift.department || undefined,
-        note: newShift.note || undefined,
-      }).then((created) => {
-        if (created?.id && created.id !== newShift.id) {
-          const list = getShifts();
-          const sIdx = list.findIndex((s) => s.id === newShift.id);
-          if (sIdx >= 0) {
-            list[sIdx] = { ...list[sIdx], id: created.id };
-            localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(list));
-            triggerSync();
-          }
-        }
-      }).catch((e) => console.warn("shiftsApi.create error:", e));
-    }
-  }
-
   return newShift;
 }
 
-export function deleteShift(id: string): { restoredParentId?: string } {
+export async function deleteShift(id: string): Promise<{ restoredParentId?: string }> {
   const current = getShifts();
   const target = current.find((s) => s.id === id);
-  let restoredParentId: string | undefined = undefined;
 
+  // 1. Check if shift is in the past
+  if (target && isShiftInPast(target.date)) {
+    throw new Error("ไม่สามารถลบเวรที่ผ่านเวลาไปแล้วได้ (Overtime / Past shift)");
+  }
+
+  // 2. Call backend API if online
+  if (typeof window !== "undefined") {
+    try {
+      await shiftsApi.delete(id);
+    } catch (err: any) {
+      if (err?.status && err.status >= 400) {
+        throw new Error(err.message || "ไม่สามารถลบเวรที่ผ่านเวลาไปแล้วได้");
+      }
+      console.warn("Backend API offline during deleteShift, performing local delete:", err);
+    }
+  }
+
+  // 3. Perform local delete & restore parent if applicable
+  let restoredParentId: string | undefined = undefined;
   const updated = current.filter((s) => s.id !== id);
 
-  // If the deleted shift was a swapped shift that originated from a parent shift:
-  // Automatically restore the original parent shift back to 'active' status!
   if (target?.swapMeta?.parentShiftId) {
     const parent = updated.find((s) => s.id === target.swapMeta?.parentShiftId);
     if (parent && parent.status === "swapped_out") {
@@ -708,7 +435,6 @@ export function deleteShift(id: string): { restoredParentId?: string } {
     }
   }
 
-  // Also detach parentShiftId link if any remaining shifts referenced this id
   updated.forEach((s) => {
     if (s.swapMeta && s.swapMeta.parentShiftId === id) {
       delete s.swapMeta.parentShiftId;
@@ -717,11 +443,6 @@ export function deleteShift(id: string): { restoredParentId?: string } {
 
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
-
-  // API Async Sync: deleteShift
-  if (typeof window !== "undefined") {
-    shiftsApi.delete(id).catch((e) => console.warn("shiftsApi.delete error:", e));
-  }
 
   return { restoredParentId };
 }
@@ -955,7 +676,7 @@ export function isTimeInShift(time: string, shiftType: ShiftType): boolean {
     case "afternoon":
       return t >= "16:00" && t <= "23:59";
     case "night":
-      return (t >= "00:00" && t < "08:00") || t === "24:00";
+      return (t >= "00:00" && t < "08:00") || t === "00:00";
     case "r1":
     case "r2":
       // เวร R หรือ Refer สามารถเลือกเพิ่มงานอื่นมาทับเวลาเวร Refer ได้ (ไม่บล็อกเวลาทำงานอื่น)
@@ -1004,12 +725,12 @@ export function getServices(): CustomerServiceRecord[] {
   }
 }
 
-export function saveService(
+export async function saveService(
   service: Omit<CustomerServiceRecord, "id" | "type" | "createdAt"> & {
     id?: string;
     createdAt?: string;
   }
-): CustomerServiceRecord {
+): Promise<CustomerServiceRecord> {
   // Prevent booking service during an active shift's working hours
   const conflictingShift = findConflictingShift(service.date, service.time);
   if (conflictingShift) {
@@ -1024,84 +745,229 @@ export function saveService(
   const existingIdx = current.findIndex((s) => s.id === id);
   const existingService = existingIdx >= 0 ? current[existingIdx] : undefined;
 
-  const newService: CustomerServiceRecord = {
+  let newService: CustomerServiceRecord = {
     ...existingService,
     ...service,
     id,
     type: "service",
     createdAt: existingService?.createdAt || service.createdAt || new Date().toISOString(),
   };
+
+  // 1. Sync with API if online
+  if (typeof window !== "undefined") {
+    try {
+      if (existingIdx >= 0) {
+        if (newService.status) {
+          const res = await servicesApi.updateStatus(newService.id, newService.status);
+          if (res) newService = { ...newService, ...res };
+        }
+      } else {
+        const created = await servicesApi.create({
+          customerId: newService.customerId,
+          customerName: newService.customerName,
+          date: newService.date,
+          time: newService.time,
+          services: newService.services || ["injection"],
+          otherServiceText: newService.otherServiceText,
+          medications: newService.medications,
+          note: newService.note,
+          price: newService.price,
+          status: newService.status,
+        });
+        if (created?.id) {
+          newService = { ...newService, ...created };
+        }
+      }
+    } catch (e) {
+      console.warn("API saveService warning:", e);
+    }
+  }
+
+  // 2. Save locally
+  const latestList = getServices();
+  const idx = latestList.findIndex((s) => s.id === id || s.id === newService.id);
   let updated: CustomerServiceRecord[];
-  if (existingIdx >= 0) {
-    updated = [...current];
-    updated[existingIdx] = newService;
+  if (idx >= 0) {
+    updated = [...latestList];
+    updated[idx] = newService;
   } else {
-    updated = [newService, ...current];
+    updated = [newService, ...latestList];
   }
 
   localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
   triggerSync();
-
-  // API Async Sync: saveService
-  if (typeof window !== "undefined") {
-    if (existingIdx >= 0) {
-      servicesApi.updateStatus(newService.id, newService.status).catch((e) => console.warn("servicesApi.updateStatus error:", e));
-    } else {
-      servicesApi.create({
-        customerId: newService.customerId,
-        customerName: newService.customerName,
-        customerPhone: newService.customerPhone,
-        customerNote: newService.customerNote,
-        date: newService.date,
-        time: newService.time,
-        services: newService.services,
-        otherServiceText: newService.otherServiceText,
-        medications: newService.medications,
-        note: newService.note,
-        price: newService.price,
-        status: newService.status,
-      }).then((created) => {
-        if (created?.id && created.id !== newService.id) {
-          const list = getServices();
-          const svIdx = list.findIndex((s) => s.id === newService.id);
-          if (svIdx >= 0) {
-            list[svIdx] = { ...list[svIdx], id: created.id };
-            localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(list));
-            triggerSync();
-          }
-        }
-      }).catch((e) => console.warn("servicesApi.create error:", e));
-    }
-  }
 
   return newService;
 }
 
-export function deleteService(id: string): void {
+export async function deleteService(id: string): Promise<void> {
   const current = getServices();
+  const target = current.find((s) => s.id === id);
+
+  // 1. Check if service date is in the past
+  if (target && isDateInPast(target.date)) {
+    throw new Error("ไม่สามารถลบบริการย้อนหลังหรือที่ผ่านเวลาไปแล้วได้ (Overtime / Past service)");
+  }
+
+  // 2. Call backend API if online
+  if (typeof window !== "undefined") {
+    try {
+      await servicesApi.delete(id);
+    } catch (err: any) {
+      if (err?.status && err.status >= 400) {
+        throw new Error(err.message || "ไม่สามารถลบบริการย้อนหลังหรือที่ผ่านเวลาไปแล้วได้");
+      }
+      console.warn("Backend API offline during deleteService, performing local delete:", err);
+    }
+  }
+
+  // 3. Perform local delete
   const updated = current.filter((s) => s.id !== id);
   localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(updated));
   triggerSync();
+}
 
-  // API Async Sync: deleteService
-  if (typeof window !== "undefined") {
-    servicesApi.delete(id).catch((e) => console.warn("servicesApi.delete error:", e));
+// Medications Storage Management
+export const initialMedications: Medications[] = [
+  { id: "med-1", name: "Vitamin B12", price: "200", unit: "เข็ม" },
+  { id: "med-2", name: "NSS 100ml", price: "150", unit: "ขวด" },
+  { id: "med-3", name: "Fat Burner", price: "500", unit: "เข็ม" },
+  { id: "med-4", name: "Collagen IV Drip", price: "800", unit: "ชุด" },
+  { id: "med-5", name: "Paracetamol", price: "50", unit: "แผง" },
+];
+
+export function getMedications(): Medications[] {
+  if (typeof window === "undefined") return initialMedications;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.MEDICATIONS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(initialMedications));
+      return initialMedications;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return initialMedications;
   }
 }
 
+export function saveMedication(med: Omit<Medications, "id"> & { id?: string }): Medications {
+  const current = getMedications();
+  const id = med.id || `med-${Date.now()}`;
+  const newMed: Medications = {
+    ...med,
+    id,
+    createdAt: med.createdAt || new Date().toISOString(),
+  };
+
+  const idx = current.findIndex((m) => m.id === id);
+  let updated: Medications[];
+  if (idx >= 0) {
+    updated = [...current];
+    updated[idx] = newMed;
+  } else {
+    updated = [newMed, ...current];
+  }
+
+  localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(updated));
+  triggerSync();
+  return newMed;
+}
+
+export function deleteMedication(id: string): void {
+  const current = getMedications();
+  const updated = current.filter((m) => m.id !== id);
+  localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(updated));
+  triggerSync();
+}
+
+export function getMedicationById(id: string): Medications | undefined {
+  return getMedications().find((m) => m.id === id);
+}
+
+// Clinic Work Logs Storage Management
+export const initialClinicLogs: ClinicWorkRecord[] = [];
+
+export function getClinicLogs(): ClinicWorkRecord[] {
+  if (typeof window === "undefined") return initialClinicLogs;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.CLINIC_LOGS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.CLINIC_LOGS, JSON.stringify(initialClinicLogs));
+      return initialClinicLogs;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return initialClinicLogs;
+  }
+}
+
+export function canEditClinicLog(log: ClinicWorkRecord): boolean {
+  if (isDateInPast(log.date)) return false;
+  return true;
+}
+
+export function saveClinicLog(
+  log: Omit<ClinicWorkRecord, "id" | "type" | "createdAt"> & { id?: string; createdAt?: string }
+): ClinicWorkRecord {
+  const current = getClinicLogs();
+  const id = log.id || `clinic-${Date.now()}`;
+  const idx = current.findIndex((c) => c.id === id);
+  const existing = idx >= 0 ? current[idx] : undefined;
+
+  const newLog: ClinicWorkRecord = {
+    ...existing,
+    ...log,
+    id,
+    type: "clinic",
+    createdAt: existing?.createdAt || log.createdAt || new Date().toISOString(),
+  };
+
+  let updated: ClinicWorkRecord[];
+  if (idx >= 0) {
+    updated = [...current];
+    updated[idx] = newLog;
+  } else {
+    updated = [newLog, ...current];
+  }
+
+  localStorage.setItem(STORAGE_KEYS.CLINIC_LOGS, JSON.stringify(updated));
+  triggerSync();
+  return newLog;
+}
+
+export function deleteClinicLog(id: string): void {
+  const current = getClinicLogs();
+  const target = current.find((c) => c.id === id);
+  if (target && isDateInPast(target.date)) {
+    throw new Error("ไม่สามารถลบบันทึกงานคลินิกย้อนหลังได้");
+  }
+
+  const updated = current.filter((c) => c.id !== id);
+  localStorage.setItem(STORAGE_KEYS.CLINIC_LOGS, JSON.stringify(updated));
+  triggerSync();
+}
+
 // All Activities combined sorted latest first
-export function getAllActivities() {
+export function getAllActivities(): ActivityItem[] {
   const shifts = getShifts();
-  // Filter only active shifts or show swapped with badge
   const visibleShifts = shifts.filter((s) => s.status !== "cancelled");
   const services = getServices();
-  const combined = [...visibleShifts, ...services];
+  const clinicLogs = getClinicLogs();
+
+  const combined: ActivityItem[] = [...visibleShifts, ...services, ...clinicLogs];
 
   return combined.sort((a, b) => {
     const dateComp = b.date.localeCompare(a.date);
     if (dateComp !== 0) return dateComp;
-    const timeA = (a as CustomerServiceRecord).time || "00:00";
-    const timeB = (b as CustomerServiceRecord).time || "00:00";
-    return timeB.localeCompare(timeA);
+
+    const getTimeStr = (item: ActivityItem) => {
+      if (item.type === "service") return (item as CustomerServiceRecord).time || "00:00";
+      if (item.type === "clinic") return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "00:00";
+      const shift = item as ShiftRecord;
+      const conf = SHIFT_CONFIG[shift.shiftType];
+      return conf?.period ? conf.period.split(" - ")[0] : "00:00";
+    };
+
+    return getTimeStr(b).localeCompare(getTimeStr(a));
   });
 }

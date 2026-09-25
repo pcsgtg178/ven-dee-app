@@ -17,13 +17,14 @@ import {
   FileText,
   DollarSign,
   Tag,
+  Pill,
 } from "lucide-react";
 import {
   CustomerServiceRecord,
-  ServiceType,
-  SERVICE_CONFIG,
+  Medications,
 } from "../../types/vendee";
-import { saveService } from "../../lib/storage";
+import { saveService, getMedications } from "../../lib/storage";
+import ModalMedicationManager from "./ModalMedicationManager";
 
 interface ModalEditServiceProps {
   service: CustomerServiceRecord | null;
@@ -40,19 +41,19 @@ export default function ModalEditService({
 }: ModalEditServiceProps) {
   const [serviceDate, setServiceDate] = useState("");
   const [serviceTime, setServiceTime] = useState("09:00");
-  const [selectedServices, setSelectedServices] = useState<ServiceType[]>(["injection"]);
-  const [otherServiceText, setOtherServiceText] = useState("");
   const [medications, setMedications] = useState<string[]>([""]);
   const [serviceNote, setServiceNote] = useState("");
   const [servicePrice, setServicePrice] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
+  const [masterMeds, setMasterMeds] = useState<Medications[]>([]);
+  const [openMedManagerModal, setOpenMedManagerModal] = useState(false);
+
   useEffect(() => {
     if (service && isOpen) {
+      setMasterMeds(getMedications());
       setServiceDate(service.date || "");
       setServiceTime(service.time || "09:00");
-      setSelectedServices(service.services || ["injection"]);
-      setOtherServiceText(service.otherServiceText || "");
       setMedications(
         service.medications && service.medications.length > 0
           ? [...service.medications]
@@ -65,16 +66,6 @@ export default function ModalEditService({
   }, [service, isOpen]);
 
   if (!isOpen || !service) return null;
-
-  const toggleService = (srv: ServiceType) => {
-    setSelectedServices((prev) => {
-      if (prev.includes(srv)) {
-        return prev.filter((s) => s !== srv);
-      } else {
-        return [...prev, srv];
-      }
-    });
-  };
 
   const handleAddMedication = () => {
     setMedications((prev) => [...prev, ""]);
@@ -92,115 +83,77 @@ export default function ModalEditService({
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!serviceDate || !serviceTime) {
       setErrorMsg("กรุณาระบุวันที่และเวลานัดหมาย");
       return;
     }
-    if (selectedServices.length === 0) {
-      setErrorMsg("กรุณาเลือกบริการอย่างน้อย 1 รายการ");
-      return;
-    }
 
-    const isInjectionSelected = selectedServices.includes("injection");
-    const validMeds = isInjectionSelected
-      ? medications.map((m) => m.trim()).filter(Boolean)
-      : undefined;
+    const validMeds = medications.map((m) => m.trim()).filter(Boolean);
 
     try {
-      const updated = saveService({
+      const updated = await saveService({
         id: service.id,
         customerId: service.customerId,
         customerName: service.customerName,
-        customerPhone: service.customerPhone,
-        customerNote: service.customerNote,
         date: serviceDate,
         time: serviceTime,
-        services: selectedServices,
-        otherServiceText: selectedServices.includes("other") ? otherServiceText : undefined,
         medications: validMeds && validMeds.length > 0 ? validMeds : undefined,
         note: serviceNote.trim() || undefined,
         price: servicePrice ? Number(servicePrice) : undefined,
-        status: service.status,
         createdAt: service.createdAt,
       });
 
       if (onSuccess) onSuccess(updated);
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || "เกิดข้อผิดพลาดในการแก้ไขนัดหมาย");
+      setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูลบริการ");
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md rounded-3xl bg-card-bg p-5 sm:p-6 shadow-2xl border border-surface-subtle dark:bg-zinc-900 dark:border-zinc-800 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+      <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900 border border-surface-subtle dark:border-zinc-800">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-surface-subtle pb-3 dark:border-zinc-800">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-light text-primary-dark dark:bg-emerald-950/60 dark:text-emerald-300">
-              <Calendar className="h-5 w-5" />
+        <div className="flex items-center justify-between border-b border-surface-subtle px-5 py-4 dark:border-zinc-800 bg-surface-subtle/30 dark:bg-zinc-800/30">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+              <Syringe className="h-5 w-5" />
             </div>
             <div>
               <h2 className="text-base font-bold text-text-main dark:text-white">
                 แก้ไขนัดหมายบริการ
               </h2>
-              <p className="text-[11px] text-text-muted dark:text-zinc-400">
-                รหัสนัดหมาย: {service.id}
+              <p className="text-xs text-text-muted dark:text-zinc-400">
+                ลูกค้า: <strong className="text-primary-dark dark:text-primary-light">{service.customerName}</strong>
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-text-muted hover:bg-surface-subtle hover:text-text-main dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"
+            className="rounded-full p-2 text-text-muted hover:bg-slate-200 dark:hover:bg-zinc-800"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Customer Badge Banner (Read-only reference) */}
-        <div className="flex items-center justify-between rounded-2xl bg-surface-subtle/80 p-3 text-xs dark:bg-zinc-800/80 border border-surface-subtle dark:border-zinc-700">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary font-bold text-white text-xs">
-              {service.customerName.substring(0, 2)}
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {errorMsg && (
+            <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-600 dark:bg-rose-950/60 dark:text-rose-300">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{errorMsg}</span>
             </div>
-            <div>
-              <div className="font-bold text-text-main dark:text-white">
-                {service.customerName}
-              </div>
-              {service.customerNote && (
-                <div className="flex items-center gap-1 text-[11px] text-primary dark:text-emerald-400 font-medium">
-                  <Tag className="h-3 w-3 shrink-0" />
-                  <span>{service.customerNote}</span>
-                </div>
-              )}
-            </div>
-          </div>
-          {service.customerPhone && service.customerPhone !== "-" && (
-            <span className="text-[11px] text-text-muted dark:text-zinc-400">
-              {service.customerPhone}
-            </span>
           )}
-        </div>
 
-        {/* Error Alert */}
-        {errorMsg && (
-          <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Date & Time Row */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
+          {/* Date & Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200 mb-1">
                 <Calendar className="h-3.5 w-3.5 text-primary" />
-                <span>วันที่นัด <strong className="text-rose-500">*</strong></span>
+                <span>วันที่</span>
               </label>
               <input
                 type="date"
@@ -210,11 +163,10 @@ export default function ModalEditService({
                 className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
               />
             </div>
-
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200 mb-1">
                 <Clock className="h-3.5 w-3.5 text-primary" />
-                <span>เวลานัด <strong className="text-rose-500">*</strong></span>
+                <span>เวลา</span>
               </label>
               <input
                 type="time"
@@ -226,90 +178,22 @@ export default function ModalEditService({
             </div>
           </div>
 
-          {/* Services Selector (Checkboxes) */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-              ประเภทบริการ (เลือกได้มากกว่า 1 ข้อ) <strong className="text-rose-500">*</strong>
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => toggleService("injection")}
-                className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-xs font-bold transition-all ${
-                  selectedServices.includes("injection")
-                    ? "border-primary bg-primary-light text-primary-dark ring-2 ring-primary/30 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-600"
-                    : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-primary/40 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400"
-                }`}
-              >
-                <Syringe className="h-4 w-4 text-primary" />
-                <span>ฉีดยา</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => toggleService("drip")}
-                className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-xs font-bold transition-all ${
-                  selectedServices.includes("drip")
-                    ? "border-sky-500 bg-sky-50 text-sky-900 ring-2 ring-sky-400/30 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-600"
-                    : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-sky-300 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400"
-                }`}
-              >
-                <Sparkles className="h-4 w-4 text-sky-500" />
-                <span>ดริป / ให้สารน้ำ</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => toggleService("delivery")}
-                className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-xs font-bold transition-all ${
-                  selectedServices.includes("delivery")
-                    ? "border-purple-500 bg-purple-50 text-purple-900 ring-2 ring-purple-400/30 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-600"
-                    : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-purple-300 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400"
-                }`}
-              >
-                <Package className="h-4 w-4 text-purple-500" />
-                <span>รับส่งยา</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => toggleService("other")}
-                className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-xs font-bold transition-all ${
-                  selectedServices.includes("other")
-                    ? "border-slate-500 bg-slate-100 text-slate-900 ring-2 ring-slate-400/30 dark:bg-zinc-700 dark:text-white dark:border-zinc-500"
-                    : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-slate-300 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400"
-                }`}
-              >
-                <MoreHorizontal className="h-4 w-4 text-slate-500" />
-                <span>อื่นๆ</span>
-              </button>
-            </div>
-          </div>
-
-          {/* If Other Service is selected */}
-          {selectedServices.includes("other") && (
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-text-muted dark:text-zinc-400">
-                ระบุรายละเอียดบริการอื่นๆ
+          {/* Dynamic Medication List */}
+          <div className="space-y-2 rounded-2xl bg-primary-light/30 p-3.5 dark:bg-emerald-950/30 border border-primary/20">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-primary-dark dark:text-emerald-300">
+                <Syringe className="h-3.5 w-3.5 text-primary" />
+                <span>รายการยาที่ใช้ (Drug Selector)</span>
               </label>
-              <input
-                type="text"
-                value={otherServiceText}
-                onChange={(e) => setOtherServiceText(e.target.value)}
-                placeholder="เช่น วัดความดัน, ทำแผลกดทับ"
-                className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
-              />
-            </div>
-          )}
-
-          {/* Dynamic Medication List (if injection selected) */}
-          {selectedServices.includes("injection") && (
-            <div className="space-y-2 rounded-2xl bg-primary-light/30 p-3 dark:bg-emerald-950/30 border border-primary/20">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-1.5 text-xs font-bold text-primary-dark dark:text-emerald-300">
-                  <Syringe className="h-3.5 w-3.5 text-primary" />
-                  <span>รายการยาฉีด (ระบุชื่อยาและขนาดยา)</span>
-                </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenMedManagerModal(true)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:underline"
+                >
+                  <Pill className="h-3 w-3" />
+                  <span>จัดการยา</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleAddMedication}
@@ -319,44 +203,65 @@ export default function ModalEditService({
                   <span>เพิ่มยา</span>
                 </button>
               </div>
+            </div>
 
-              <div className="space-y-1.5">
-                {medications.map((med, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5">
+            <div className="space-y-2">
+              {medications.map((med, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 w-4 text-right">
+                    {idx + 1}.
+                  </span>
+                  <div className="flex-1 flex gap-1.5">
+                    {masterMeds.length > 0 && (
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) handleMedicationChange(idx, e.target.value);
+                        }}
+                        defaultValue=""
+                        className="rounded-xl border border-primary/30 bg-white px-2 py-1 text-xs text-text-main dark:bg-zinc-900 dark:text-white"
+                      >
+                        <option value="" disabled>-- เลือกจากคลัง --</option>
+                        {masterMeds.map((m) => (
+                          <option key={m.id} value={m.name}>
+                            {m.name} {m.price ? `(฿${m.price})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <input
                       type="text"
                       value={med}
                       onChange={(e) => handleMedicationChange(idx, e.target.value)}
-                      placeholder={`รายการยาที่ ${idx + 1} เช่น Ceftriaxone 1g, Insulin`}
-                      className="flex-1 rounded-xl border border-primary/30 bg-card-bg px-3 py-1.5 text-xs text-text-main outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:bg-zinc-900 dark:text-white dark:border-emerald-800"
+                      placeholder="ชื่อยา / ขนาดยา"
+                      className="flex-1 rounded-xl border border-primary/30 bg-card-bg px-3 py-1.5 text-xs text-text-main outline-none focus:border-primary dark:bg-zinc-900 dark:text-white dark:border-emerald-800"
                     />
-                    {medications.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMedication(idx)}
-                        className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
                   </div>
-                ))}
-              </div>
+                  {medications.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMedication(idx)}
+                      className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Service Note */}
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
               <FileText className="h-3.5 w-3.5 text-primary" />
-              <span>บันทึกบริการ / อาการลูกค้า (Service Note)</span>
+              <span>บันทึกบริการ / รายละเอียด</span>
             </label>
-            <textarea
-              rows={2}
+            <input
+              type="text"
               value={serviceNote}
               onChange={(e) => setServiceNote(e.target.value)}
-              placeholder="บันทึกข้อความ เช่น อาการล่าสุด, ตรวจค่าน้ำตาล"
-              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2 text-sm text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white resize-none"
+              placeholder="ระบุรายละเอียดเพิ่มเติม"
+              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
             />
           </div>
 
@@ -364,14 +269,14 @@ export default function ModalEditService({
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
               <DollarSign className="h-3.5 w-3.5 text-primary" />
-              <span>ค่าบริการ (บาท - ไม่บังคับ)</span>
+              <span>ค่าบริการ (บาท)</span>
             </label>
             <input
               type="number"
               value={servicePrice}
               onChange={(e) => setServicePrice(e.target.value)}
               placeholder="เช่น 500"
-              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2 text-sm text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
             />
           </div>
 
@@ -394,6 +299,14 @@ export default function ModalEditService({
           </div>
         </form>
       </div>
+
+      <ModalMedicationManager
+        isOpen={openMedManagerModal}
+        onClose={() => {
+          setOpenMedManagerModal(false);
+          setMasterMeds(getMedications());
+        }}
+      />
     </div>
   );
 }

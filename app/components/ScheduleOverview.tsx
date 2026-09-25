@@ -12,35 +12,16 @@ import {
   List,
   Calendar as CalendarIcon,
   Plus,
-  Phone,
-  Clock,
-  MapPin,
-  Syringe,
-  Sparkles,
-  Package,
-  MoreHorizontal,
-  Moon,
-  Sun,
-  Sunset,
-  ShieldCheck,
-  CheckCircle2,
-  Trash2,
   CalendarDays,
-  ArrowLeftRight,
-  GitCommit,
-  RotateCcw,
-  Lock,
-  Flame,
-  Ambulance,
 } from "lucide-react";
 
 import {
   ActivityItem,
   CustomerServiceRecord,
   ShiftRecord,
+  ClinicWorkRecord,
   SHIFT_CONFIG,
   SHIFT_CATEGORY_CONFIG,
-  SERVICE_CONFIG,
   SHIFT_CODE_MAP,
 } from "../../types/vendee";
 import {
@@ -48,6 +29,7 @@ import {
   subscribeToStorage,
   deleteShift,
   deleteService,
+  deleteClinicLog,
   saveService,
   undoSwapShift,
   restoreShift,
@@ -60,6 +42,7 @@ import ModalShiftSwap from "./ModalShiftSwap";
 import ModalSwapTrail from "./ModalSwapTrail";
 import ModalEditShift from "./ModalEditShift";
 import ModalEditService from "./ModalEditService";
+import ModalEditClinicLog from "./ModalEditClinicLog";
 import BottomSheet from "./BottomModalSheet";
 import BottomNav from "./BottomNav";
 import ThemeToggle from "./ThemeToggle";
@@ -83,7 +66,7 @@ type ConfirmModalState =
 export default function ScheduleOverview() {
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [filterType, setFilterType] = useState<"all" | "shift" | "service">(
+  const [filterType, setFilterType] = useState<"all" | "shift" | "service" | "clinic">(
     "all",
   );
 
@@ -92,7 +75,7 @@ export default function ScheduleOverview() {
   const [modalDefaultDate, setModalDefaultDate] = useState<string | undefined>(
     undefined,
   );
-  const [modalInitialTab, setModalInitialTab] = useState<"shift" | "service">(
+  const [modalInitialTab, setModalInitialTab] = useState<"shift" | "service" | "clinic">(
     "shift",
   );
 
@@ -112,12 +95,15 @@ export default function ScheduleOverview() {
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [openDateDetailSheet, setOpenDateDetailSheet] = useState(false);
 
-  // Edit Shift & Edit Service state
+  // Edit Shift, Service, Clinic state
   const [editingShift, setEditingShift] = useState<ShiftRecord | null>(null);
   const [openEditShiftModal, setOpenEditShiftModal] = useState(false);
 
   const [editingService, setEditingService] = useState<CustomerServiceRecord | null>(null);
   const [openEditServiceModal, setOpenEditServiceModal] = useState(false);
+
+  const [editingClinicLog, setEditingClinicLog] = useState<ClinicWorkRecord | null>(null);
+  const [openEditClinicLogModal, setOpenEditClinicLogModal] = useState(false);
 
   const handleEditShift = useCallback((shift: ShiftRecord) => {
     setEditingShift(shift);
@@ -127,6 +113,11 @@ export default function ScheduleOverview() {
   const handleEditService = useCallback((service: CustomerServiceRecord) => {
     setEditingService(service);
     setOpenEditServiceModal(true);
+  }, []);
+
+  const handleEditClinicLog = useCallback((clinicLog: ClinicWorkRecord) => {
+    setEditingClinicLog(clinicLog);
+    setOpenEditClinicLogModal(true);
   }, []);
 
   // Alert/Notification banner state
@@ -143,12 +134,13 @@ export default function ScheduleOverview() {
   // Reference month for Quota Widget (e.g. 2026-09)
   const currentMonthKey = "2026-09";
 
-  // Load activities with live API sync
-  const reloadData = useCallback(async () => {
-    // 1. Initial fast local load
+  // Load activities from local storage only (fast, no network side-effects)
+  const loadLocalData = useCallback(() => {
     setActivities(getAllActivities());
+  }, []);
 
-    // 2. Background sync with backend API (http://localhost:8080/api/v1)
+  // Background sync with backend API (http://localhost:8080/api/v1)
+  const syncApiData = useCallback(async () => {
     try {
       setIsSyncing(true);
       const res = await syncAllDataFromApi();
@@ -162,9 +154,15 @@ export default function ScheduleOverview() {
     }
   }, []);
 
+  const reloadData = useCallback(() => {
+    loadLocalData();
+    syncApiData();
+  }, [loadLocalData, syncApiData]);
+
   useEffect(() => {
-    reloadData();
-    const unsubscribe = subscribeToStorage(reloadData);
+    loadLocalData();
+    syncApiData();
+    const unsubscribe = subscribeToStorage(loadLocalData);
 
     const handleOpenAddEvent = (e: Event) => {
       const customEvent = e as CustomEvent<{
@@ -188,7 +186,7 @@ export default function ScheduleOverview() {
       unsubscribe();
       window.removeEventListener("vendee_open_add_modal", handleOpenAddEvent);
     };
-  }, [reloadData]);
+  }, [loadLocalData, syncApiData]);
 
   // Quota statistics for current month
   const quotaStats = useMemo(() => {
@@ -223,7 +221,10 @@ export default function ScheduleOverview() {
             return "00:00";
         }
       }
-      return item.time || "12:00";
+      if (item.type === "clinic") {
+        return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "12:30";
+      }
+      return (item as CustomerServiceRecord).time || "12:00";
     };
 
     // วันนี้หรือวันถัดไปที่ใกล้มาก่อน (Nearest date first - Ascending)
@@ -283,17 +284,32 @@ export default function ScheduleOverview() {
           const eventColor = isRefer ? "#16a34a" : isRed ? "#dc2626" : "#000000";
 
           return {
+            className: "!text-lg !font-bold",
             id: item.id,
             title: titleText,
             date: item.date,
-            color: eventColor,
-            textColor: "#ffffff",
+            color: "#ffffff",
+            textColor: eventColor,
+            contrastColor: eventColor,
             order: 1, // SHIFTS ALWAYS FIRST!
             extendedProps: { item, order: 1 },
           };
+        } else if (item.type === "clinic") {
+          const clinicLog = item as ClinicWorkRecord;
+          const clinicTitle = `🏥 ${clinicLog.presetShift}`;
+          return {
+            id: item.id,
+            title: clinicTitle,
+            date: item.date,
+            color: "#8b5cf6",
+            textColor: "#ffffff",
+            contrastColor: "#ffffff",
+            order: 3,
+            extendedProps: { item, order: 3 },
+          };
         } else {
           // Customer Service: ชื่อลูกค้าและเวลา
-          const serviceTitle = `${item.customerName} ${item.time} น.`;
+          const serviceTitle = `${item.time} ${item.customerName}`;
 
           return {
             id: item.id,
@@ -301,6 +317,7 @@ export default function ScheduleOverview() {
             date: item.date,
             color: "#0284c7", // Sea blue for customer service to contrast with green Refer
             textColor: "#ffffff",
+            contrastColor: "#ffffff",
             order: 2, // SERVICES AFTER SHIFTS
             extendedProps: { item, order: 2 },
           };
@@ -319,16 +336,6 @@ export default function ScheduleOverview() {
     const item = info.event.extendedProps.item as ActivityItem;
     setSelectedDateStr(item.date);
     setOpenDateDetailSheet(true);
-  };
-
-  // Quick toggle service status
-  const handleToggleServiceStatus = (service: CustomerServiceRecord) => {
-    const nextStatus =
-      service.status === "completed" ? "upcoming" : "completed";
-    saveService({
-      ...service,
-      status: nextStatus,
-    });
   };
 
   // Swap action handler
@@ -413,10 +420,10 @@ export default function ScheduleOverview() {
   };
 
   // Execute Delete
-  const handleExecuteDelete = (item: ActivityItem) => {
+  const handleExecuteDelete = async (item: ActivityItem) => {
     try {
       if (item.type === "shift") {
-        const res = deleteShift(item.id);
+        const res = await deleteShift(item.id);
         if (res?.restoredParentId) {
           setToastMessage(
             "ลบเวรที่แลกมา และคืนสถานะเวรเดิมให้กลับมาพร้อมใช้งานเรียบร้อยแล้ว",
@@ -426,8 +433,12 @@ export default function ScheduleOverview() {
           setToastMessage("ลบเวรออกจากตารางเรียบร้อยแล้ว");
           setTimeout(() => setToastMessage(null), 3000);
         }
+      } else if (item.type === "clinic") {
+        deleteClinicLog(item.id);
+        setToastMessage("ลบบันทึกกะคลินิกเรียบร้อยแล้ว");
+        setTimeout(() => setToastMessage(null), 3000);
       } else {
-        deleteService(item.id);
+        await deleteService(item.id);
         setToastMessage("ลบนัดหมายบริการลูกค้าเรียบร้อยแล้ว");
         setTimeout(() => setToastMessage(null), 3000);
       }
@@ -639,8 +650,36 @@ export default function ScheduleOverview() {
         };
       }
 
+      if (item.type === "clinic") {
+        const clinicLog = item as ClinicWorkRecord;
+        return {
+          title: "ยืนยันการลบบันทึกกะคลินิก",
+          subtitle: `วันที่: ${formatThaiDate(clinicLog.date)} (${clinicLog.presetShift} น.)`,
+          variant: "danger" as ConfirmVariant,
+          iconType: "trash" as const,
+          confirmText: "ยืนยันลบบันทึก",
+          cancelText: "ยกเลิก",
+          items: [
+            {
+              label: "วันที่ปฏิบัติงาน",
+              value: formatThaiDate(clinicLog.date),
+            },
+            {
+              label: "ช่วงเวลาทำงาน",
+              value: `${clinicLog.presetShift} น.`,
+            },
+          ],
+          warningNotice: (
+            <span>
+              คุณต้องการลบบันทึกกะคลินิกนี้ใช่หรือไม่?
+            </span>
+          ),
+          onConfirm: () => handleExecuteDelete(item),
+        };
+      }
+
       // Customer Service
-      const service = item;
+      const service = item as CustomerServiceRecord;
       return {
         title: "ยืนยันการลบนัดหมายบริการ",
         subtitle: `ลูกค้านัดหมาย: ${service.customerName}`,
@@ -661,14 +700,6 @@ export default function ScheduleOverview() {
             label: "เวลา",
             value: `${service.time} น.`,
           },
-          ...(service.customerNote
-            ? [
-                {
-                  label: "บันทึก",
-                  value: service.customerNote,
-                },
-              ]
-            : []),
         ],
         warningNotice: (
           <span>
@@ -790,13 +821,13 @@ export default function ScheduleOverview() {
               setOpenAddModal(true);
             }}
             onRequestDelete={handleRequestDelete}
-            onToggleServiceStatus={handleToggleServiceStatus}
             onInitiateSwap={handleInitiateSwap}
             onViewTrail={handleViewTrail}
             onRequestUndoSwap={handleRequestUndoSwap}
             onRequestRestore={handleRequestRestore}
             onEditShift={handleEditShift}
             onEditService={handleEditService}
+            onEditClinicLog={handleEditClinicLog}
           />
         ) : (
           <ScheduleCalendarView
@@ -829,17 +860,13 @@ export default function ScheduleOverview() {
                 key={item.id}
                 item={item}
                 onDelete={() => handleRequestDelete(item)}
-                onToggleStatus={() => {
-                  if (item.type === "service") {
-                    handleToggleServiceStatus(item);
-                  }
-                }}
                 onSwapShift={(shift) => handleInitiateSwap(shift)}
                 onViewTrail={(shift) => handleViewTrail(shift)}
                 onUndoSwap={(shift) => handleRequestUndoSwap(shift)}
                 onRestoreShift={(shift) => handleRequestRestore(shift)}
                 onEditShift={handleEditShift}
                 onEditService={handleEditService}
+                onEditClinicLog={handleEditClinicLog}
               />
             ))
           )}
@@ -920,6 +947,21 @@ export default function ScheduleOverview() {
         }}
         onSuccess={() => {
           setToastMessage("บันทึกการแก้ไขนัดหมายเรียบร้อยแล้ว");
+          setTimeout(() => setToastMessage(null), 3500);
+          reloadData();
+        }}
+      />
+
+      {/* Modal Edit Clinic Work Log */}
+      <ModalEditClinicLog
+        clinicLog={editingClinicLog}
+        isOpen={openEditClinicLogModal}
+        onClose={() => {
+          setOpenEditClinicLogModal(false);
+          setEditingClinicLog(null);
+        }}
+        onSuccess={() => {
+          setToastMessage("บันทึกการแก้ไขกะคลินิกเรียบร้อยแล้ว");
           setTimeout(() => setToastMessage(null), 3500);
           reloadData();
         }}

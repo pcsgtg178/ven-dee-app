@@ -94,47 +94,6 @@ export default function ScheduleCalendarView({
     >
       {/* Top Bar: Color Legend + Fullscreen Toggle Button */}
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-white pb-2 mb-1 px-1 text-[11px] text-slate-800 shrink-0">
-        {/* Color Legend with 1, 2, 3 codes and customer label - Crisp Pure White */}
-        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-          <span className="font-bold text-slate-600">รหัสเวร:</span>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="flex items-center gap-1 font-bold text-slate-900">
-              <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-black text-[10px] text-white font-bold">
-                1
-              </span>{" "}
-              เวรดึก
-            </span>
-            <span className="flex items-center gap-1 font-bold text-slate-900">
-              <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-black text-[10px] text-white font-bold">
-                2
-              </span>{" "}
-              เวรเช้า
-            </span>
-            <span className="flex items-center gap-1 font-bold text-slate-900">
-              <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-black text-[10px] text-white font-bold">
-                3
-              </span>{" "}
-              เวรบ่าย
-            </span>
-            <span className="flex items-center gap-1 font-bold text-emerald-700">
-              <span className="flex h-4 px-1.5 items-center justify-center rounded-sm bg-emerald-600 text-[10px] text-white font-bold">
-                R1/R2
-              </span>{" "}
-              เวร R (เขียว)
-            </span>
-            <span className="flex items-center gap-1 font-bold text-red-600">
-              <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-[10px] text-white font-bold">
-                แดง
-              </span>{" "}
-              OT
-            </span>
-            <span className="flex items-center gap-1 font-bold text-sky-600">
-              <span className="h-2.5 w-2.5 rounded-full bg-sky-600" />{" "}
-              ลูกค้า (ชื่อ + เวลา)
-            </span>
-          </div>
-        </div>
-
         {/* Fullscreen Toggle Action Button */}
         <button
           type="button"

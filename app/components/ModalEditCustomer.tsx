@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, User, Phone, Tag, MapPin, Check, AlertCircle } from "lucide-react";
+import { X, User, Check, AlertCircle } from "lucide-react";
 import { Customer } from "../../types/vendee";
 import { saveCustomer } from "../../lib/storage";
 
@@ -19,24 +19,18 @@ export default function ModalEditCustomer({
   onSuccess,
 }: ModalEditCustomerProps) {
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [note, setNote] = useState("");
-  const [address, setAddress] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     if (customer && isOpen) {
       setName(customer.name || "");
-      setPhone(customer.phone === "-" ? "" : customer.phone || "");
-      setNote(customer.note || "");
-      setAddress(customer.address || "");
       setErrorMsg("");
     }
   }, [customer, isOpen]);
 
   if (!isOpen || !customer) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setErrorMsg("กรุณากรอกชื่อ-นามสกุลลูกค้า");
@@ -44,12 +38,9 @@ export default function ModalEditCustomer({
     }
 
     try {
-      const updated = saveCustomer({
+      const updated = await saveCustomer({
         id: customer.id,
         name: name.trim(),
-        phone: phone.trim() || "-",
-        note: note.trim() || "ลูกค้าทั่วไป",
-        address: address.trim() || undefined,
         avatarColor: customer.avatarColor,
         createdAt: customer.createdAt,
       });
@@ -106,7 +97,7 @@ export default function ModalEditCustomer({
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
               <User className="h-3.5 w-3.5 text-primary" />
-              <span>ชื่อ-นามสกุลลูกค้า <strong className="text-rose-500">*</strong></span>
+              <span>ชื่อ <strong className="text-rose-500">*</strong></span>
             </label>
             <input
               type="text"
@@ -115,55 +106,6 @@ export default function ModalEditCustomer({
               onChange={(e) => setName(e.target.value)}
               placeholder="ระบุชื่อจริง นามสกุล หรือชื่อเรียก"
               className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2.5 text-sm text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
-            />
-          </div>
-
-          {/* Phone Number */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
-              <Phone className="h-3.5 w-3.5 text-primary" />
-              <span>เบอร์โทรศัพท์ติดต่อ</span>
-            </label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="เช่น 081-234-5678"
-              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2.5 text-sm text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
-            />
-          </div>
-
-          {/* Distinctive Note (ป้องกันชื่อซ้ำ) */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
-              <Tag className="h-3.5 w-3.5 text-primary" />
-              <span>จุดสังเกต / Note กำกับ <strong className="text-rose-500">*</strong></span>
-            </label>
-            <input
-              type="text"
-              required
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="เช่น ซอย 5 (บ้านสีฟ้า), ชั้น 18, ตรวจแผลหลังผ่า"
-              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2.5 text-sm text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
-            />
-            <p className="text-[11px] text-text-muted dark:text-zinc-400">
-              * ใช้สำหรับแยกแยะกรณีลูกค้ามีชื่อ-นามสกุลซ้ำกัน
-            </p>
-          </div>
-
-          {/* Address */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
-              <MapPin className="h-3.5 w-3.5 text-primary" />
-              <span>ที่อยู่ / พิกัดบริการ (ไม่บังคับ)</span>
-            </label>
-            <textarea
-              rows={2}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="ระบุบ้านเลขที่ ซอย หรือจุดสังเกตสถานที่"
-              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2 text-sm text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white resize-none"
             />
           </div>
 

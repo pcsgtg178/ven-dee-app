@@ -178,11 +178,10 @@ export const shiftsApi = {
  * Customers API (/api/v1/customers)
  */
 export const customersApi = {
-  getAll: (params?: { search?: string; name?: string; phone?: string }) => {
+  getAll: (params?: { search?: string; name?: string; }) => {
     const query = new URLSearchParams();
     if (params?.search) query.append("search", params.search);
     if (params?.name) query.append("name", params.name);
-    if (params?.phone) query.append("phone", params.phone);
     const qs = query.toString();
     return request<Customer[]>(`/customers${qs ? `?${qs}` : ""}`);
   },
@@ -196,14 +195,14 @@ export const customersApi = {
     >(`/customers/${id}`);
   },
 
-  create: (data: { name: string; phone?: string; note?: string; address?: string; avatarColor?: string }) => {
+  create: (data: { name: string; avatarColor?: string }) => {
     return request<Customer>("/customers", {
       method: "POST",
       body: JSON.stringify(data),
     });
   },
 
-  update: (id: string, data: { name?: string; phone?: string; note?: string; address?: string; avatarColor?: string }) => {
+  update: (id: string, data: { name?: string; avatarColor?: string }) => {
     return request<Customer>(`/customers/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -235,8 +234,6 @@ export const servicesApi = {
   create: (data: {
     customerId: string;
     customerName: string;
-    customerPhone: string;
-    customerNote: string;
     date: string;
     time: string;
     services: ServiceType[];

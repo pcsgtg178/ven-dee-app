@@ -52,7 +52,7 @@ export default function ModalEditShift({
 
   if (!isOpen || !shift) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shiftDate) {
       setErrorMsg("กรุณาเลือกวันที่ขึ้นเวร");
@@ -63,7 +63,7 @@ export default function ModalEditShift({
       shiftType === "r1" || shiftType === "r2" ? "green" : shiftCategory;
 
     try {
-      const updated = saveShift({
+      const updated = await saveShift({
         id: shift.id,
         date: shiftDate,
         shiftType,
@@ -166,7 +166,7 @@ export default function ModalEditShift({
               >
                 <Sunset className="h-5 w-5 text-sky-500 mb-1" />
                 <span className="text-xs font-bold">เวรบ่าย</span>
-                <span className="text-[10px] text-text-muted dark:text-zinc-400">16:00 - 24:00</span>
+                <span className="text-[10px] text-text-muted dark:text-zinc-400">16:00 - 00:00</span>
               </button>
 
               <button
@@ -180,12 +180,12 @@ export default function ModalEditShift({
               >
                 <Moon className="h-5 w-5 text-indigo-500 mb-1" />
                 <span className="text-xs font-bold">เวรดึก</span>
-                <span className="text-[10px] text-text-muted dark:text-zinc-400">24:00 - 08:00</span>
+                <span className="text-[10px] text-text-muted dark:text-zinc-400">00:00 - 08:00</span>
               </button>
             </div>
 
-            {/* Refer Shifts */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            {/* Refer, Off, CT Shifts */}
+            <div className="grid grid-cols-3 gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setShiftType("r1")}
@@ -196,7 +196,7 @@ export default function ModalEditShift({
                 }`}
               >
                 <Ambulance className="h-3.5 w-3.5 text-emerald-600" />
-                <span>เวร R1 (Refer เวร 1)</span>
+                <span>R1</span>
               </button>
 
               <button
@@ -204,12 +204,48 @@ export default function ModalEditShift({
                 onClick={() => setShiftType("r2")}
                 className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all ${
                   shiftType === "r2"
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-400/40 dark:bg-emerald-950/50 dark:text-emerald-200 dark:border-emerald-500"
+                    : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-emerald-300 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
+                }`}
+              >
+                <Ambulance className="h-3.5 w-3.5 text-emerald-600" />
+                <span>R2</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShiftType("off")}
+                className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all ${
+                  shiftType === "off"
+                    ? "border-slate-800 bg-slate-100 text-slate-900 ring-2 ring-slate-400 dark:bg-zinc-800 dark:text-white"
+                    : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-slate-400 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
+                }`}
+              >
+                <span>Off (0)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShiftType("ctm")}
+                className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all ${
+                  shiftType === "ctm"
                     ? "border-purple-500 bg-purple-50 text-purple-900 ring-2 ring-purple-400/40 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-500"
                     : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-purple-300 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
                 }`}
               >
-                <Ambulance className="h-3.5 w-3.5 text-purple-600" />
-                <span>เวร R2 (Refer เวร 2)</span>
+                <span>CTM</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShiftType("cta")}
+                className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all col-span-2 ${
+                  shiftType === "cta"
+                    ? "border-purple-500 bg-purple-50 text-purple-900 ring-2 ring-purple-400/40 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-500"
+                    : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-purple-300 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
+                }`}
+              >
+                <span>CTA</span>
               </button>
             </div>
           </div>

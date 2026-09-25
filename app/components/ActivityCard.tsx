@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import moment from "moment";
 import "moment/locale/th";
 import {
@@ -8,8 +7,6 @@ import {
   Sun,
   Sunset,
   Ambulance,
-  ShieldCheck,
-  Flame,
   MapPin,
   ArrowLeftRight,
   Lock,
@@ -17,26 +14,26 @@ import {
   RotateCcw,
   Trash2,
   Clock,
-  CheckCircle2,
-  Phone,
   Syringe,
-  Sparkles,
-  Package,
-  MoreHorizontal,
   Pencil,
+  Building2,
+  ScanSquare,
+  Bed,
 } from "lucide-react";
-import { canEditShift, canEditService } from "../../lib/storage";
+import { canEditShift, canEditService, canEditClinicLog } from "../../lib/storage";
 import {
   ActivityItem,
   CustomerServiceRecord,
   ShiftRecord,
+  ClinicWorkRecord,
   SHIFT_CONFIG,
   SHIFT_CATEGORY_CONFIG,
-  SERVICE_CONFIG,
+  SHIFT_CODE_MAP,
 } from "../../types/vendee";
 
 export interface ActivityCardProps {
   item: ActivityItem;
+  hideDateHeader?: boolean;
   onDelete: () => void;
   onToggleStatus?: () => void;
   onSwapShift?: (shift: ShiftRecord) => void;
@@ -45,29 +42,93 @@ export interface ActivityCardProps {
   onRestoreShift?: (shift: ShiftRecord) => void;
   onEditShift?: (shift: ShiftRecord) => void;
   onEditService?: (service: CustomerServiceRecord) => void;
+  onEditClinicLog?: (clinicLog: ClinicWorkRecord) => void;
 }
 
 export default function ActivityCard({
   item,
+  hideDateHeader = false,
   onDelete,
-  onToggleStatus,
   onSwapShift,
   onViewTrail,
   onUndoSwap,
   onRestoreShift,
   onEditShift,
   onEditService,
+  onEditClinicLog,
 }: ActivityCardProps) {
-  const isShift = item.type === "shift";
+  // ─── CLINIC WORK LOG CARD ───
+  if (item.type === "clinic") {
+    const clinicLog = item as ClinicWorkRecord;
+    const canEdit = canEditClinicLog(clinicLog);
+    const todayStr = moment().format("YYYY-MM-DD");
+    const isToday = clinicLog.date === todayStr;
 
-  if (isShift) {
+    return (
+      <div className="relative overflow-hidden rounded-2xl border border-purple-200 bg-card-bg p-3.5 shadow-xs transition-all hover:shadow-md dark:border-purple-900/60 dark:bg-zinc-900">
+        {/* Purple color stripe left */}
+        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-purple-600" />
+
+        <div className="flex items-start justify-between gap-2 pl-2">
+          <div className="space-y-1.5 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {!hideDateHeader && (
+                <span className="text-xs font-bold text-text-main dark:text-white">
+                  {moment(clinicLog.date).locale("th").format("ddd D MMM YYYY")}
+                </span>
+              )}
+              {isToday && (
+                <span className="rounded-md bg-purple-100 px-1.5 py-0.5 text-[10px] font-extrabold text-purple-800 dark:bg-purple-950/70 dark:text-purple-300">
+                  วันนี้
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 rounded-lg bg-purple-100 px-2 py-0.5 text-[11px] font-bold text-purple-800 dark:bg-purple-950/60 dark:text-purple-300">
+                <Building2 className="h-3 w-3" />
+                <span>กะคลินิก: {clinicLog.presetShift} น.</span>
+              </span>
+            </div>
+
+            {clinicLog.note && (
+              <div className="text-xs text-text-muted dark:text-zinc-400">
+                <span>📝 {clinicLog.note}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {canEdit && onEditClinicLog && (
+              <button
+                type="button"
+                onClick={() => onEditClinicLog(clinicLog)}
+                className="rounded-lg p-1.5 text-text-muted hover:bg-purple-50 hover:text-purple-600 active:scale-95 dark:hover:bg-purple-950/40 dark:hover:text-purple-300 transition-all"
+                title="แก้ไขงานคลินิก"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red active:scale-95 dark:hover:bg-rose-950/40 transition-colors"
+              title="ลบบันทึกคลินิก"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── SHIFT RECORD CARD ───
+  if (item.type === "shift") {
     const shift = item as ShiftRecord;
     const shiftInfo = SHIFT_CONFIG[shift.shiftType];
     const catInfo = SHIFT_CATEGORY_CONFIG[shift.category];
     const isSwapped = Boolean(shift.swapMeta);
-    const isLocked = shift.swapMeta?.isLocked ?? false;
     const isSwappedOut = shift.status === "swapped_out";
     const canEdit = canEditShift(shift);
+    const code = SHIFT_CODE_MAP[shift.shiftType] || shift.shiftType;
 
     const ShiftIcon =
       shift.shiftType === "night"
@@ -76,7 +137,11 @@ export default function ActivityCard({
           ? Sun
           : shift.shiftType === "afternoon"
             ? Sunset
-            : Ambulance;
+            : shift.shiftType === "off"
+              ? Bed
+              : shift.shiftType === "ctm" || shift.shiftType === "cta"
+                ? ScanSquare
+                : Ambulance;
 
     const todayStr = moment().format("YYYY-MM-DD");
     const tomorrowStr = moment().add(1, "day").format("YYYY-MM-DD");
@@ -93,66 +158,46 @@ export default function ActivityCard({
               : "border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900"
         }`}
       >
-        {/* Color stripe left: Secondary sea blue for normal shift, Shift-red for OT, Emerald for Refer */}
+        {/* Color stripe left */}
         <div
           className={`absolute left-0 top-0 bottom-0 w-1.5 ${
             shift.category === "green" || shift.shiftType === "r1" || shift.shiftType === "r2"
               ? "bg-emerald-600"
-              : shift.category === "red"
-                ? "bg-shift-red"
-                : "bg-secondary"
+              : shift.category === "purple" || shift.shiftType === "ctm" || shift.shiftType === "cta"
+                ? "bg-purple-600"
+                : shift.category === "gray" || shift.shiftType === "off"
+                  ? "bg-gray-500"
+                  : shift.category === "red"
+                    ? "bg-shift-red"
+                    : "bg-secondary"
           }`}
         />
 
         <div className="flex items-start justify-between gap-2 pl-2">
           {/* Main Info */}
-          <div className="space-y-2 flex-1">
-            {/* Header: Date + Today/Tomorrow Badge + Shift Type Badge + Black/Red/Green Badge */}
+          <div className="space-y-1.5 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-bold text-text-main dark:text-white">
-                {moment(shift.date).locale("th").format("ddd D MMM YYYY")}
-              </span>
+              {!hideDateHeader && (
+                <span className="text-xs font-bold text-text-main dark:text-white">
+                  {moment(shift.date).locale("th").format("ddd D MMM YYYY")}
+                </span>
+              )}
 
-              {isToday && (
+              {isToday && !hideDateHeader && (
                 <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 shadow-2xs">
                   วันนี้
                 </span>
               )}
-              {isTomorrow && (
+              {isTomorrow && !hideDateHeader && (
                 <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800 dark:bg-sky-950/70 dark:text-sky-300">
                   พรุ่งนี้
                 </span>
               )}
 
-              {/* Shift type badge (Secondary Sea Blue) */}
+              {/* Concise Shift Code Badge */}
               <span className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-bold bg-secondary-light text-secondary-dark dark:bg-secondary-dark/30 dark:text-secondary-light">
                 <ShiftIcon className="h-3 w-3" />
-                {shiftInfo.label} ({shiftInfo.period})
-              </span>
-
-              {/* ป้ายกำกับประเภทเวร:
-                  - เวรดำ (เวรประจำ): ป้ายสีเข้ม/ทึบ (shift-black: #1E293B)
-                  - เวรแดง (OT/เวรช่วย): ป้ายสีกรอบแดง/สีแดงเด่นชัด (shift-red-badge: #FEE2E2)
-                  - เวร R (Refer): ป้ายสีเขียว (bg-emerald-600) */}
-              <span
-                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-0.5 text-[10px] font-bold ${
-                  shift.category === "green" || shift.shiftType === "r1" || shift.shiftType === "r2"
-                    ? "bg-emerald-600 text-white shadow-xs"
-                    : catInfo.badge
-                }`}
-              >
-                {shift.category === "green" || shift.shiftType === "r1" || shift.shiftType === "r2" ? (
-                  <Ambulance className="h-3 w-3" />
-                ) : shift.category === "black" ? (
-                  <ShieldCheck className="h-3 w-3" />
-                ) : (
-                  <Flame className="h-3 w-3 text-shift-red" />
-                )}
-                <span>
-                  {shift.category === "green" || shift.shiftType === "r1" || shift.shiftType === "r2"
-                    ? "เวร R (สีเขียว)"
-                    : `${catInfo.label} (${catInfo.subLabel})`}
-                </span>
+                <span>[{code}] {shiftInfo.label} ({shiftInfo.period})</span>
               </span>
 
               {isSwappedOut && (
@@ -170,158 +215,49 @@ export default function ActivityCard({
               </div>
             )}
 
-            {/* =========================================================
-                สถานะการแลกเวรบนการ์ด (Swap Status Box)
-                ========================================================= */}
+            {/* Swap Details */}
             {isSwapped && shift.swapMeta && (
-              <div className="rounded-xl bg-secondary-light/60 p-2.5 text-xs dark:bg-secondary-dark/20 border border-secondary/25 space-y-1.5">
-                <div className="flex flex-wrap items-center justify-between gap-1">
-                  {/* ไอคอน 🔄 พร้อมระบุ: แลกกับ [ชื่อคนแลก] (เวรเดิม: [ชื่อเจ้าของเดิม ถ้ามี]) */}
+              <div className="rounded-xl bg-secondary-light/60 p-2 text-xs dark:bg-secondary-dark/20 border border-secondary/25 space-y-1">
+                <div className="flex items-center justify-between gap-1">
                   <div className="flex items-center gap-1.5 font-bold text-secondary-dark dark:text-secondary-light text-[11px]">
                     <ArrowLeftRight className="h-3.5 w-3.5 text-secondary shrink-0" />
-                    <span>
-                      แลกกับ:{" "}
-                      <strong className="text-text-main dark:text-white">
-                        {shift.swapMeta.swappedWith}
-                      </strong>
-                      {shift.swapMeta.originalOwner && (
-                        <span className="ml-1 font-semibold text-primary dark:text-primary-light">
-                          (เวรเดิม: {shift.swapMeta.originalOwner})
-                        </span>
-                      )}
-                    </span>
+                    <span>แลกกับ: <strong>{shift.swapMeta.swappedWith}</strong></span>
                   </div>
-
-                  {/* Lock Indicator */}
-                  {isLocked && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-text-muted dark:bg-zinc-800 dark:text-zinc-400">
-                      <Lock className="h-2.5 w-2.5" /> ล็อกแล้ว
-                    </span>
-                  )}
-                </div>
-
-                {shift.swapMeta.swapReason && (
-                  <p className="text-[11px] text-text-muted dark:text-zinc-400">
-                    📝 {shift.swapMeta.swapReason}
-                  </p>
-                )}
-
-                {/* Swap Actions: ดูลำดับการแลก (Swap Trail) & ยกเลิกการแลก (Undo) */}
-                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-secondary/20 dark:border-secondary-dark/40">
-                  {/* ปุ่ม "ดูลำดับการแลก (Swap Trail)" */}
-                  {onViewTrail &&
-                    (shift.swapMeta.originalOwner ||
-                      (shift.swapMeta.swapHistory &&
-                        shift.swapMeta.swapHistory.length > 0)) && (
-                      <button
-                        type="button"
-                        onClick={() => onViewTrail(shift)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-secondary px-2.5 py-1 text-[10px] font-bold text-white shadow-2xs hover:bg-secondary-dark active:scale-95 transition-all"
-                      >
-                        <GitCommit className="h-3 w-3" />
-                        <span>ดูลำดับการแลก (Swap Trail)</span>
-                      </button>
-                    )}
-
-                  {/* ระบบ Undo/Rollback */}
-                  {onUndoSwap && (
-                    <div className="relative group inline-block">
-                      <button
-                        type="button"
-                        disabled={isLocked}
-                        onClick={() => !isLocked && onUndoSwap(shift)}
-                        className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all ${
-                          isLocked
-                            ? "cursor-not-allowed bg-surface-subtle text-text-muted border border-surface-subtle dark:bg-zinc-800 dark:text-zinc-500"
-                            : "cursor-pointer bg-card-bg text-shift-red border border-rose-200 hover:bg-shift-red-badge active:scale-95 shadow-2xs dark:bg-zinc-800 dark:text-rose-400 dark:border-rose-900"
-                        }`}
-                        title={
-                          isLocked
-                            ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
-                            : "ยกเลิกการแลกเวรและคืนค่าเดิม"
-                        }
-                      >
-                        {isLocked ? (
-                          <Lock className="h-2.5 w-2.5" />
-                        ) : (
-                          <RotateCcw className="h-2.5 w-2.5" />
-                        )}
-                        <span>ยกเลิกการแลก</span>
-                      </button>
-
-                      {isLocked && (
-                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden w-48 rounded-lg bg-shift-black p-2 text-center text-[10px] text-white shadow-lg group-hover:block z-50">
-                          ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว
-                        </div>
-                      )}
-                    </div>
+                  {onViewTrail && (
+                    <button
+                      type="button"
+                      onClick={() => onViewTrail(shift)}
+                      className="text-[10px] font-bold text-secondary hover:underline"
+                    >
+                      ประวัติ
+                    </button>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Note & Category description */}
-            <div className="text-[11px] text-text-muted dark:text-zinc-400 space-y-0.5">
-              {shift.note && !isSwapped && (
-                <p className="font-medium text-text-main dark:text-zinc-300">
-                  📝 {shift.note}
-                </p>
-              )}
-              <p className="text-[10px] text-text-muted dark:text-zinc-500">
-                *{catInfo.desc}
-              </p>
-            </div>
-
-            {/* Actions: ปุ่ม "แก้ไขเวร" และ "แลกเวร" */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              {canEdit && onEditShift && (
-                <button
-                  type="button"
-                  onClick={() => onEditShift(shift)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-text-main hover:bg-sky-50 hover:text-secondary active:scale-95 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-sky-950/40 dark:hover:text-sky-300 transition-all shadow-2xs border border-surface-subtle dark:border-zinc-700"
-                >
-                  <Pencil className="h-3.5 w-3.5 text-secondary" />
-                  <span>แก้ไขเวร</span>
-                </button>
-              )}
-              {!isSwappedOut && onSwapShift && (
-                <button
-                  type="button"
-                  onClick={() => onSwapShift(shift)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-secondary-dark hover:bg-secondary-light hover:text-secondary active:scale-95 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-secondary-dark/40 dark:hover:text-secondary-light transition-all shadow-2xs"
-                >
-                  <ArrowLeftRight className="h-3.5 w-3.5 text-secondary" />
-                  <span>แลกเวรนี้</span>
-                </button>
-              )}
-            </div>
-
-            {/* Action: ปุ่ม "กู้คืนเวรนี้" เมื่อเวรถูกแลกออกไปแล้ว */}
             {isSwappedOut && onRestoreShift && (
-              <div className="pt-2 flex items-center justify-between border-t border-surface-subtle dark:border-zinc-800">
-                <span className="text-[11px] text-text-muted dark:text-zinc-400">
-                  เวรนี้ถูกแลกออกไปแล้ว
-                </span>
+              <div className="pt-1 flex items-center justify-between">
+                <span className="text-[10px] text-text-muted">แลกออกแล้ว</span>
                 <button
                   type="button"
                   onClick={() => onRestoreShift(shift)}
-                  className="inline-flex items-center gap-1 rounded-xl bg-primary-light px-2.5 py-1 text-xs font-bold text-primary-dark hover:bg-emerald-100 dark:bg-primary-dark/40 dark:text-primary-light border border-primary/20 active:scale-95 transition-all shadow-2xs"
+                  className="rounded-lg bg-primary-light px-2 py-0.5 text-[10px] font-bold text-primary-dark"
                 >
-                  <RotateCcw className="h-3 w-3" />
-                  <span>กู้คืนเวรนี้</span>
+                  กู้คืน
                 </button>
               </div>
             )}
           </div>
 
-          {/* Action Buttons: Edit + Delete */}
+          {/* Actions */}
           <div className="flex items-center gap-1 shrink-0">
             {canEdit && onEditShift && (
               <button
                 type="button"
                 onClick={() => onEditShift(shift)}
-                className="rounded-lg p-1.5 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 dark:hover:bg-sky-950/40 dark:hover:text-sky-300 transition-all"
-                title="แก้ไขเวรนี้"
+                className="rounded-lg p-1.5 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 transition-all dark:hover:bg-zinc-800"
+                title="แก้ไข"
               >
                 <Pencil className="h-4 w-4" />
               </button>
@@ -329,8 +265,8 @@ export default function ActivityCard({
             <button
               type="button"
               onClick={onDelete}
-              className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red active:scale-95 dark:hover:bg-rose-950/40 transition-colors"
-              title="ลบเวรนี้"
+              className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red transition-colors dark:hover:bg-zinc-800"
+              title="ลบ"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -340,126 +276,42 @@ export default function ActivityCard({
     );
   }
 
-  /* Customer Service Card */
+  // ─── CUSTOMER SERVICE CARD ───
   const service = item as CustomerServiceRecord;
-  const isCompleted = service.status === "completed";
   const canEdit = canEditService(service);
 
   return (
-    <div
-      className={`relative overflow-hidden rounded-2xl border p-3.5 shadow-xs transition-all hover:shadow-md ${
-        isCompleted
-          ? "border-primary/40 bg-primary-light/15 dark:border-emerald-900/50 dark:bg-emerald-950/20"
-          : "border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900"
-      }`}
-    >
-      {/* Color stripe left: Primary health green */}
+    <div className="relative overflow-hidden rounded-2xl border p-3.5 shadow-xs transition-all hover:shadow-md border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900">
+      {/* Primary health green stripe */}
       <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary" />
 
       <div className="flex items-start justify-between gap-2 pl-2">
-        <div className="space-y-2 flex-1">
-          {/* Header: Date + Time + Status */}
+        <div className="space-y-1.5 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-text-main dark:text-white">
-              {moment(service.date).locale("th").format("ddd D MMM YYYY")}
-            </span>
-            {(() => {
-              const todayStr = moment().format("YYYY-MM-DD");
-              const tomorrowStr = moment().add(1, "day").format("YYYY-MM-DD");
-              if (service.date === todayStr) {
-                return (
-                  <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 shadow-2xs">
-                    วันนี้
-                  </span>
-                );
-              }
-              if (service.date === tomorrowStr) {
-                return (
-                  <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800 dark:bg-sky-950/70 dark:text-sky-300">
-                    พรุ่งนี้
-                  </span>
-                );
-              }
-              return null;
-            })()}
+            {!hideDateHeader && (
+              <span className="text-xs font-bold text-text-main dark:text-white">
+                {moment(service.date).locale("th").format("ddd D MMM YYYY")}
+              </span>
+            )}
             <span className="flex items-center gap-1 rounded-md bg-surface-subtle px-2 py-0.5 text-[11px] font-semibold text-text-main dark:bg-zinc-800 dark:text-zinc-200">
               <Clock className="h-3 w-3 text-primary" />
               {service.time} น.
             </span>
-            <button
-              type="button"
-              onClick={onToggleStatus}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold cursor-pointer transition-colors ${
-                isCompleted
-                  ? "bg-primary-light text-primary-dark dark:bg-emerald-950/80 dark:text-emerald-300"
-                  : "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
-              }`}
-            >
-              <CheckCircle2 className="h-3 w-3" />
-              {isCompleted ? "เสร็จสิ้นแล้ว" : "รอดำเนินการ"}
-            </button>
           </div>
 
-          {/* Customer Name & Distinguishing Note Tag */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-bold text-sm text-text-main dark:text-white">
-              {service.customerName}
-            </span>
-            {service.customerNote && (
-              <span className="rounded-lg bg-primary-light/80 px-2 py-0.5 text-[10px] font-medium text-primary-dark dark:bg-primary-dark/30 dark:text-primary-light border border-primary/20">
-                🏷️ {service.customerNote}
-              </span>
-            )}
-            {/* Quick Call Button */}
-            {service.customerPhone && service.customerPhone !== "-" && (
-              <a
-                href={`tel:${service.customerPhone}`}
-                className="inline-flex items-center gap-1 rounded-full bg-surface-subtle px-2 py-0.5 text-[10px] font-semibold text-text-main hover:bg-primary-light hover:text-primary-dark dark:bg-zinc-800 dark:text-zinc-300 transition-colors"
-                title={`โทร ${service.customerPhone}`}
-              >
-                <Phone className="h-2.5 w-2.5 text-primary" />
-                <span>{service.customerPhone}</span>
-              </a>
-            )}
+          <div className="font-bold text-sm text-text-main dark:text-white">
+            {service.customerName}
           </div>
 
-          {/* Services Badges */}
-          <div className="flex flex-wrap items-center gap-1">
-            {service.services.map((srv) => {
-              const conf = SERVICE_CONFIG[srv];
-              return (
-                <span
-                  key={srv}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold ${conf.bg}`}
-                >
-                  {srv === "injection" && <Syringe className="h-3 w-3" />}
-                  {srv === "drip" && <Sparkles className="h-3 w-3" />}
-                  {srv === "delivery" && <Package className="h-3 w-3" />}
-                  {srv === "other" && <MoreHorizontal className="h-3 w-3" />}
-                  {conf.label}
-                </span>
-              );
-            })}
-            {service.otherServiceText && (
-              <span className="text-[11px] text-text-muted">
-                ({service.otherServiceText})
-              </span>
-            )}
-          </div>
-
-          {/* Medications (Dynamic List if Injection) */}
+          {/* Medications list */}
           {service.medications && service.medications.length > 0 && (
             <div className="rounded-xl bg-primary-light/35 p-2 text-xs text-primary-dark dark:bg-emerald-950/40 dark:text-emerald-200 border border-primary/20">
-              <span className="font-bold flex items-center gap-1 text-[11px] text-primary-dark dark:text-emerald-300 mb-1">
-                <Syringe className="h-3 w-3 text-primary" /> ตัวยาที่ใช้:
+              <span className="font-bold flex items-center gap-1 text-[11px] text-primary-dark dark:text-emerald-300 mb-0.5">
+                <Syringe className="h-3 w-3 text-primary" /> ยาที่ใช้:
               </span>
-              <ul className="list-inside list-disc space-y-0.5 text-[11px]">
-                {service.medications.map((med, idx) => (
-                  <li key={idx} className="font-medium">
-                    {med}
-                  </li>
-                ))}
-              </ul>
+              <div className="text-[11px] font-medium text-text-main dark:text-zinc-200">
+                {service.medications.join(", ")}
+              </div>
             </div>
           )}
 
@@ -476,14 +328,14 @@ export default function ActivityCard({
           )}
         </div>
 
-        {/* Action Buttons: Edit + Delete */}
+        {/* Actions */}
         <div className="flex items-center gap-1 shrink-0">
           {canEdit && onEditService && (
             <button
               type="button"
               onClick={() => onEditService(service)}
-              className="rounded-lg p-1.5 text-text-muted hover:bg-emerald-50 hover:text-primary active:scale-95 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300 transition-all"
-              title="แก้ไขนัดหมายนี้"
+              className="rounded-lg p-1.5 text-text-muted hover:bg-emerald-50 hover:text-primary active:scale-95 transition-all dark:hover:bg-zinc-800"
+              title="แก้ไข"
             >
               <Pencil className="h-4 w-4" />
             </button>
@@ -491,8 +343,8 @@ export default function ActivityCard({
           <button
             type="button"
             onClick={onDelete}
-            className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red active:scale-95 dark:hover:bg-rose-950/40 transition-colors"
-            title="ลบนัดหมายนี้"
+            className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red transition-colors dark:hover:bg-zinc-800"
+            title="ลบ"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -501,4 +353,3 @@ export default function ActivityCard({
     </div>
   );
 }
-;

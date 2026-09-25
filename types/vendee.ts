@@ -1,6 +1,6 @@
-export type ShiftType = "morning" | "afternoon" | "night" | "r1" | "r2";
+export type ShiftType = "morning" | "afternoon" | "night" | "r1" | "r2" | "off" | "ctm" | "cta";
 
-export type ShiftCategory = "black" | "red" | "green"; // ดำ = ปกติแลกได้ขึ้นครบ, แดง = OT, เขียว = เวร R (Refer)
+export type ShiftCategory = "black" | "red" | "green" | "gray" | "purple"; // ดำ = ปกติแลกได้ขึ้นครบ, แดง = OT, เขียว = เวร R (Refer)
 
 export type ShiftStatus = "active" | "swapped_out" | "cancelled";
 
@@ -39,34 +39,65 @@ export interface ShiftRecord {
 export interface Customer {
   id: string;
   name: string;
-  phone: string;
-  note: string; // โน้ตจำแนก เช่น "บ้านสวน ซ.5 (แม่น้องพลอย)", "คอนโดลุมพินี ชั้น 12"
-  address?: string;
   avatarColor?: string;
   createdAt?: string;
 }
 
-export type ServiceType = "injection" | "drip" | "delivery" | "other";
+export interface Medications {
+  id: string;
+  name: string;
+  price?: string; // ราคาต้นทุน / ราคา
+  unit?: string;
+  note?: string;
+  createdAt?: string;
+}
+
+export interface MedicationsRecord {
+  id: string;
+  name: string;
+  price?: string; // ราคาขาย
+  unitAmt?: string;   // จำนวน unit ที่ใช้
+  createdAt?: string;
+}
+
+export type ServiceType = "injection" | "dressing" | "consult" | "vital_signs" | "other";
+
+export const SERVICE_CONFIG: Record<ServiceType, { label: string; icon: string; bg: string }> = {
+  injection: { label: "ฉีดยา", icon: "💉", bg: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300" },
+  dressing: { label: "ทำแผล", icon: "🩹", bg: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" },
+  consult: { label: "ปรึกษา", icon: "💬", bg: "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300" },
+  vital_signs: { label: "วัดสัญญาณชีพ", icon: "🫀", bg: "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300" },
+  other: { label: "บริการอื่น", icon: "✨", bg: "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-zinc-300" },
+};
 
 export interface CustomerServiceRecord {
   id: string;
   type: "service";
   customerId: string;
   customerName: string;
-  customerPhone: string;
-  customerNote: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
-  services: ServiceType[];
+  services?: ServiceType[];
   otherServiceText?: string;
   medications?: string[]; // รายการยา (เพิ่ม/ลบได้หลายตัว โผล่เมื่อเลือกฉีดยา)
   note?: string;
-  status: "upcoming" | "completed" | "cancelled";
   price?: number;
+  status?: "upcoming" | "completed" | "cancelled";
   createdAt: string;
 }
 
-export type ActivityItem = ShiftRecord | CustomerServiceRecord;
+export type ClinicPresetShift = "12:30 - 17:30" | "17:00 - 19:30" | "12:30 - 19:30";
+
+export interface ClinicWorkRecord {
+  id: string;
+  type: "clinic";
+  date: string; // YYYY-MM-DD
+  presetShift: ClinicPresetShift;
+  note?: string;
+  createdAt: string;
+}
+
+export type ActivityItem = ShiftRecord | CustomerServiceRecord | ClinicWorkRecord;
 
 export const DEFAULT_BLACK_SHIFT_QUOTA = 14; // กฎเวรดำ x วันต่อเดือน
 
@@ -74,8 +105,11 @@ export const SHIFT_CODE_MAP: Record<ShiftType, string> = {
   night: "1", // 1 = เวรดึก
   morning: "2", // 2 = เวรเช้า
   afternoon: "3", // 3 = เวรบ่าย
-  r1: "R1", // R1 = เวร Refer ทีม 1
-  r2: "R2", // R2 = เวร Refer ทีม 2
+  r1: "R1", // Refer
+  r2: "R2", // Refer
+  off: "0", // 0 = เวรหยุด
+  ctm: "CTM", // CT
+  cta: "CTA", // CT
 };
 
 export const SHIFT_CONFIG: Record<
@@ -85,7 +119,7 @@ export const SHIFT_CONFIG: Record<
   night: {
     label: "เวรดึก",
     shortLabel: "ดึก",
-    period: "24:00 - 08:00",
+    period: "00:00 - 08:00",
     color: "#6366f1", // indigo
     badgeBg: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300",
     textBg: "text-indigo-600 dark:text-indigo-400",
@@ -103,29 +137,56 @@ export const SHIFT_CONFIG: Record<
   afternoon: {
     label: "เวรบ่าย",
     shortLabel: "บ่าย",
-    period: "16:00 - 24:00",
+    period: "16:00 - 00:00",
     color: "#0284c7", // sky
     badgeBg: "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
     textBg: "text-sky-600 dark:text-sky-400",
     borderBg: "border-sky-200 dark:border-sky-800",
   },
   r1: {
-    label: "เวร R1 (Refer ทีม 1)",
+    label: "Refer ทีม 1",
     shortLabel: "R1",
     period: "ทั้งวัน",
-    color: "#8b5cf6", // violet
+    color: "#198f13", // emerald
+    badgeBg: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    textBg: "text-emerald-600 dark:text-emerald-400",
+    borderBg: "border-emerald-200 dark:border-emerald-800",
+  },
+  r2: {
+    label: "Refer ทีม 2",
+    shortLabel: "R2",
+    period: "ทั้งวัน",
+    color: "#198f13", // emeraldd
+    badgeBg: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    textBg: "text-emerald-600 dark:text-emerald-400",
+    borderBg: "border-emerald-200 dark:border-emerald-800",
+  },
+  off: {
+    label: "เวรหยุด",
+    shortLabel: "หยุด",
+    period: "ทั้งวัน",
+    color: "#6b7280", // gray
+    badgeBg: "bg-gray-50 text-gray-700 dark:bg-gray-950/60 dark:text-gray-300",
+    textBg: "text-gray-600 dark:text-gray-400",
+    borderBg: "border-gray-200 dark:border-gray-800",
+  },
+  ctm: {
+    label: "เวร CT เช้า",
+    shortLabel: "CT เช้า",
+    period: "กำหนดช่วงเวลาเอง",
+    color: "#8b5cf6", // purple
     badgeBg: "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300",
     textBg: "text-purple-600 dark:text-purple-400",
     borderBg: "border-purple-200 dark:border-purple-800",
   },
-  r2: {
-    label: "เวร R2 (Refer ทีม 2)",
-    shortLabel: "R2",
-    period: "ทั้งวัน",
-    color: "#a855f7", // fuchsia
-    badgeBg: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/60 dark:text-fuchsia-300",
-    textBg: "text-fuchsia-600 dark:text-fuchsia-400",
-    borderBg: "border-fuchsia-200 dark:border-fuchsia-800",
+  cta: {
+    label: "เวร CT บ่าย",
+    shortLabel: "CT บ่าย",
+    period: "กำหนดช่วงเวลาเอง",
+    color: "#8b5cf6", // purple
+    badgeBg: "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300",
+    textBg: "text-purple-600 dark:text-purple-400",
+    borderBg: "border-purple-200 dark:border-purple-800",
   },
 };
 
@@ -156,31 +217,19 @@ export const SHIFT_CATEGORY_CONFIG: Record<
     badge: "bg-emerald-600 text-white dark:bg-emerald-600 dark:text-white font-bold shadow-xs",
     pill: "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300",
   },
-};
-
-export const SERVICE_CONFIG: Record<
-  ServiceType,
-  { label: string; color: string; bg: string }
-> = {
-  injection: {
-    label: "ฉีดยา",
-    color: "#16A34A", // Primary green
-    bg: "bg-primary-light text-primary-dark dark:bg-emerald-950/60 dark:text-emerald-300",
+  gray: {
+    label: "เวรออฟ",
+    subLabel: "วันหยุด",
+    desc: "เวรออฟ วันหยุด",
+    badge: "bg-gray-600 text-white dark:bg-gray-600 dark:text-white font-bold shadow-xs",
+    pill: "bg-gray-50 text-gray-700 border-gray-300 dark:bg-gray-950/60 dark:text-gray-300",
   },
-  drip: {
-    label: "ดริปผิว",
-    color: "#0284C7", // Secondary sea blue
-    bg: "bg-secondary-light text-secondary-dark dark:bg-sky-950/60 dark:text-sky-300",
-  },
-  delivery: {
-    label: "ส่งของ",
-    color: "#8B5CF6", // Violet
-    bg: "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300",
-  },
-  other: {
-    label: "อื่นๆ",
-    color: "#64748B", // Slate
-    bg: "bg-surface-subtle text-text-main dark:bg-zinc-800 dark:text-zinc-300",
+  purple: {
+    label: "เวร CT",
+    subLabel: "CT Scan",
+    desc: "เวรห้อง CT Scan",
+    badge: "bg-purple-600 text-white dark:bg-purple-600 dark:text-white font-bold shadow-xs",
+    pill: "bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300",
   },
 };
 

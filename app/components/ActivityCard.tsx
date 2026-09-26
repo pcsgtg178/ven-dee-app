@@ -10,7 +10,6 @@ import {
   MapPin,
   ArrowLeftRight,
   Lock,
-  GitCommit,
   RotateCcw,
   Trash2,
   Clock,
@@ -20,7 +19,11 @@ import {
   ScanSquare,
   Bed,
 } from "lucide-react";
-import { canEditShift, canEditService, canEditClinicLog } from "../../lib/storage";
+import {
+  canEditShift,
+  canEditService,
+  canEditClinicLog,
+} from "../../lib/storage";
 import {
   ActivityItem,
   CustomerServiceRecord,
@@ -126,6 +129,7 @@ export default function ActivityCard({
     const shiftInfo = SHIFT_CONFIG[shift.shiftType];
     const catInfo = SHIFT_CATEGORY_CONFIG[shift.category];
     const isSwapped = Boolean(shift.swapMeta);
+    const isLocked = shift.swapMeta?.isLocked ?? false;
     const isSwappedOut = shift.status === "swapped_out";
     const canEdit = canEditShift(shift);
     const code = SHIFT_CODE_MAP[shift.shiftType] || shift.shiftType;
@@ -161,9 +165,13 @@ export default function ActivityCard({
         {/* Color stripe left */}
         <div
           className={`absolute left-0 top-0 bottom-0 w-1.5 ${
-            shift.category === "green" || shift.shiftType === "r1" || shift.shiftType === "r2"
+            shift.category === "green" ||
+            shift.shiftType === "r1" ||
+            shift.shiftType === "r2"
               ? "bg-emerald-600"
-              : shift.category === "purple" || shift.shiftType === "ctm" || shift.shiftType === "cta"
+              : shift.category === "purple" ||
+                  shift.shiftType === "ctm" ||
+                  shift.shiftType === "cta"
                 ? "bg-purple-600"
                 : shift.category === "gray" || shift.shiftType === "off"
                   ? "bg-gray-500"
@@ -197,7 +205,9 @@ export default function ActivityCard({
               {/* Concise Shift Code Badge */}
               <span className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-bold bg-secondary-light text-secondary-dark dark:bg-secondary-dark/30 dark:text-secondary-light">
                 <ShiftIcon className="h-3 w-3" />
-                <span>[{code}] {shiftInfo.label} ({shiftInfo.period})</span>
+                <span>
+                  [{code}] {shiftInfo.label} ({shiftInfo.period})
+                </span>
               </span>
 
               {isSwappedOut && (
@@ -217,34 +227,88 @@ export default function ActivityCard({
 
             {/* Swap Details */}
             {isSwapped && shift.swapMeta && (
-              <div className="rounded-xl bg-secondary-light/60 p-2 text-xs dark:bg-secondary-dark/20 border border-secondary/25 space-y-1">
-                <div className="flex items-center justify-between gap-1">
+              <div className="rounded-xl bg-secondary-light/60 p-2.5 text-xs dark:bg-secondary-dark/20 border border-secondary/25 space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <div className="flex items-center gap-1.5 font-bold text-secondary-dark dark:text-secondary-light text-[11px]">
                     <ArrowLeftRight className="h-3.5 w-3.5 text-secondary shrink-0" />
-                    <span>แลกกับ: <strong>{shift.swapMeta.swappedWith}</strong></span>
+                    <span>
+                      แลกกับ:{" "}
+                      <strong className="text-text-main dark:text-white">
+                        {shift.swapMeta.swappedWith}
+                      </strong>
+                      {shift.swapMeta.originalOwner && (
+                        <span className="ml-1 font-semibold text-primary dark:text-primary-light">
+                          (เวรเดิม: {shift.swapMeta.originalOwner})
+                        </span>
+                      )}
+                    </span>
                   </div>
-                  {onViewTrail && (
-                    <button
-                      type="button"
-                      onClick={() => onViewTrail(shift)}
-                      className="text-[10px] font-bold text-secondary hover:underline"
-                    >
-                      ประวัติ
-                    </button>
-                  )}
+
+                  <div className="flex items-center gap-1.5">
+                    {onViewTrail && (
+                      <button
+                        type="button"
+                        onClick={() => onViewTrail(shift)}
+                        className="text-[10px] font-bold text-secondary hover:underline cursor-pointer"
+                      >
+                        ประวัติ
+                      </button>
+                    )}
+                    {onUndoSwap && (
+                      <button
+                        type="button"
+                        disabled={isLocked}
+                        onClick={() => !isLocked && onUndoSwap(shift)}
+                        className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold transition-all ${
+                          isLocked
+                            ? "cursor-not-allowed bg-surface-subtle text-text-muted opacity-60"
+                            : "cursor-pointer bg-card-bg text-shift-red hover:bg-rose-50 border border-rose-200 dark:bg-zinc-800 dark:text-rose-400 dark:border-rose-900"
+                        }`}
+                        title={
+                          isLocked
+                            ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
+                            : "ยกเลิกการแลกเวรและคืนค่าเดิม"
+                        }
+                      >
+                        {isLocked ? (
+                          <Lock className="h-2.5 w-2.5" />
+                        ) : (
+                          <RotateCcw className="h-2.5 w-2.5" />
+                        )}
+                        <span>ยกเลิกแลก</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {shift.swapMeta.swapReason && (
+                  <p className="text-[11px] text-text-muted dark:text-zinc-400">
+                    📝 {shift.swapMeta.swapReason}
+                  </p>
+                )}
               </div>
             )}
 
+            {/* Shift Note */}
+            {shift.note && (
+              <div className="text-xs text-text-muted dark:text-zinc-400">
+                <span>📝 {shift.note}</span>
+              </div>
+            )}
+
+            {/* Action: กู้คืนเวรที่แลกออกไปแล้ว */}
             {isSwappedOut && onRestoreShift && (
-              <div className="pt-1 flex items-center justify-between">
-                <span className="text-[10px] text-text-muted">แลกออกแล้ว</span>
+              <div className="pt-2 flex items-center justify-between border-t border-surface-subtle dark:border-zinc-800">
+                <span className="text-[11px] text-text-muted dark:text-zinc-400">
+                  เวรนี้ถูกแลกออกไปแล้ว
+                </span>
                 <button
                   type="button"
                   onClick={() => onRestoreShift(shift)}
-                  className="rounded-lg bg-primary-light px-2 py-0.5 text-[10px] font-bold text-primary-dark"
+                  className="inline-flex items-center gap-1 rounded-xl bg-primary-light px-2.5 py-1 text-xs font-bold text-primary-dark hover:bg-emerald-100 dark:bg-primary-dark/40 dark:text-primary-light border border-primary/20 active:scale-95 transition-all shadow-2xs cursor-pointer"
                 >
-                  กู้คืน
+                  <RotateCcw className="h-3 w-3" />
+                  <span>กู้คืนเวรนี้</span>
                 </button>
               </div>
             )}
@@ -252,11 +316,21 @@ export default function ActivityCard({
 
           {/* Actions */}
           <div className="flex items-center gap-1 shrink-0">
+            {!isSwappedOut && onSwapShift && (
+              <button
+                type="button"
+                onClick={() => onSwapShift(shift)}
+                className="rounded-lg p-1.5 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 transition-all dark:hover:bg-zinc-800 cursor-pointer"
+                title="แลกเวรนี้"
+              >
+                <ArrowLeftRight className="h-4 w-4" />
+              </button>
+            )}
             {canEdit && onEditShift && (
               <button
                 type="button"
                 onClick={() => onEditShift(shift)}
-                className="rounded-lg p-1.5 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 transition-all dark:hover:bg-zinc-800"
+                className="rounded-lg p-1.5 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 transition-all dark:hover:bg-zinc-800 cursor-pointer"
                 title="แก้ไข"
               >
                 <Pencil className="h-4 w-4" />
@@ -265,7 +339,7 @@ export default function ActivityCard({
             <button
               type="button"
               onClick={onDelete}
-              className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red transition-colors dark:hover:bg-zinc-800"
+              className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red transition-colors dark:hover:bg-zinc-800 cursor-pointer"
               title="ลบ"
             >
               <Trash2 className="h-4 w-4" />

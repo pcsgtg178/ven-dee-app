@@ -11,6 +11,7 @@ import {
   List,
   Pencil,
   Building2,
+  ArrowLeftRight,
 } from "lucide-react";
 import moment from "moment";
 import "moment/locale/th";
@@ -24,7 +25,11 @@ import {
   SHIFT_CODE_MAP,
 } from "../../types/vendee";
 import ActivityCard from "./ActivityCard";
-import { canEditShift, canEditService, canEditClinicLog } from "../../lib/storage";
+import {
+  canEditShift,
+  canEditService,
+  canEditClinicLog,
+} from "../../lib/storage";
 import MonthlyQuotaWidget from "./MonthlyQuotaWidget";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -115,11 +120,13 @@ function TimelineRow({
   item,
   onEditShift,
   onEditService,
+  onSwapShift,
   onEditClinicLog,
 }: {
   item: ActivityItem;
   onEditShift?: (shift: ShiftRecord) => void;
   onEditService?: (service: CustomerServiceRecord) => void;
+  onSwapShift?: (shift: ShiftRecord) => void;
   onEditClinicLog?: (clinicLog: ClinicWorkRecord) => void;
 }) {
   if (item.type === "clinic") {
@@ -159,48 +166,69 @@ function TimelineRow({
 
     return (
       <div
-        className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs transition-colors ${
+        className={`flex items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-xs transition-colors ${
           isSwapped
             ? "opacity-50 bg-surface-subtle/50 dark:bg-zinc-800/30"
             : "bg-card-bg dark:bg-zinc-900"
         }`}
       >
-        <span
-          className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-            shift.category === "black"
-              ? "bg-shift-black dark:bg-slate-300"
-              : shift.category === "red"
-                ? "bg-shift-red"
-                : "bg-emerald-500"
-          }`}
-        />
-        <span className={`font-bold ${shiftConf?.textBg || "text-text-main dark:text-white"}`}>
-          [{code}] {shiftConf?.shortLabel || shift.shiftType}
-        </span>
-        <span className="text-text-muted dark:text-zinc-400">
-          {shiftConf?.period || "ทั้งวัน"}
-        </span>
-        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${catConf?.badge || ""}`}>
-          {catConf?.label || shift.category}
-        </span>
-        {isSwapped && (
-          <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
-            แลกแล้ว
-          </span>
-        )}
-        {canEditShift(shift) && onEditShift && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditShift(shift);
-            }}
-            className="ml-auto rounded-lg p-1 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-sky-300 transition-all"
-            title="แก้ไขเวรนี้"
+        <div className="flex items-center gap-1">
+          <span
+            className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+              shift.category === "black"
+                ? "bg-shift-black dark:bg-slate-300"
+                : shift.category === "red"
+                  ? "bg-shift-red"
+                  : "bg-emerald-500"
+            }`}
+          />
+          <span
+            className={`font-bold ${shiftConf?.textBg || "text-text-main dark:text-white"}`}
           >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-        )}
+            [{code}] {shiftConf?.shortLabel || shift.shiftType}
+          </span>
+          <span className="text-text-muted dark:text-zinc-400">
+            {shiftConf?.period || "ทั้งวัน"}
+          </span>
+          <span
+            className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${catConf?.badge || ""}`}
+          >
+            {catConf?.label || shift.category}
+          </span>
+          {isSwapped && (
+            <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+              แลกแล้ว
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {!isSwapped && onSwapShift && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSwapShift(shift);
+              }}
+              className="ml-auto rounded-lg p-1 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-sky-300 transition-all"
+              title="แลกเวรนี้"
+            >
+              <ArrowLeftRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {canEditShift(shift) && onEditShift && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditShift(shift);
+              }}
+              className="ml-auto rounded-lg p-1 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-sky-300 transition-all"
+              title="แก้ไขเวรนี้"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -217,7 +245,7 @@ function TimelineRow({
       <span className="font-semibold text-text-main dark:text-white truncate">
         {service.customerName}
       </span>
-      
+
       {canEditService(service) && onEditService && (
         <button
           type="button"
@@ -412,7 +440,9 @@ export default function ScheduleTodoListView({
           </p>
           <button
             type="button"
-            onClick={() => onOpenAddModal(new Date().toISOString().split("T")[0])}
+            onClick={() =>
+              onOpenAddModal(new Date().toISOString().split("T")[0])
+            }
             className="mt-4 flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:brightness-105"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -448,7 +478,9 @@ export default function ScheduleTodoListView({
                     <div className="flex items-center justify-between rounded-xl bg-surface-subtle/50 px-3 py-1.5 dark:bg-zinc-800/40">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-extrabold text-text-main dark:text-zinc-200">
-                          {moment(group.dateStr).locale("th").format("dddd D MMMM YYYY")}
+                          {moment(group.dateStr)
+                            .locale("th")
+                            .format("dddd D MMMM YYYY")}
                         </span>
                         {isToday && (
                           <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">
@@ -509,9 +541,13 @@ export default function ScheduleTodoListView({
                 <div key={group.dateStr} className="space-y-2 opacity-70">
                   <div className="flex items-center justify-between rounded-xl bg-surface-subtle/40 px-3 py-1.5 dark:bg-zinc-800/30">
                     <span className="text-xs font-bold text-text-muted dark:text-zinc-300">
-                      {moment(group.dateStr).locale("th").format("dddd D MMMM YYYY")}
+                      {moment(group.dateStr)
+                        .locale("th")
+                        .format("dddd D MMMM YYYY")}
                     </span>
-                    <span className="text-[10px] text-text-muted">{group.items.length} งาน</span>
+                    <span className="text-[10px] text-text-muted">
+                      {group.items.length} งาน
+                    </span>
                   </div>
 
                   <div className="space-y-2.5">
@@ -556,12 +592,20 @@ export default function ScheduleTodoListView({
                     key={group.dateStr}
                     className="flex gap-3 border-b border-surface-subtle/70 last:border-b-0 dark:border-zinc-800/70"
                   >
-                    <div className={`flex flex-col items-center justify-start pt-3 pb-3 w-16 shrink-0 ${isToday ? "relative" : ""}`}>
-                      {isToday && <div className="absolute inset-0 rounded-xl bg-secondary/10 dark:bg-secondary/20" />}
-                      <span className={`relative z-10 text-lg font-extrabold leading-none ${isToday ? "text-secondary dark:text-sky-400" : "text-text-main dark:text-zinc-200"}`}>
+                    <div
+                      className={`flex flex-col items-center justify-start pt-3 pb-3 w-16 shrink-0 ${isToday ? "relative" : ""}`}
+                    >
+                      {isToday && (
+                        <div className="absolute inset-0 rounded-xl bg-secondary/10 dark:bg-secondary/20" />
+                      )}
+                      <span
+                        className={`relative z-10 text-lg font-extrabold leading-none ${isToday ? "text-secondary dark:text-sky-400" : "text-text-main dark:text-zinc-200"}`}
+                      >
                         {m.format("D")}
                       </span>
-                      <span className={`relative z-10 text-[10px] font-semibold mt-0.5 ${isToday ? "text-secondary dark:text-sky-400" : "text-text-muted dark:text-zinc-400"}`}>
+                      <span
+                        className={`relative z-10 text-[10px] font-semibold mt-0.5 ${isToday ? "text-secondary dark:text-sky-400" : "text-text-muted dark:text-zinc-400"}`}
+                      >
                         {m.locale("th").format("ddd")}
                       </span>
                       <span className="relative z-10 text-[9px] mt-0.5 text-text-muted/60 dark:text-zinc-500">
@@ -576,6 +620,7 @@ export default function ScheduleTodoListView({
                           item={item}
                           onEditShift={onEditShift}
                           onEditService={onEditService}
+                          onSwapShift={onInitiateSwap}
                           onEditClinicLog={onEditClinicLog}
                         />
                       ))}
@@ -598,7 +643,10 @@ export default function ScheduleTodoListView({
                 const m = moment(group.dateStr);
 
                 return (
-                  <div key={group.dateStr} className="flex gap-3 border-b border-surface-subtle/70 last:border-b-0 dark:border-zinc-800/70 opacity-60">
+                  <div
+                    key={group.dateStr}
+                    className="flex gap-3 border-b border-surface-subtle/70 last:border-b-0 dark:border-zinc-800/70 opacity-60"
+                  >
                     <div className="flex flex-col items-center justify-start pt-3 pb-3 w-16 shrink-0">
                       <span className="text-lg font-extrabold leading-none text-text-main dark:text-zinc-200">
                         {m.format("D")}
@@ -630,7 +678,10 @@ export default function ScheduleTodoListView({
         </div>
       )}
 
-      <div className="h-24 sm:h-28 pb-safe pointer-events-none" aria-hidden="true" />
+      <div
+        className="h-24 sm:h-28 pb-safe pointer-events-none"
+        aria-hidden="true"
+      />
     </div>
   );
 }

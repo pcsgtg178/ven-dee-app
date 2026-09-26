@@ -188,7 +188,11 @@ export default function ModalShiftSwap({
         </div>
 
         {/* Scrollable Form Content */}
-        <form id="shift-swap-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <form
+          id="shift-swap-form"
+          onSubmit={handleSubmit}
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
+        >
           {/* Error Message */}
           {errorMsg && (
             <div className="rounded-xl bg-rose-50 p-2.5 text-xs text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200">
@@ -204,13 +208,18 @@ export default function ModalShiftSwap({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-slate-900 dark:text-white">
-                  {moment(shift.date).locale("th").format("ddddที่ D MMMM YYYY")}
+                  {moment(shift.date)
+                    .locale("th")
+                    .format("ddddที่ D MMMM YYYY")}
                 </p>
                 <p className="text-xs text-slate-600 dark:text-zinc-300 mt-0.5">
-                  {shiftInfo.label} ({shiftInfo.period}) • {shift.department || "วอร์ดหลัก"}
+                  {shiftInfo.label} ({shiftInfo.period}) •{" "}
+                  {shift.department || "วอร์ดหลัก"}
                 </p>
               </div>
-              <span className={`inline-flex rounded-lg px-2 py-0.5 text-[10px] ${catInfo.badge}`}>
+              <span
+                className={`inline-flex rounded-lg px-2 py-0.5 text-[10px] ${catInfo.badge}`}
+              >
                 {catInfo.label}
               </span>
             </div>
@@ -219,7 +228,8 @@ export default function ModalShiftSwap({
           {/* Field 1: คนที่ตกลงแลกด้วย (Direct Partner) [Required] */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-              คนที่ตกลงแลกด้วย (Direct Partner) <span className="text-rose-500">*</span>
+              คนที่ตกลงแลกด้วย (Direct Partner){" "}
+              <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <input
@@ -252,7 +262,8 @@ export default function ModalShiftSwap({
             {isTopUp && (
               <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-zinc-700/80 animate-in fade-in duration-150">
                 <label className="block text-xs font-semibold text-teal-800 dark:text-teal-300 mb-1">
-                  เจ้าของเวรเดิมตามตาราง (Original Owner) <span className="text-rose-500">*</span>
+                  เจ้าของเวรเดิมตามตาราง (Original Owner){" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -263,7 +274,8 @@ export default function ModalShiftSwap({
                   className="w-full rounded-xl border border-teal-300 bg-white px-3.5 py-2 text-xs sm:text-sm text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 dark:border-teal-700 dark:bg-zinc-800 dark:text-white"
                 />
                 <p className="mt-1 text-[10px] text-slate-500 dark:text-zinc-400">
-                  *ระบุชื่อเจ้าของเวรดั้งเดิมตามตารางเวรหลักเพื่อสร้างประวัติ Swap Trail
+                  *ระบุชื่อเจ้าของเวรดั้งเดิมตามตารางเวรหลักเพื่อสร้างประวัติ
+                  Swap Trail
                 </p>
               </div>
             )}
@@ -273,7 +285,8 @@ export default function ModalShiftSwap({
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                วันที่ของเวรใหม่ที่ได้รับ <span className="text-rose-500">*</span>
+                วันที่ของเวรใหม่ที่ได้รับ{" "}
+                <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -335,111 +348,76 @@ export default function ModalShiftSwap({
                   <span className="text-[10px] opacity-70">16:00 - 00:00</span>
                 </button>
               </div>
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setNewShiftType("r1")}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all ${
+                    newShiftType === "r1"
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-400/40 dark:bg-emerald-950/50 dark:text-emerald-200 dark:border-emerald-500"
+                      : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-emerald-300 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
+                  }`}
+                >
+                  <Ambulance className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>R1</span>
+                </button>
 
-              {/* เวร R (Refer) - ทั้งวัน พร้อมตัวเลือก R1 (ทีม 1) และ R2 (ทีม 2) */}
-              <div
-                className={`mt-2.5 rounded-2xl border-2 p-3 transition-all ${
-                  newShiftType === "r1" || newShiftType === "r2"
-                    ? "border-purple-600 bg-purple-50/70 shadow-sm dark:border-purple-500 dark:bg-purple-950/40"
-                    : "border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-850"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300">
-                      <Ambulance className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-slate-800 dark:text-white">
-                          เวร R (Refer)
-                        </span>
-                        <span className="rounded-md bg-purple-100 dark:bg-purple-900/60 px-1.5 py-0.5 text-[10px] font-bold text-purple-700 dark:text-purple-300">
-                          ทั้งวัน (แลกได้)
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-purple-700 dark:text-purple-300 font-medium">
-                        เวรส่งต่อผู้ป่วยฉุกเฉิน (สามารถลงงานบริการ/งานอื่นทับเวลาเวรนี้ได้)
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewShiftType("r2")}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all ${
+                    newShiftType === "r2"
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-400/40 dark:bg-emerald-950/50 dark:text-emerald-200 dark:border-emerald-500"
+                      : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-emerald-300 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
+                  }`}
+                >
+                  <Ambulance className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>R2</span>
+                </button>
 
-                <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-zinc-800">
-                  <span className="block text-[10px] font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">
-                    ตัวเลือกทีม Refer:
-                  </span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNewShiftType("r1")}
-                      className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl border-2 text-xs font-bold transition-all ${
-                        newShiftType === "r1"
-                          ? "border-purple-600 bg-purple-600 text-white shadow-xs"
-                          : "border-slate-200 bg-slate-50/60 text-slate-700 hover:border-purple-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                      }`}
-                    >
-                      <Ambulance className="h-3.5 w-3.5" />
-                      <span>R1 (ทีม 1)</span>
-                      {newShiftType === "r1" && <Check className="h-3.5 w-3.5 ml-auto" />}
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => setNewShiftType("off")}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all ${
+                    newShiftType === "off"
+                      ? "border-slate-800 bg-slate-100 text-slate-900 ring-2 ring-slate-400 dark:bg-zinc-800 dark:text-white"
+                      : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-slate-400 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
+                  }`}
+                >
+                  <span>Off (0)</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setNewShiftType("ctm")}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all ${
+                    newShiftType === "ctm"
+                      ? "border-purple-500 bg-purple-50 text-purple-900 ring-2 ring-purple-400/40 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-500"
+                      : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-purple-300 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
+                  }`}
+                >
+                  <span>CT เช้า</span>
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setNewShiftType("r2")}
-                      className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl border-2 text-xs font-bold transition-all ${
-                        newShiftType === "r2"
-                          ? "border-purple-600 bg-purple-600 text-white shadow-xs"
-                          : "border-slate-200 bg-slate-50/60 text-slate-700 hover:border-purple-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                      }`}
-                    >
-                      <Ambulance className="h-3.5 w-3.5" />
-                      <span>R2 (ทีม 2)</span>
-                      {newShiftType === "r2" && <Check className="h-3.5 w-3.5 ml-auto" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewShiftType("off")}
-                    className={`py-1.5 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
-                      newShiftType === "off"
-                        ? "border-slate-800 bg-slate-800 text-white shadow-xs"
-                        : "border-slate-200 bg-slate-50/60 text-slate-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                    }`}
-                  >
-                    Off (0)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewShiftType("ctm")}
-                    className={`py-1.5 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
-                      newShiftType === "ctm"
-                        ? "border-purple-600 bg-purple-600 text-white shadow-xs"
-                        : "border-slate-200 bg-slate-50/60 text-slate-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                    }`}
-                  >
-                    CTM
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewShiftType("cta")}
-                    className={`py-1.5 px-2 rounded-xl border-2 text-xs font-bold transition-all ${
-                      newShiftType === "cta"
-                        ? "border-purple-600 bg-purple-600 text-white shadow-xs"
-                        : "border-slate-200 bg-slate-50/60 text-slate-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                    }`}
-                  >
-                    CTA
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewShiftType("cta")}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all ${
+                    newShiftType === "cta"
+                      ? "border-purple-500 bg-purple-50 text-purple-900 ring-2 ring-purple-400/40 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-500"
+                      : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-purple-300 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
+                  }`}
+                >
+                  <span>CT บ่าย</span>
+                </button>
               </div>
             </div>
 
             {/* หมวดเวรใหม่: เวรดำ vs เวรแดง (ไม่ต้องเลือกกรณีเวร R เพราะเวร R ให้ใช้สีเขียว) */}
-            {newShiftType !== "r1" && newShiftType !== "r2" ? (
+            {(newShiftType === "morning" ||
+              newShiftType === "afternoon" ||
+              newShiftType === "night") && (
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
                   หมวดเวรใหม่ที่ได้รับ <span className="text-rose-500">*</span>
@@ -482,7 +460,10 @@ export default function ModalShiftSwap({
                   </button>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {/* หมวดเวรใหม่: เวร R (ไม่ต้องเลือกเวรดำ/แดง เพราะเวร R ให้ใช้สีเขียว) */}
+            {(newShiftType === "r1" || newShiftType === "r2") && (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
@@ -490,12 +471,40 @@ export default function ModalShiftSwap({
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white shadow-2xs">
                     <span className="h-2 w-2 rounded-full bg-white" />
-                    เวร R (สีเขียว • ทั้งวัน)
+                    เวร Refer ทีม {newShiftType === "r1" ? "1" : "2"} (สีเขียว •
+                    ทั้งวัน)
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400">
-                  *เวร Refer ไม่ต้องเลือกเวรดำ/แดง ระบบจะแสดงผลด้วยสีเขียวอัตโนมัติ
-                </p>
+              </div>
+            )}
+
+            {/* หมวดเวรใหม่: เวร Off */}
+            {newShiftType === "off" && (
+              <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-3 dark:border-gray-900/50 dark:bg-gray-950/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-800 dark:text-gray-300">
+                    หมวดเวรใหม่:
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-600 px-2.5 py-1 text-xs font-bold text-white shadow-2xs">
+                    <span className="h-2 w-2 rounded-full bg-white" />
+                    เวร Off (สีดำ • ทั้งวัน)
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* หมวดเวรใหม่: เวร CTA */}
+            {(newShiftType === "cta" || newShiftType === "ctm") && (
+              <div className="rounded-2xl border border-purple-200 bg-purple-50/70 p-3 dark:border-purple-900/50 dark:bg-purple-950/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-800 dark:text-purple-300">
+                    หมวดเวรใหม่:
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white shadow-2xs">
+                    <span className="h-2 w-2 rounded-full bg-white" />
+                    เวร Off (สีดำ • ทั้งวัน)
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -510,14 +519,18 @@ export default function ModalShiftSwap({
                     ⚠️ คำเตือน: ยอดเวรดำไม่ครบเกณฑ์ประจำเดือน
                   </h4>
                   <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
-                    การแลก <strong>เวรดำ</strong> ออกไปแล้วได้รับ <strong>เวรแดง (OT)</strong> กลับมา จะทำให้ยอดเวรดำในเดือน {quotaWarning.monthName} ลดลงเหลือ{" "}
+                    การแลก <strong>เวรดำ</strong> ออกไปแล้วได้รับ{" "}
+                    <strong>เวรแดง (OT)</strong> กลับมา จะทำให้ยอดเวรดำในเดือน{" "}
+                    {quotaWarning.monthName} ลดลงเหลือ{" "}
                     <strong className="underline text-rose-700 dark:text-rose-300">
                       {quotaWarning.simulatedCount}/{quotaWarning.quota} วัน
                     </strong>{" "}
-                    (ขาดอีก {quotaWarning.remainingNeeded} วัน จึงจะครบเกณฑ์ {quotaWarning.quota} วัน)
+                    (ขาดอีก {quotaWarning.remainingNeeded} วัน จึงจะครบเกณฑ์{" "}
+                    {quotaWarning.quota} วัน)
                   </p>
                   <p className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold pt-1">
-                    *กรุณาตรวจสอบว่าท่านมีเวรดำอื่นมาชดเชย หรือได้รับอนุญาตจากหัวหน้าเวรแล้วก่อนยืนยัน
+                    *กรุณาตรวจสอบว่าท่านมีเวรดำอื่นมาชดเชย
+                    หรือได้รับอนุญาตจากหัวหน้าเวรแล้วก่อนยืนยัน
                   </p>
                 </div>
               </div>
@@ -578,7 +591,8 @@ export default function ModalShiftSwap({
             label: "เวรเดิมที่จะแลกออก",
             value: (
               <span className="font-bold text-text-main dark:text-white">
-                {moment(shift.date).locale("th").format("D MMM YYYY")} • {shiftInfo.label} ({catInfo.label})
+                {moment(shift.date).locale("th").format("D MMM YYYY")} •{" "}
+                {shiftInfo.label} ({catInfo.label})
               </span>
             ),
           },
@@ -619,7 +633,8 @@ export default function ModalShiftSwap({
             <span className="text-amber-900 dark:text-amber-200">
               ⚠️ <strong>คำเตือนโควตา:</strong> การแลกนี้จะทำให้ยอดเวรดำในเดือน{" "}
               {quotaWarning.monthName} ลดเหลือ {quotaWarning.simulatedCount}/
-              {quotaWarning.quota} วัน (ขาดอีก {quotaWarning.remainingNeeded} วัน)
+              {quotaWarning.quota} วัน (ขาดอีก {quotaWarning.remainingNeeded}{" "}
+              วัน)
             </span>
           ) : (
             <span>

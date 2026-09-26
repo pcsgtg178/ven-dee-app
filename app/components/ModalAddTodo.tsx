@@ -62,7 +62,9 @@ export default function ModalAddTodo({
   defaultDate,
   onSuccess,
 }: ModalAddTodoProps) {
-  const [activeTab, setActiveTab] = useState<"shift" | "service" | "clinic">(initialTab);
+  const [activeTab, setActiveTab] = useState<"shift" | "service" | "clinic">(
+    initialTab,
+  );
 
   // Customers & Medications state
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -75,7 +77,6 @@ export default function ModalAddTodo({
   const [shiftDate, setShiftDate] = useState("");
   const [shiftType, setShiftType] = useState<ShiftType>("morning");
   const [shiftCategory, setShiftCategory] = useState<ShiftCategory>("black");
-  const [shiftDepartment, setShiftDepartment] = useState("");
   const [shiftNote, setShiftNote] = useState("");
 
   // Customer Service Form State
@@ -88,7 +89,8 @@ export default function ModalAddTodo({
 
   // Clinic Form State
   const [clinicDate, setClinicDate] = useState("");
-  const [clinicPresetShift, setClinicPresetShift] = useState<ClinicPresetShift>("12:30 - 17:30");
+  const [clinicPresetShift, setClinicPresetShift] =
+    useState<ClinicPresetShift>("12:30 - 17:30");
   const [clinicNote, setClinicNote] = useState("");
 
   // Loading & error
@@ -148,7 +150,6 @@ export default function ModalAddTodo({
         date: shiftDate,
         shiftType,
         category: categoryToSave,
-        department: shiftDepartment.trim() || undefined,
         note: shiftNote.trim() || undefined,
       });
 
@@ -358,7 +359,11 @@ export default function ModalAddTodo({
             /* ====================================
                FORM 1: ขึ้นเวร (Shift Form)
                ==================================== */
-            <form id="shift-form" onSubmit={handleSaveShift} className="space-y-4">
+            <form
+              id="shift-form"
+              onSubmit={handleSaveShift}
+              className="space-y-4"
+            >
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
                   วันที่ขึ้นเวร <span className="text-rose-500">*</span>
@@ -430,7 +435,7 @@ export default function ModalAddTodo({
                   </button>
                 </div>
 
-                <div className="mt-2 grid grid-cols-4 gap-2">
+                <div className="mt-2 grid grid-cols-3 gap-2">
                   {/* Off */}
                   <button
                     type="button"
@@ -450,7 +455,10 @@ export default function ModalAddTodo({
                   {/* Refer */}
                   <button
                     type="button"
-                    onClick={() => { if (shiftType !== "r1" && shiftType !== "r2") setShiftType("r1"); }}
+                    onClick={() => {
+                      if (shiftType !== "r1" && shiftType !== "r2")
+                        setShiftType("r1");
+                    }}
                     className={`relative flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all touch-manipulation text-center ${
                       shiftType === "r1" || shiftType === "r2"
                         ? "border-emerald-500 bg-emerald-50/80 text-emerald-900 shadow-sm dark:border-emerald-400 dark:bg-emerald-950/50 dark:text-emerald-200"
@@ -466,9 +474,12 @@ export default function ModalAddTodo({
                   {/* CT เช้า */}
                   <button
                     type="button"
-                    onClick={() => setShiftType("ctm")}
+                    onClick={() => {
+                      if (shiftType !== "ctm" && shiftType !== "cta")
+                        setShiftType("ctm");
+                    }}
                     className={`relative flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all touch-manipulation text-center ${
-                      shiftType === "ctm"
+                      shiftType === "ctm" || shiftType === "cta"
                         ? "border-purple-600 bg-purple-50/80 text-purple-900 shadow-sm dark:border-purple-400 dark:bg-purple-950/50 dark:text-purple-200"
                         : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
                     }`}
@@ -476,29 +487,15 @@ export default function ModalAddTodo({
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/60 mb-1 text-purple-700 dark:text-purple-300">
                       <ScanSquare className="h-3.5 w-3.5" />
                     </div>
-                    <span className="font-bold text-[11px]">CTM</span>
-                  </button>
-
-                  {/* CT บ่าย */}
-                  <button
-                    type="button"
-                    onClick={() => setShiftType("cta")}
-                    className={`relative flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all touch-manipulation text-center ${
-                      shiftType === "cta"
-                        ? "border-purple-600 bg-purple-50/80 text-purple-900 shadow-sm dark:border-purple-400 dark:bg-purple-950/50 dark:text-purple-200"
-                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
-                    }`}
-                  >
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/60 mb-1 text-purple-700 dark:text-purple-300">
-                      <ScanSquare className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="font-bold text-[11px]">CTA</span>
+                    <span className="font-bold text-[11px]">CT</span>
                   </button>
                 </div>
               </div>
 
               {/* Shift Category: Black / Red */}
-              {(shiftType === "morning" || shiftType === "afternoon" || shiftType === "night") && (
+              {(shiftType === "morning" ||
+                shiftType === "afternoon" ||
+                shiftType === "night") && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
                     หมวดเวร <span className="text-rose-500">*</span>
@@ -513,7 +510,9 @@ export default function ModalAddTodo({
                           : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300"
                       }`}
                     >
-                      <span className="text-xs font-extrabold">เวรดำ (ประจำ)</span>
+                      <span className="text-xs font-extrabold">
+                        เวรดำ (ประจำ)
+                      </span>
                     </button>
                     <button
                       type="button"
@@ -524,25 +523,95 @@ export default function ModalAddTodo({
                           : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300"
                       }`}
                     >
-                      <span className="text-xs font-extrabold text-rose-600 dark:text-rose-400">เวรแดง (OT)</span>
+                      <span className="text-xs font-extrabold text-rose-600 dark:text-rose-400">
+                        เวรแดง (OT)
+                      </span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Ward / Dept */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                  แผนก / วอร์ด
-                </label>
-                <input
-                  type="text"
-                  placeholder="เช่น Ward 5, ICU"
-                  value={shiftDepartment}
-                  onChange={(e) => setShiftDepartment(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
+              {/* Shift Category: Black / Red */}
+              {(shiftType === "r1" || shiftType === "r2") && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
+                    ตัวเลือกทีม Refer <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShiftType("r1")}
+                      className={`flex flex-col items-start p-3 rounded-2xl border-2 text-left transition-all ${
+                        shiftType === "r1"
+                          ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold"
+                          : "border-emerald-200 bg-white text-emerald-700 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300"
+                      }`}
+                    >
+                      <div
+                        className={`flex gap-1.5 items-center text-xs font-extrabold ${shiftType === "r1" ? "text-emerald-500 justify-center" : "text-emerald-700 dark:text-emerald-300"}`}
+                      >
+                        <Ambulance className="h-3.5 w-3.5" />
+                        Refer ทีม 1
+                        {shiftType === "r1" && (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShiftType("r2")}
+                      className={`flex flex-col items-start p-3 rounded-2xl border-2 text-left transition-all ${
+                        shiftType === "r2"
+                          ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold"
+                          : "border-emerald-200 bg-white text-emerald-700 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300"
+                      }`}
+                    >
+                      <div
+                        className={`flex gap-1.5 items-center text-xs font-extrabold ${shiftType === "r2" ? "text-emerald-500 justify-center" : "text-emerald-700 dark:text-emerald-300"}`}
+                      >
+                        <Ambulance className="h-3.5 w-3.5" />
+                        Refer ทีม 2
+                        {shiftType === "r2" && (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Shift Type: CT */}
+              {(shiftType === "ctm" || shiftType === "cta") && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
+                    ตัวเลือกเวร CT <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShiftType("ctm")}
+                      className={`flex flex-col items-start p-3 rounded-2xl border-2 text-left transition-all ${
+                        shiftType === "ctm"
+                          ? "border-purple-600 bg-purple-50 text-purple-900 dark:border-purple-400 dark:bg-purple-950/60 dark:text-purple-200 font-bold"
+                          : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300"
+                      }`}
+                    >
+                      <span className="text-xs font-extrabold">CT เช้า</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShiftType("cta")}
+                      className={`flex flex-col items-start p-3 rounded-2xl border-2 text-left transition-all ${
+                        shiftType === "cta"
+                          ? "border-purple-600 bg-purple-50 text-purple-900 dark:border-purple-400 dark:bg-purple-950/60 dark:text-purple-200 font-bold"
+                          : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300"
+                      }`}
+                    >
+                      <span className="text-xs font-extrabold">CT บ่าย</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Note */}
               <div>
@@ -562,7 +631,11 @@ export default function ModalAddTodo({
             /* ====================================
                FORM 2: บริการลูกค้า (Service Form)
                ==================================== */
-            <form id="service-form" onSubmit={handleSaveService} className="space-y-4">
+            <form
+              id="service-form"
+              onSubmit={handleSaveService}
+              className="space-y-4"
+            >
               {/* Customer Selector */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -571,7 +644,9 @@ export default function ModalAddTodo({
                   </label>
                   <button
                     type="button"
-                    onClick={() => setShowQuickAddCustomer(!showQuickAddCustomer)}
+                    onClick={() =>
+                      setShowQuickAddCustomer(!showQuickAddCustomer)
+                    }
                     className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
                   >
                     <UserPlus className="h-3 w-3" />
@@ -691,12 +766,15 @@ export default function ModalAddTodo({
                         {masterMedications.length > 0 && (
                           <select
                             onChange={(e) => {
-                              if (e.target.value) handleUpdateMedication(idx, e.target.value);
+                              if (e.target.value)
+                                handleUpdateMedication(idx, e.target.value);
                             }}
                             defaultValue=""
                             className="rounded-xl border border-emerald-300 bg-white px-2 py-1.5 text-xs text-slate-800 dark:border-emerald-800 dark:bg-zinc-850 dark:text-white"
                           >
-                            <option value="" disabled>-- เลือกจากคลัง --</option>
+                            <option value="" disabled>
+                              -- เลือกจากคลัง --
+                            </option>
                             {masterMedications.map((m) => (
                               <option key={m.id} value={m.name}>
                                 {m.name} {m.price ? `(฿${m.price})` : ""}
@@ -708,7 +786,9 @@ export default function ModalAddTodo({
                           type="text"
                           placeholder="ชื่อยา / ขนาดยา"
                           value={med}
-                          onChange={(e) => handleUpdateMedication(idx, e.target.value)}
+                          onChange={(e) =>
+                            handleUpdateMedication(idx, e.target.value)
+                          }
                           className="flex-1 rounded-xl border border-emerald-200 bg-white px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-emerald-500 dark:border-emerald-800 dark:bg-zinc-850 dark:text-white"
                         />
                       </div>
@@ -758,10 +838,15 @@ export default function ModalAddTodo({
             /* ====================================
                FORM 3: คลินิก (Clinic Log Form)
                ==================================== */
-            <form id="clinic-form" onSubmit={handleSaveClinicLog} className="space-y-4">
+            <form
+              id="clinic-form"
+              onSubmit={handleSaveClinicLog}
+              className="space-y-4"
+            >
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                  วันที่ปฏิบัติงานคลินิก <span className="text-rose-500">*</span>
+                  วันที่ปฏิบัติงานคลินิก{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -778,7 +863,8 @@ export default function ModalAddTodo({
               {/* 3 Preset Working Shifts */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-2">
-                  เลือกกะเวลาคลินิก (Preset Shift) <span className="text-rose-500">*</span>
+                  เลือกกะเวลาคลินิก (Preset Shift){" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <div className="space-y-2">
                   {CLINIC_PRESETS.map((preset) => {
@@ -795,10 +881,14 @@ export default function ModalAddTodo({
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <Clock className={`h-4 w-4 ${isSelected ? "text-purple-600 dark:text-purple-300" : "text-slate-400"}`} />
+                          <Clock
+                            className={`h-4 w-4 ${isSelected ? "text-purple-600 dark:text-purple-300" : "text-slate-400"}`}
+                          />
                           <span>{preset} น.</span>
                         </div>
-                        {isSelected && <Check className="h-4 w-4 text-purple-600 dark:text-purple-300" />}
+                        {isSelected && (
+                          <Check className="h-4 w-4 text-purple-600 dark:text-purple-300" />
+                        )}
                       </button>
                     );
                   })}
@@ -833,7 +923,13 @@ export default function ModalAddTodo({
           </button>
           <button
             type="submit"
-            form={activeTab === "shift" ? "shift-form" : activeTab === "service" ? "service-form" : "clinic-form"}
+            form={
+              activeTab === "shift"
+                ? "shift-form"
+                : activeTab === "service"
+                  ? "service-form"
+                  : "clinic-form"
+            }
             className={`flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:brightness-105 transition-all ${
               activeTab === "shift"
                 ? "bg-secondary"

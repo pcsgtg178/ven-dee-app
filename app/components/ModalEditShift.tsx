@@ -16,7 +16,13 @@ import {
   FileText,
   MapPin,
 } from "lucide-react";
-import { ShiftCategory, ShiftRecord, ShiftType, SHIFT_CONFIG, SHIFT_CATEGORY_CONFIG } from "../../types/vendee";
+import {
+  ShiftCategory,
+  ShiftRecord,
+  ShiftType,
+  SHIFT_CONFIG,
+  SHIFT_CATEGORY_CONFIG,
+} from "../../types/vendee";
 import { saveShift } from "../../lib/storage";
 
 interface ModalEditShiftProps {
@@ -35,7 +41,6 @@ export default function ModalEditShift({
   const [shiftDate, setShiftDate] = useState("");
   const [shiftType, setShiftType] = useState<ShiftType>("morning");
   const [shiftCategory, setShiftCategory] = useState<ShiftCategory>("black");
-  const [shiftDepartment, setShiftDepartment] = useState("");
   const [shiftNote, setShiftNote] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -44,7 +49,6 @@ export default function ModalEditShift({
       setShiftDate(shift.date || "");
       setShiftType(shift.shiftType || "morning");
       setShiftCategory(shift.category || "black");
-      setShiftDepartment(shift.department || "");
       setShiftNote(shift.note || "");
       setErrorMsg("");
     }
@@ -68,7 +72,6 @@ export default function ModalEditShift({
         date: shiftDate,
         shiftType,
         category: categoryToSave,
-        department: shiftDepartment.trim() || undefined,
         note: shiftNote.trim() || undefined,
         status: shift.status,
         createdAt: shift.createdAt,
@@ -123,7 +126,9 @@ export default function ModalEditShift({
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
               <Calendar className="h-3.5 w-3.5 text-secondary" />
-              <span>วันที่ขึ้นเวร <strong className="text-rose-500">*</strong></span>
+              <span>
+                วันที่ขึ้นเวร <strong className="text-rose-500">*</strong>
+              </span>
             </label>
             <input
               type="date"
@@ -152,7 +157,9 @@ export default function ModalEditShift({
               >
                 <Sun className="h-5 w-5 text-amber-500 mb-1" />
                 <span className="text-xs font-bold">เวรเช้า</span>
-                <span className="text-[10px] text-text-muted dark:text-zinc-400">08:00 - 16:00</span>
+                <span className="text-[10px] text-text-muted dark:text-zinc-400">
+                  08:00 - 16:00
+                </span>
               </button>
 
               <button
@@ -166,7 +173,9 @@ export default function ModalEditShift({
               >
                 <Sunset className="h-5 w-5 text-sky-500 mb-1" />
                 <span className="text-xs font-bold">เวรบ่าย</span>
-                <span className="text-[10px] text-text-muted dark:text-zinc-400">16:00 - 00:00</span>
+                <span className="text-[10px] text-text-muted dark:text-zinc-400">
+                  16:00 - 00:00
+                </span>
               </button>
 
               <button
@@ -180,7 +189,9 @@ export default function ModalEditShift({
               >
                 <Moon className="h-5 w-5 text-indigo-500 mb-1" />
                 <span className="text-xs font-bold">เวรดึก</span>
-                <span className="text-[10px] text-text-muted dark:text-zinc-400">00:00 - 08:00</span>
+                <span className="text-[10px] text-text-muted dark:text-zinc-400">
+                  00:00 - 08:00
+                </span>
               </button>
             </div>
 
@@ -223,7 +234,8 @@ export default function ModalEditShift({
               >
                 <span>Off (0)</span>
               </button>
-
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setShiftType("ctm")}
@@ -239,7 +251,7 @@ export default function ModalEditShift({
               <button
                 type="button"
                 onClick={() => setShiftType("cta")}
-                className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all col-span-2 ${
+                className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-bold transition-all ${
                   shiftType === "cta"
                     ? "border-purple-500 bg-purple-50 text-purple-900 ring-2 ring-purple-400/40 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-500"
                     : "border-surface-subtle bg-surface-subtle/30 text-text-muted hover:border-purple-300 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400"
@@ -251,7 +263,9 @@ export default function ModalEditShift({
           </div>
 
           {/* Shift Category (Black vs Red OT) */}
-          {shiftType !== "r1" && shiftType !== "r2" && (
+          {(shiftType === "morning" ||
+            shiftType === "afternoon" ||
+            shiftType === "night") && (
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-text-main dark:text-zinc-200">
                 ประเภทเวร (Category)
@@ -303,21 +317,6 @@ export default function ModalEditShift({
               </div>
             </div>
           )}
-
-          {/* Department */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
-              <MapPin className="h-3.5 w-3.5 text-secondary" />
-              <span>วอร์ด / แผนกที่ขึ้นเวร (ไม่บังคับ)</span>
-            </label>
-            <input
-              type="text"
-              value={shiftDepartment}
-              onChange={(e) => setShiftDepartment(e.target.value)}
-              placeholder="เช่น วอร์ด ICU, แผนก ER, ตึกผู้ป่วยใน 6"
-              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2.5 text-sm text-text-main outline-none focus:border-secondary focus:ring-2 focus:ring-secondary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
-            />
-          </div>
 
           {/* Note */}
           <div className="space-y-1.5">

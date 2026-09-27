@@ -196,6 +196,7 @@ export default function ScheduleCalendarView({
           locales={[thLocale]}
           plugins={[themePlugin, interactionPlugin, dayGridPlugin]}
           initialView="dayGridMonth"
+          firstDay={0}
           height="100%"
           expandRows={true}
           headerToolbar={{

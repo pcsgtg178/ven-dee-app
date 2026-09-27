@@ -149,9 +149,9 @@ export default function ModalEditService({
           )}
 
           {/* Date & Time */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200 mb-1">
+          <div className="grid grid-cols-2 gap-3 items-end">
+            <div className="flex flex-col">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200 mb-1.5">
                 <Calendar className="h-3.5 w-3.5 text-primary" />
                 <span>วันที่</span>
               </label>
@@ -160,11 +160,11 @@ export default function ModalEditService({
                 required
                 value={serviceDate}
                 onChange={(e) => setServiceDate(e.target.value)}
-                className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+                className="w-full h-11 min-h-[44px] rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white appearance-none box-border flex items-center"
               />
             </div>
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200 mb-1">
+            <div className="flex flex-col">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200 mb-1.5">
                 <Clock className="h-3.5 w-3.5 text-primary" />
                 <span>เวลา</span>
               </label>
@@ -173,7 +173,7 @@ export default function ModalEditService({
                 required
                 value={serviceTime}
                 onChange={(e) => setServiceTime(e.target.value)}
-                className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+                className="w-full h-11 min-h-[44px] rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white appearance-none box-border flex items-center"
               />
             </div>
           </div>
@@ -207,18 +207,18 @@ export default function ModalEditService({
 
             <div className="space-y-2">
               {medications.map((med, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 w-4 text-right">
+                <div key={idx} className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 w-3.5 sm:w-4 text-right shrink-0">
                     {idx + 1}.
                   </span>
-                  <div className="flex-1 flex gap-1.5">
+                  <div className="flex-1 flex items-center gap-1.5 min-w-0">
                     {masterMeds.length > 0 && (
                       <select
                         onChange={(e) => {
                           if (e.target.value) handleMedicationChange(idx, e.target.value);
                         }}
                         defaultValue=""
-                        className="rounded-xl border border-primary/30 bg-white px-2 py-1 text-xs text-text-main dark:bg-zinc-900 dark:text-white"
+                        className="w-28 sm:w-36 shrink-0 min-w-0 truncate rounded-xl border border-primary/30 bg-white px-2 py-1.5 text-xs text-text-main dark:bg-zinc-900 dark:text-white"
                       >
                         <option value="" disabled>-- เลือกจากคลัง --</option>
                         {masterMeds.map((m) => (
@@ -233,14 +233,14 @@ export default function ModalEditService({
                       value={med}
                       onChange={(e) => handleMedicationChange(idx, e.target.value)}
                       placeholder="ชื่อยา / ขนาดยา"
-                      className="flex-1 rounded-xl border border-primary/30 bg-card-bg px-3 py-1.5 text-xs text-text-main outline-none focus:border-primary dark:bg-zinc-900 dark:text-white dark:border-emerald-800"
+                      className="flex-1 min-w-0 w-full rounded-xl border border-primary/30 bg-card-bg px-2.5 py-1.5 text-xs text-text-main outline-none focus:border-primary dark:bg-zinc-900 dark:text-white dark:border-emerald-800"
                     />
                   </div>
                   {medications.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleRemoveMedication(idx)}
-                      className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>

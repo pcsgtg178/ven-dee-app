@@ -9,16 +9,31 @@ import thLocale from "@fullcalendar/react/locales/th";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { ActivityItem } from "../../types/vendee";
 
+export interface ShiftDetail {
+  code: string;
+  isRed: boolean;
+  isRefer: boolean;
+  isSwapped: boolean;
+  shiftType: string;
+  category: string;
+}
+
 export interface CalendarEventItem {
   id: string;
   title: string;
   date: string;
+  start?: string;
+  allDay?: boolean;
   color: string;
   textColor: string;
+  contrastColor?: string;
   order: number;
   extendedProps: {
-    item: ActivityItem;
+    item?: ActivityItem;
+    items?: ActivityItem[];
     order: number;
+    shiftDetails?: ShiftDetail[];
+    isService?: boolean;
   };
 }
 
@@ -84,6 +99,60 @@ export default function ScheduleCalendarView({
     };
   }, [isFullscreen]);
 
+  // Custom Event Renderer for FullCalendar (Grouped shifts displayed as 1 / 2 / 3 with large font)
+  const renderEventContent = (eventInfo: any) => {
+    const { title, extendedProps } = eventInfo.event;
+    const shiftDetails = extendedProps?.shiftDetails as ShiftDetail[] | undefined;
+    const isService = Boolean(
+      extendedProps?.isService || extendedProps?.item?.type === "service",
+    );
+
+    if (shiftDetails && shiftDetails.length > 0) {
+      return (
+        <div className="flex items-center justify-center gap-0.5 sm:gap-1 w-full overflow-hidden text-center py-0.5 px-0.5 leading-none">
+          {shiftDetails.map((detail, idx) => {
+            let colorClass = "text-slate-900 dark:text-slate-100 font-extrabold";
+            if (detail.isRefer) {
+              colorClass = "text-emerald-600 dark:text-emerald-400 font-extrabold";
+            } else if (detail.isRed) {
+              colorClass = "text-rose-600 dark:text-rose-400 font-extrabold";
+            }
+
+            return (
+              <React.Fragment key={idx}>
+                {idx > 0 && (
+                  <span className="text-slate-400 dark:text-slate-500 font-bold mx-0.5 text-sm sm:text-base select-none">
+                    /
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-0.5">
+                  {detail.isSwapped && <span className="text-[10px] sm:text-xs">🔄</span>}
+                  <span className={`text-base sm:text-xl font-extrabold tracking-tight ${colorClass}`}>
+                    {detail.code}
+                  </span>
+                </span>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      );
+    }
+
+    if (isService) {
+      return (
+        <div className="truncate text-[10px] sm:text-[11px] font-medium leading-tight px-0.5 py-0.5 text-white">
+          {title}
+        </div>
+      );
+    }
+
+    return (
+      <div className="truncate text-xs font-semibold px-1 py-0.5 text-slate-700 dark:text-slate-200">
+        {title}
+      </div>
+    );
+  };
+
   return (
     <div
       className={
@@ -136,6 +205,7 @@ export default function ScheduleCalendarView({
           }}
           eventOrder="order,start"
           events={events}
+          eventContent={renderEventContent}
           dateClick={onDateClick}
           eventClick={onEventClick}
         />

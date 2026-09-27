@@ -221,3 +221,35 @@ button, a, input, select, textarea, [role="button"] {
     font-size: 16px !important;
   }
 }
+
+/* =========================================================================
+   Fix iOS Safari Date & Time Input Alignment & Height Discrepancies (iPhone 15)
+   ========================================================================= */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  min-height: 44px !important;
+  max-height: 44px !important;
+  height: 44px !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.25em;
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  margin-left: auto;
+}
+

@@ -258,71 +258,177 @@ export default function ScheduleOverview() {
           return item.status !== "swapped_out" && item.status !== "cancelled";
         }
         return true;
+      })
+      .sort((a, b) => {
+        const getTimeVal = (item: ActivityItem) => {
+          if (item.type === "shift") {
+            switch (item.shiftType) {
+              case "night":
+                return "00:00";
+              case "r1":
+              case "r2":
+                return "00:01";
+              case "off":
+                return "00:02";
+              case "ctm":
+                return "07:30";
+              case "morning":
+                return "08:00";
+              case "cta":
+                return "12:00";
+              case "afternoon":
+                return "16:00";
+              default:
+                return "00:00";
+            }
+          }
+          if (item.type === "clinic") {
+            return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "12:30";
+          }
+          return (item as CustomerServiceRecord).time || "12:00";
+        };
+        return getTimeVal(a).localeCompare(getTimeVal(b));
       });
   }, [activities, selectedDateStr]);
 
-  // Calendar events transformation (hide swapped-out shifts from calendar)
+  // Calendar events transformation (hide swapped-out shifts from calendar & group shifts per day)
   const calendarEvents = useMemo(() => {
-    return activities
-      .filter((item) => {
-        // ซ่อนเวรเก่าที่ถูกแลกออกแล้ว (swapped_out) และเวรที่ถูกยกเลิก (cancelled) ออกจากปฏิทิน
-        if (item.type === "shift") {
-          return item.status !== "swapped_out" && item.status !== "cancelled";
-        }
-        return true;
-      })
-      .map((item) => {
-        if (item.type === "shift") {
-          const code = SHIFT_CODE_MAP[item.shiftType]; // "1" = เวรดึก, "2" = เวรเช้า, "3" = เวรบ่าย, "R1", "R2"
-          const isRed = item.category === "red";
-          const isRefer = item.shiftType === "r1" || item.shiftType === "r2" || item.category === "green";
-          const isSwapped = Boolean(item.swapMeta);
-          const swapPrefix = isSwapped ? "🔄" : "";
-          const titleText = `${swapPrefix}${code}`;
+    const activeItems = activities.filter((item) => {
+      // ซ่อนเวรเก่าที่ถูกแลกออกแล้ว (swapped_out) และเวรที่ถูกยกเลิก (cancelled) ออกจากปฏิทิน
+      if (item.type === "shift") {
+        return item.status !== "swapped_out" && item.status !== "cancelled";
+      }
+      return true;
+    });
 
-          // เวรดำ: พื้นหลังสีดำ (#000000), เวรแดง: พื้นหลังสีแดง (#dc2626), เวร R: พื้นหลังสีเขียว (#16a34a)
-          const eventColor = isRefer ? "#16a34a" : isRed ? "#dc2626" : "#000000";
+    const shifts = activeItems.filter((item) => item.type === "shift") as ShiftRecord[];
+    const nonShifts = activeItems.filter((item) => item.type !== "shift");
 
-          return {
-            className: "!text-lg !font-bold",
-            id: item.id,
-            title: titleText,
-            date: item.date,
-            color: "#ffffff",
-            textColor: eventColor,
-            contrastColor: eventColor,
-            order: 1, // SHIFTS ALWAYS FIRST!
-            extendedProps: { item, order: 1 },
-          };
-        } else if (item.type === "clinic") {
-          const clinicLog = item as ClinicWorkRecord;
-          const clinicTitle = `🏥 ${clinicLog.presetShift}`;
-          return {
-            id: item.id,
-            title: clinicTitle,
-            date: item.date,
-            color: "#8b5cf6",
-            textColor: "#ffffff",
-            contrastColor: "#ffffff",
-            order: 3,
-            extendedProps: { item, order: 3 },
-          };
-        } else {
-          // Customer Service: ชื่อลูกค้าและเวลา
-          const serviceTitle = `${item.time} ${item.customerName}`;
+    // จัดกลุ่มเวรตามวันที่ (Group active shifts by date)
+    const shiftsByDate: Record<string, ShiftRecord[]> = {};
+    shifts.forEach((shift) => {
+      if (!shiftsByDate[shift.date]) {
+        shiftsByDate[shift.date] = [];
+      }
+      shiftsByDate[shift.date].push(shift);
+    });
 
-          return {
-            id: item.id,
-            title: serviceTitle,
-            date: item.date,
-            color: "#0284c7", // Sea blue for customer service to contrast with green Refer
-            textColor: "#ffffff",
-            contrastColor: "#ffffff",
-            order: 2, // SERVICES AFTER SHIFTS
-            extendedProps: { item, order: 2 },
-          };
-        }
+    const shiftSortOrder: Record<string, number> = {
+      night: 1,     // เวรดึก (00:00)
+      r1: 2,        // Refer 1
+      r2: 2,        // Refer 2
+      off: 3,       // เวรหยุด
+      ctm: 4,       // CT เช้า (07:30)
+      morning: 5,   // เวรเช้า (08:00)
+      cta: 6,       // CT บ่าย (12:00)
+      afternoon: 7, // เวรบ่าย (16:00)
+    };
+
+    const eventsResult: any[] = [];
+
+    // แปลงเวรที่จัดกลุ่มแล้ว (เรียงตามลำดับเวลา: ดึก -> เช้า -> บ่าย)
+    Object.entries(shiftsByDate).forEach(([date, dateShifts]) => {
+      // เรียงลำดับเวรในวันเดียวกันตามเวลาที่เกิดก่อน (Chronological order)
+      dateShifts.sort((a, b) => {
+        const orderA = shiftSortOrder[a.shiftType] ?? 99;
+        const orderB = shiftSortOrder[b.shiftType] ?? 99;
+        return orderA - orderB;
       });
+
+      const shiftDetails = dateShifts.map((shift) => {
+        const code = SHIFT_CODE_MAP[shift.shiftType] || shift.shiftType;
+        const isRed = shift.category === "red";
+        const isRefer =
+          shift.shiftType === "r1" ||
+          shift.shiftType === "r2" ||
+          shift.category === "green";
+        const isSwapped = Boolean(shift.swapMeta);
+
+        return {
+          code,
+          isRed,
+          isRefer,
+          isSwapped,
+          shiftType: shift.shiftType,
+          category: shift.category,
+        };
+      });
+
+      // หากมีหลายเวรในวันเดียวกัน ให้รวมเป็น <code> / <code> เช่น 2 / 3
+      const titleText = shiftDetails
+        .map((d) => `${d.isSwapped ? "🔄" : ""}${d.code}`)
+        .join(" / ");
+
+      eventsResult.push({
+        id: `shift-group-${date}`,
+        title: titleText,
+        date: date,
+        start: `${date}T00:00:00`,
+        allDay: true,
+        color: "#ffffff",
+        textColor: "#0f172a",
+        contrastColor: "#0f172a",
+        order: 1,
+        extendedProps: {
+          items: dateShifts,
+          item: dateShifts[0],
+          order: 1,
+          shiftDetails,
+        },
+      });
+    });
+
+    // Helper สำหรับจัดรูปแบบเวลาบริการนัดหมายลูกค้า (14:00 -> 14, 14:30 -> 14:30)
+    const formatServiceTime = (timeStr?: string) => {
+      if (!timeStr) return "";
+      const parts = timeStr.split(":");
+      if (parts.length < 2) return timeStr;
+      const hours = parseInt(parts[0], 10).toString();
+      const minutes = parts[1];
+      if (minutes === "00") {
+        return hours;
+      }
+      return timeStr;
+    };
+
+    // แปลงรายการอื่นๆ (คลินิก & นัดหมายบริการ)
+    nonShifts.forEach((item) => {
+      if (item.type === "clinic") {
+        const clinicLog = item as ClinicWorkRecord;
+        const startTime = clinicLog.presetShift.split(" - ")[0] || "12:30";
+        const clinicTitle = `🏥 ${clinicLog.presetShift}`;
+        eventsResult.push({
+          id: item.id,
+          title: clinicTitle,
+          date: item.date,
+          start: `${item.date}T${startTime}:00`,
+          allDay: true,
+          color: "#8b5cf6",
+          textColor: "#ffffff",
+          contrastColor: "#ffffff",
+          order: 3,
+          extendedProps: { item, order: 3 },
+        });
+      } else {
+        const service = item as CustomerServiceRecord;
+        const formattedTime = formatServiceTime(service.time);
+        const serviceTitle = `${formattedTime} ${service.customerName}`;
+        eventsResult.push({
+          id: item.id,
+          title: serviceTitle,
+          date: item.date,
+          start: `${item.date}T${service.time || "12:00"}:00`,
+          allDay: true,
+          color: "#0284c7",
+          textColor: "#ffffff",
+          contrastColor: "#ffffff",
+          order: 2,
+          extendedProps: { item, order: 2, isService: true },
+        });
+      }
+    });
+
+    return eventsResult;
   }, [activities]);
 
   // Calendar date click handler
@@ -333,9 +439,14 @@ export default function ScheduleOverview() {
 
   // Calendar event click handler
   const handleEventClick = (info: any) => {
-    const item = info.event.extendedProps.item as ActivityItem;
-    setSelectedDateStr(item.date);
-    setOpenDateDetailSheet(true);
+    const item = info.event.extendedProps?.item as ActivityItem | undefined;
+    const items = info.event.extendedProps?.items as ActivityItem[] | undefined;
+    const dateStr =
+      info.event.startStr?.split("T")[0] || item?.date || items?.[0]?.date;
+    if (dateStr) {
+      setSelectedDateStr(dateStr);
+      setOpenDateDetailSheet(true);
+    }
   };
 
   // Swap action handler
@@ -356,6 +467,24 @@ export default function ScheduleOverview() {
     } catch {
       return dateStr;
     }
+  };
+
+  const formatBottomSheetTitle = (dateStr: string) => {
+    const formatted = formatThaiDate(dateStr);
+    const todayStr = moment().format("YYYY-MM-DD");
+    const tomorrowStr = moment().add(1, "day").format("YYYY-MM-DD");
+    const yesterdayStr = moment().subtract(1, "day").format("YYYY-MM-DD");
+
+    if (dateStr === todayStr) {
+      return `${formatted} (วันนี้)`;
+    }
+    if (dateStr === tomorrowStr) {
+      return `${formatted} (พรุ่งนี้)`;
+    }
+    if (dateStr === yesterdayStr) {
+      return `${formatted} (เมื่อวาน)`;
+    }
+    return formatted;
   };
 
   const formatShortThaiDate = (dateStr: string) => {
@@ -735,16 +864,6 @@ export default function ScheduleOverview() {
                 <p className="text-[10px] text-text-muted dark:text-zinc-400 leading-none">
                   บันทึกเวรและบริการลูกค้า
                 </p>
-                <button
-                  type="button"
-                  onClick={reloadData}
-                  disabled={isSyncing}
-                  title="คลิกเพื่อรีเฟรชข้อมูลจาก API เซิร์ฟเวอร์ (พอร์ต 8080)"
-                  className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 transition-colors border border-emerald-200/60 dark:border-emerald-800/60"
-                >
-                  <RefreshCw className={`h-2.5 w-2.5 ${isSyncing ? "animate-spin text-teal-600" : "text-emerald-600"}`} />
-                  <span>{isSyncing ? "กำลังซิงค์..." : "API Live"}</span>
-                </button>
               </div>
             </div>
           </div>
@@ -844,7 +963,7 @@ export default function ScheduleOverview() {
         onClose={() => setOpenDateDetailSheet(false)}
         title={
           selectedDateStr
-            ? formatThaiDate(selectedDateStr)
+            ? formatBottomSheetTitle(selectedDateStr)
             : "รายละเอียดกิจกรรม"
         }
         subtitle={`กิจกรรมทั้งหมด ${activitiesForSelectedDate.length} รายการ`}

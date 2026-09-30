@@ -101,6 +101,18 @@ export default function ModalShiftSwap({
     return null;
   }, [shift, newCategory, newDate]);
 
+  // Check if same date and same shift type (duplicate shift error protection)
+  const isSameShiftSameDate = useMemo(() => {
+    if (!shift || !newDate) return false;
+    return shift.date === newDate && shift.shiftType === newShiftType;
+  }, [shift, newDate, newShiftType]);
+
+  // Check if same date but different shift type (switch shift on same day)
+  const isSameDateDifferentShift = useMemo(() => {
+    if (!shift || !newDate) return false;
+    return shift.date === newDate && shift.shiftType !== newShiftType;
+  }, [shift, newDate, newShiftType]);
+
   if (!isOpen || !shift) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -115,6 +127,16 @@ export default function ModalShiftSwap({
     }
     if (!newDate) {
       setErrorMsg("กรุณาระบุวันที่เวรใหม่ที่ได้รับ");
+      return;
+    }
+
+    // ตรวจสอบกรณีแลกเวรประเภทเดียวกันในวันเดียวกัน ป้องกัน user error เลือกวันที่ผิด
+    if (isSameShiftSameDate) {
+      const shiftName = shiftInfo.label;
+      const dateFormatted = moment(shift.date).locale("th").format("D MMMM YYYY");
+      setErrorMsg(
+        `ไม่สามารถแลกเป็น${shiftName}ในวันเดียวกันได้ (${dateFormatted}) กรุณาตรวจสอบวันที่หรือประเภทเวรใหม่`
+      );
       return;
     }
 
@@ -502,12 +524,50 @@ export default function ModalShiftSwap({
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white shadow-2xs">
                     <span className="h-2 w-2 rounded-full bg-white" />
-                    เวร Off (สีดำ • ทั้งวัน)
+                    เวร CT ({newShiftType === "ctm" ? "เช้า" : "บ่าย"} • สีม่วง)
                   </span>
                 </div>
               </div>
             )}
           </div>
+
+          {/* Validation Alert: แลกเวรประเภทเดียวกันในวันเดียวกัน */}
+          {isSameShiftSameDate && (
+            <div className="rounded-2xl border-2 border-rose-300 bg-rose-50/95 p-3.5 text-xs text-rose-950 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-100 animate-in fade-in duration-200 shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-rose-900 dark:text-rose-200 text-xs">
+                    ⚠️ ไม่สามารถแลกเป็นเวรประเภทเดียวกันในวันเดียวกันได้
+                  </h4>
+                  <p className="text-[11px] leading-relaxed text-rose-800 dark:text-rose-300">
+                    เวรเดิมที่คุณกำลังจะแลกออกคือ <strong>{shiftInfo.label}</strong> ในวันที่{" "}
+                    <strong>
+                      {moment(shift.date).locale("th").format("D MMMM YYYY")}
+                    </strong>{" "}
+                    การเลือกเวรใหม่เป็น <strong>{shiftInfo.label}</strong> ในวันเดียวกันอาจเกิดจากการเลือกวันที่ผิดพลาด กรุณาเลือกวันที่หรือประเภทเวรใหม่
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Info Notice: สลับกะภายในวันเดียวกัน */}
+          {isSameDateDifferentShift && (
+            <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-3 text-xs text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-200 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-sky-800 dark:text-sky-300">
+                  สลับกะภายในวันเดียวกัน:
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-lg bg-sky-100 dark:bg-sky-900/60 px-2 py-0.5 text-xs font-bold text-sky-800 dark:text-sky-200">
+                  {shiftInfo.label} ➔ {SHIFT_CONFIG[newShiftType]?.label || newShiftType}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-sky-700 dark:text-sky-400">
+                *วันที่ {moment(shift.date).locale("th").format("D MMMM YYYY")} กรุณาตรวจสอบว่าท่านต้องการสลับกะในวันเดียวกันจริง
+              </p>
+            </div>
+          )}
 
           {/* ALERT CONFIRMATION (กล่องสีส้มแจ้งเตือนผลกระทบกฎเวรดำ) */}
           {quotaWarning && (
@@ -564,13 +624,20 @@ export default function ModalShiftSwap({
           <button
             type="submit"
             form="shift-swap-form"
+            disabled={isSameShiftSameDate}
             className={`rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-md active:scale-95 transition-all ${
-              quotaWarning
-                ? "bg-gradient-to-r from-amber-600 to-shift-red hover:from-amber-700 hover:to-red-600 shadow-amber-500/20"
-                : "bg-gradient-to-r from-sky-500 to-emerald-600 hover:brightness-105 shadow-emerald-600/20"
+              isSameShiftSameDate
+                ? "bg-slate-300 dark:bg-zinc-700 cursor-not-allowed text-slate-500 dark:text-zinc-400 shadow-none active:scale-100"
+                : quotaWarning
+                  ? "bg-gradient-to-r from-amber-600 to-shift-red hover:from-amber-700 hover:to-red-600 shadow-amber-500/20"
+                  : "bg-gradient-to-r from-sky-500 to-emerald-600 hover:brightness-105 shadow-emerald-600/20"
             }`}
           >
-            {quotaWarning ? "ดำเนินการแลกเวร (มีคำเตือน)" : "ดำเนินการแลกเวร"}
+            {isSameShiftSameDate
+              ? "ไม่สามารถแลกเวรเดียวกันได้"
+              : quotaWarning
+                ? "ดำเนินการแลกเวร (มีคำเตือน)"
+                : "ดำเนินการแลกเวร"}
           </button>
         </div>
       </div>
@@ -635,6 +702,10 @@ export default function ModalShiftSwap({
               {quotaWarning.monthName} ลดเหลือ {quotaWarning.simulatedCount}/
               {quotaWarning.quota} วัน (ขาดอีก {quotaWarning.remainingNeeded}{" "}
               วัน)
+            </span>
+          ) : isSameDateDifferentShift ? (
+            <span className="text-sky-900 dark:text-sky-200">
+              ℹ️ <strong>หมายเหตุการสลับกะ:</strong> ท่านกำลังสลับกะภายในวันเดียวกัน ({moment(shift.date).locale("th").format("D MMMM YYYY")}) จาก{shiftInfo.label} เป็น {SHIFT_CONFIG[newShiftType].label}
             </span>
           ) : (
             <span>

@@ -1,5 +1,7 @@
 "use client";
 
+import moment from "moment";
+import "moment/locale/th";
 import { shiftsApi, customersApi, servicesApi, analyticsApi } from "./api";
 
 import {
@@ -488,6 +490,15 @@ export function swapShift(params: {
   const oldShift = current.find((s) => s.id === params.shiftId);
   if (!oldShift) {
     throw new Error("ไม่พบเวรที่ต้องการแลก");
+  }
+
+  // Prevent swapping the exact same shift on the same date (user error protection)
+  if (oldShift.date === params.newDate && oldShift.shiftType === params.newShiftType) {
+    const label = SHIFT_CONFIG[params.newShiftType]?.label || "เวรเดิม";
+    const dateFormatted = moment(params.newDate).locale("th").format("D MMMM YYYY");
+    throw new Error(
+      `ไม่สามารถแลกเป็น${label}ในวันเดียวกันได้ (${dateFormatted}) กรุณาตรวจสอบวันที่หรือประเภทเวรใหม่`
+    );
   }
 
   // Prevent duplicate active shift on newDate and newShiftType

@@ -111,7 +111,7 @@ export default function ScheduleCalendarView({
       return (
         <div className="flex items-center justify-center gap-0.5 sm:gap-1 w-full overflow-hidden text-center py-0.5 px-0.5 leading-none">
           {shiftDetails.map((detail, idx) => {
-            let colorClass = "text-slate-900 dark:text-slate-100 font-extrabold";
+            let colorClass = "text-black font-extrabold";
             if (detail.isRefer) {
               colorClass = "text-emerald-600 dark:text-emerald-400 font-extrabold";
             } else if (detail.isRed) {

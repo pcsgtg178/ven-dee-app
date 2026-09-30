@@ -713,11 +713,11 @@ export default function ScheduleOverview() {
 
         if (isSwappedOut) {
           return {
-            title: "ยืนยันการลบเวรที่แลกออกแล้ว",
-            subtitle: "เวรนี้อยู่ในสถานะถูกแลกออกไปแล้ว",
-            variant: "danger" as ConfirmVariant,
-            iconType: "trash" as const,
-            confirmText: "ยืนยันลบถาวร",
+            title: "ไม่สามารถลบเวรที่แลกออกแล้วได้",
+            subtitle: "เพื่อป้องกันประวัติการแลกสูญหาย คุณสามารถกู้คืนเวรเดิมกลับมาได้",
+            variant: "warning" as ConfirmVariant,
+            iconType: "undo" as const,
+            confirmText: "กู้คืนเวร (ยกเลิกการแลก)",
             cancelText: "ยกเลิก",
             items: [
               {
@@ -729,18 +729,17 @@ export default function ScheduleOverview() {
                 value: `${shiftInfo?.label || "เวร"} (${shiftInfo?.period || ""})`,
               },
               {
-                label: "สถานะ",
+                label: "สถานะปัจจุบัน",
                 value: "แลกออกแล้ว (Swapped Out)",
               },
             ],
             warningNotice: (
               <span>
-                ⚠️ การลบจะนำเวรนี้ออกจากประวัติตารางเวรอย่างถาวร
-                หากต้องการนำเวรกลับมาทำงาน ให้กดปุ่ม{" "}
-                <strong>&quot;กู้คืนเวรนี้&quot;</strong> แทน
+                ⚠️ ตามกฎ <strong>DOMAIN_RULES.md (ข้อ 2.3.2)</strong> เวรที่ถูกแลกออกไปแล้วจะไม่สามารถลบถาวรได้{" "}
+                การกดปุ่มด้านล่างจะดำเนินการ <strong>กู้คืนเวรเดิมของคุณ และยกเลิกเวรที่ได้รับมาจากการแลกให้อัตโนมัติ</strong>
               </span>
             ),
-            onConfirm: () => handleExecuteDelete(item),
+            onConfirm: () => handleExecuteUndoSwap(shift),
           };
         }
 

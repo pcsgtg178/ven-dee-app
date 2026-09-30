@@ -92,7 +92,7 @@ export default function ModalSwapTrail({
                     <span className="text-[10px] font-bold">{index + 1}</span>
                   </div>
 
-                  <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs dark:border-zinc-800 dark:bg-zinc-850">
+                  <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs dark:border-zinc-800 dark:bg-zinc-800/50">
                     <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 mb-1">
                       <span className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
                         <Calendar className="h-3 w-3" />
@@ -121,7 +121,7 @@ export default function ModalSwapTrail({
                 <div className="absolute -left-6 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white shadow-xs">
                   <span className="text-[10px] font-bold">1</span>
                 </div>
-                <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs dark:border-zinc-800 dark:bg-zinc-850">
+                <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs dark:border-zinc-800 dark:bg-zinc-800/50">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-white">
                     <span>{swapMeta.originalOwner || swapMeta.swappedWith}</span>
                     <ArrowRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />

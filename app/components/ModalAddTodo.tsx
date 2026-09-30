@@ -101,9 +101,32 @@ export default function ModalAddTodo({
     setMasterMedications(getMedications());
   };
 
+  const resetAllFormInputs = () => {
+    // Reset Shift form state
+    setShiftType("morning");
+    setShiftCategory("black");
+    setShiftNote("");
+
+    // Reset Customer Service form state
+    setServiceTime("09:00");
+    setMedications([""]);
+    setServiceNote("");
+    setServicePrice("");
+
+    // Reset Clinic form state
+    setClinicPresetShift("12:30 - 17:30");
+    setClinicNote("");
+
+    // Reset error & quick add state
+    setErrorMsg("");
+    setShowQuickAddCustomer(false);
+    setQuickCustName("");
+  };
+
   useEffect(() => {
     if (openModal) {
       loadMasterData();
+      resetAllFormInputs();
 
       const todayStr = defaultDate || new Date().toISOString().split("T")[0];
       setShiftDate(todayStr);
@@ -114,15 +137,13 @@ export default function ModalAddTodo({
       if (initialCustomerId) {
         setSelectedCustomerId(initialCustomerId);
         setActiveTab("service");
-      } else if (allCust.length > 0 && !selectedCustomerId) {
+      } else if (allCust.length > 0) {
         setSelectedCustomerId(allCust[0].id);
       }
 
       if (initialTab) {
         setActiveTab(initialTab);
       }
-      setErrorMsg("");
-      setShowQuickAddCustomer(false);
     }
   }, [openModal, initialTab, initialCustomerId, defaultDate]);
 
@@ -153,6 +174,7 @@ export default function ModalAddTodo({
         note: shiftNote.trim() || undefined,
       });
 
+      resetAllFormInputs();
       toggleModal();
       if (onSuccess) onSuccess();
     } catch (err: any) {
@@ -191,6 +213,7 @@ export default function ModalAddTodo({
         price: servicePrice ? Number(servicePrice) : undefined,
       });
 
+      resetAllFormInputs();
       toggleModal();
       if (onSuccess) onSuccess();
     } catch (err: any) {
@@ -213,6 +236,7 @@ export default function ModalAddTodo({
         note: clinicNote.trim() || undefined,
       });
 
+      resetAllFormInputs();
       toggleModal();
       if (onSuccess) onSuccess();
     } catch (err: any) {
@@ -374,7 +398,7 @@ export default function ModalAddTodo({
                     value={shiftDate}
                     onChange={(e) => setShiftDate(e.target.value)}
                     required
-                    className="w-full h-11 min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs sm:text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white appearance-none box-border flex items-center"
+                    className="w-full h-11 min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs sm:text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white appearance-none box-border flex items-center"
                   />
                   <Calendar className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" />
                 </div>
@@ -393,7 +417,7 @@ export default function ModalAddTodo({
                     className={`relative flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all touch-manipulation text-center ${
                       shiftType === "night"
                         ? "border-indigo-600 bg-indigo-50/80 text-indigo-900 shadow-sm dark:border-indigo-400 dark:bg-indigo-950/50 dark:text-indigo-200"
-                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                        : "border-slate-200 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300 bg-white hover:border-slate-300 text-slate-700 "
                     }`}
                   >
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/60 mb-1 text-indigo-700 dark:text-indigo-300">
@@ -409,7 +433,7 @@ export default function ModalAddTodo({
                     className={`relative flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all touch-manipulation text-center ${
                       shiftType === "morning"
                         ? "border-amber-500 bg-amber-50/80 text-amber-900 shadow-sm dark:border-amber-400 dark:bg-amber-950/50 dark:text-amber-200"
-                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                        : "border-slate-200 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300 bg-white hover:border-slate-300 text-slate-700"
                     }`}
                   >
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/60 mb-1 text-amber-700 dark:text-amber-300">
@@ -425,7 +449,7 @@ export default function ModalAddTodo({
                     className={`relative flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all touch-manipulation text-center ${
                       shiftType === "afternoon"
                         ? "border-sky-600 bg-sky-50/80 text-sky-900 shadow-sm dark:border-sky-400 dark:bg-sky-950/50 dark:text-sky-200"
-                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                     }`}
                   >
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900/60 mb-1 text-sky-700 dark:text-sky-300">
@@ -443,7 +467,7 @@ export default function ModalAddTodo({
                     className={`relative flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all touch-manipulation text-center ${
                       shiftType === "off"
                         ? "border-slate-900 bg-slate-100 text-slate-900 shadow-sm dark:border-white dark:bg-zinc-800 dark:text-white"
-                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                     }`}
                   >
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 mb-1 text-slate-700 dark:text-slate-300">
@@ -462,7 +486,7 @@ export default function ModalAddTodo({
                     className={`relative flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all touch-manipulation text-center ${
                       shiftType === "r1" || shiftType === "r2"
                         ? "border-emerald-500 bg-emerald-50/80 text-emerald-900 shadow-sm dark:border-emerald-400 dark:bg-emerald-950/50 dark:text-emerald-200"
-                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                     }`}
                   >
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/60 mb-1 text-emerald-700 dark:text-emerald-300">
@@ -481,7 +505,7 @@ export default function ModalAddTodo({
                     className={`relative flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all touch-manipulation text-center ${
                       shiftType === "ctm" || shiftType === "cta"
                         ? "border-purple-600 bg-purple-50/80 text-purple-900 shadow-sm dark:border-purple-400 dark:bg-purple-950/50 dark:text-purple-200"
-                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                     }`}
                   >
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/60 mb-1 text-purple-700 dark:text-purple-300">
@@ -623,7 +647,7 @@ export default function ModalAddTodo({
                   placeholder="ระบุหมายเหตุเพิ่มเติม..."
                   value={shiftNote}
                   onChange={(e) => setShiftNote(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                 />
               </div>
             </form>
@@ -661,7 +685,7 @@ export default function ModalAddTodo({
                       placeholder="ระบุชื่อลูกค้าใหม่..."
                       value={quickCustName}
                       onChange={(e) => setQuickCustName(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-800 outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white"
+                      className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-800 outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                       autoFocus
                     />
                     <div className="flex justify-end gap-2">
@@ -686,7 +710,7 @@ export default function ModalAddTodo({
                     value={selectedCustomerId}
                     onChange={(e) => setSelectedCustomerId(e.target.value)}
                     required
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                   >
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -708,7 +732,7 @@ export default function ModalAddTodo({
                     value={serviceDate}
                     onChange={(e) => setServiceDate(e.target.value)}
                     required
-                    className="w-full h-11 min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white appearance-none box-border flex items-center"
+                    className="w-full h-11 min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white appearance-none box-border flex items-center"
                   />
                 </div>
                 <div className="flex flex-col">
@@ -720,7 +744,7 @@ export default function ModalAddTodo({
                     value={serviceTime}
                     onChange={(e) => setServiceTime(e.target.value)}
                     required
-                    className="w-full h-11 min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white appearance-none box-border flex items-center"
+                    className="w-full h-11 min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white appearance-none box-border flex items-center"
                   />
                 </div>
               </div>
@@ -770,7 +794,7 @@ export default function ModalAddTodo({
                                 handleUpdateMedication(idx, e.target.value);
                             }}
                             defaultValue=""
-                            className="w-28 sm:w-36 shrink-0 min-w-0 truncate rounded-xl border border-emerald-300 bg-white px-2 py-1.5 text-xs text-slate-800 dark:border-emerald-800 dark:bg-zinc-850"
+                            className="w-28 sm:w-36 shrink-0 min-w-0 truncate rounded-xl border border-emerald-300 bg-white px-2 py-1.5 text-xs text-slate-800 dark:border-emerald-800 dark:bg-zinc-800/50"
                           >
                             <option value="" disabled>
                               -- เลือกจากคลัง --
@@ -789,7 +813,7 @@ export default function ModalAddTodo({
                           onChange={(e) =>
                             handleUpdateMedication(idx, e.target.value)
                           }
-                          className="flex-1 min-w-0 w-full rounded-xl border border-emerald-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 outline-none focus:border-emerald-500 dark:border-emerald-800 dark:bg-zinc-850 dark:focus:text-white dark:text-black"
+                          className="flex-1 min-w-0 w-full rounded-xl border border-emerald-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 outline-none focus:border-emerald-500 dark:border-emerald-800 dark:bg-zinc-800/50 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                         />
                       </div>
                       {medications.length > 1 && (
@@ -816,7 +840,7 @@ export default function ModalAddTodo({
                   placeholder="ระบุรายละเอียดนัดหมาย"
                   value={serviceNote}
                   onChange={(e) => setServiceNote(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                 />
               </div>
 
@@ -830,7 +854,7 @@ export default function ModalAddTodo({
                   placeholder="เช่น 500"
                   value={servicePrice}
                   onChange={(e) => setServicePrice(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                 />
               </div>
             </form>
@@ -854,7 +878,7 @@ export default function ModalAddTodo({
                     value={clinicDate}
                     onChange={(e) => setClinicDate(e.target.value)}
                     required
-                    className="w-full h-11 min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs text-slate-800 outline-none focus:border-purple-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white appearance-none box-border flex items-center"
+                    className="w-full h-11 min-h-[44px] rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs text-slate-800 outline-none focus:border-purple-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white appearance-none box-border flex items-center"
                   />
                   <Calendar className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" />
                 </div>
@@ -877,7 +901,7 @@ export default function ModalAddTodo({
                         className={`flex w-full items-center justify-between rounded-xl border p-3 text-xs font-bold transition-all ${
                           isSelected
                             ? "border-purple-600 bg-purple-50 text-purple-900 dark:bg-purple-950/60 dark:text-purple-200 shadow-xs"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -905,7 +929,7 @@ export default function ModalAddTodo({
                   placeholder="เช่น ทำงานกะพิเศษ, ตรวจเคสเสริม"
                   value={clinicNote}
                   onChange={(e) => setClinicNote(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-purple-500 dark:border-zinc-700 dark:bg-zinc-800 dark:focus:text-black dark:text-white"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-purple-500 dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                 />
               </div>
             </form>

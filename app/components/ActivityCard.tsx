@@ -290,14 +290,31 @@ export default function ActivityCard({
                 <span className="text-[11px] font-medium text-amber-900 dark:text-amber-200">
                   ⚠️ เวรนี้ถูกแลกออกไปแล้ว
                 </span>
-                {onRestoreShift && (
+                {(onUndoSwap || onRestoreShift) && (
                   <button
                     type="button"
-                    onClick={() => onRestoreShift(shift)}
-                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 active:scale-95 transition-all shadow-2xs cursor-pointer"
+                    disabled={isLocked}
+                    onClick={() => {
+                      if (isLocked) return;
+                      if (onUndoSwap) {
+                        onUndoSwap(shift);
+                      } else if (onRestoreShift) {
+                        onRestoreShift(shift);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all shadow-2xs ${
+                      isLocked
+                        ? "cursor-not-allowed bg-slate-300 text-slate-500 dark:bg-zinc-800 dark:text-zinc-500 opacity-60"
+                        : "cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95"
+                    }`}
+                    title={
+                      isLocked
+                        ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
+                        : "กู้คืนเวรนี้และยกเลิกเวรที่ได้รับจากการแลก"
+                    }
                   >
-                    <RotateCcw className="h-3 w-3" />
-                    <span>กู้คืนเวรนี้</span>
+                    {isLocked ? <Lock className="h-3 w-3" /> : <RotateCcw className="h-3 w-3" />}
+                    <span>{isLocked ? "เวรล็อกอยู่" : "กู้คืนเวร (ยกเลิกการแลก)"}</span>
                   </button>
                 )}
               </div>

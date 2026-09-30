@@ -13,6 +13,7 @@ import {
   DEFAULT_BLACK_SHIFT_QUOTA,
   SwapTrailNode,
   SHIFT_CONFIG,
+  SHIFT_CATEGORY_CONFIG,
   Medications,
   ClinicWorkRecord,
   ClinicPresetShift,
@@ -408,40 +409,44 @@ export async function deleteShift(id: string): Promise<{ restoredParentId?: stri
   const current = getShifts();
   const target = current.find((s) => s.id === id);
 
-  // 1. Check if shift is in the past
-  if (target && isShiftInPast(target.date)) {
-    throw new Error("ไม่สามารถลบเวรที่ผ่านเวลาไปแล้วได้ (Overtime / Past shift)");
+  if (!target) return {};
+
+  // 1. Check if shift is in the past or locked (DOMAIN_RULES.md 2.3.1)
+  if (target.swapMeta?.isLocked || isShiftInPast(target.date)) {
+    throw new Error("ไม่สามารถลบเวรที่ผ่านเวลาไปแล้วได้ (เวรถูกล็อกอยู่)");
   }
 
-  // 2. Call backend API if online
+  // 2. Check if shift is swapped_out OR acts as parentShiftId to another shift (DOMAIN_RULES.md 2.3.2)
+  const hasChildShift = current.some((s) => s.swapMeta?.parentShiftId === id);
+  if (target.status === "swapped_out" || hasChildShift) {
+    throw new Error(
+      "ไม่สามารถลบเวรที่ถูกแลกออกไปแล้วได้ กรุณาใช้ปุ่ม 'กู้คืนเวร (ยกเลิกการแลก)' แทนการลบเพื่อป้องกันประวัติการแลกสูญหาย"
+    );
+  }
+
+  // 3. Call backend API if online
   if (typeof window !== "undefined") {
     try {
       await shiftsApi.delete(id);
     } catch (err: any) {
       if (err?.status && err.status >= 400) {
-        throw new Error(err.message || "ไม่สามารถลบเวรที่ผ่านเวลาไปแล้วได้");
+        throw new Error(err.message || "ไม่สามารถลบเวรที่ถูกล็อกหรือผ่านเวลาไปแล้วได้");
       }
       console.warn("Backend API offline during deleteShift, performing local delete:", err);
     }
   }
 
-  // 3. Perform local delete & restore parent if applicable
+  // 4. Perform local delete & restore parent if applicable (for a received shift)
   let restoredParentId: string | undefined = undefined;
   const updated = current.filter((s) => s.id !== id);
 
-  if (target?.swapMeta?.parentShiftId) {
+  if (target.swapMeta?.parentShiftId) {
     const parent = updated.find((s) => s.id === target.swapMeta?.parentShiftId);
     if (parent && parent.status === "swapped_out") {
       parent.status = "active";
       restoredParentId = parent.id;
     }
   }
-
-  updated.forEach((s) => {
-    if (s.swapMeta && s.swapMeta.parentShiftId === id) {
-      delete s.swapMeta.parentShiftId;
-    }
-  });
 
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
@@ -492,26 +497,40 @@ export function swapShift(params: {
     throw new Error("ไม่พบเวรที่ต้องการแลก");
   }
 
-  // Prevent swapping the exact same shift on the same date (user error protection)
+  const targetCategory =
+    params.newShiftType === "r1" || params.newShiftType === "r2"
+      ? "green"
+      : params.newCategory;
+
+  // Same Shift Type & Date Category Swap Exception (DOMAIN_RULES.md 2.2.3):
+  // Permit same date + same shiftType swap IF AND ONLY IF changing between Black and Red categories
   if (oldShift.date === params.newDate && oldShift.shiftType === params.newShiftType) {
-    const label = SHIFT_CONFIG[params.newShiftType]?.label || "เวรเดิม";
-    const dateFormatted = moment(params.newDate).locale("th").format("D MMMM YYYY");
-    throw new Error(
-      `ไม่สามารถแลกเป็น${label}ในวันเดียวกันได้ (${dateFormatted}) กรุณาตรวจสอบวันที่หรือประเภทเวรใหม่`
-    );
+    const isBlackRedSwap =
+      (oldShift.category === "black" && targetCategory === "red") ||
+      (oldShift.category === "red" && targetCategory === "black");
+
+    if (!isBlackRedSwap) {
+      const label = SHIFT_CONFIG[params.newShiftType]?.label || "เวรเดิม";
+      const dateFormatted = moment(params.newDate).locale("th").format("D MMMM YYYY");
+      throw new Error(
+        `การแลก${label}ในวันเดียวกัน (${dateFormatted}) สามารถแลกได้เฉพาะกรณีเปลี่ยนหมวดระหว่างเวรดำและเวรแดงเท่านั้น (เช่น เช้าดำ ↔ เช้าแดง)`
+      );
+    }
   }
 
-  // Prevent duplicate active shift on newDate and newShiftType
+  // Prevent duplicate active shift on newDate, newShiftType, AND targetCategory
   const duplicate = current.find(
     (s) =>
       s.id !== params.shiftId &&
       s.date === params.newDate &&
       s.shiftType === params.newShiftType &&
+      s.category === targetCategory &&
       s.status === "active"
   );
   if (duplicate) {
-    const label = SHIFT_CONFIG[params.newShiftType].label;
-    throw new Error(`คุณมี${label}ในวันที่ ${params.newDate} อยู่แล้ว ไม่สามารถแลกมารับเวรซ้ำช่วงเวลาเดียวกันได้`);
+    const label = SHIFT_CONFIG[params.newShiftType]?.label || "เวร";
+    const catLabel = SHIFT_CATEGORY_CONFIG[targetCategory]?.label || "";
+    throw new Error(`คุณมี${label} (${catLabel}) ในวันที่ ${params.newDate} อยู่แล้ว ไม่สามารถแลกมารับเวรซ้ำช่วงเวลาและหมวดเดียวกันได้`);
   }
 
   // Check conflict with customer services on newDate (เวร R / Refer สามารถรับแลกเข้ามาได้แม้มีงานอื่นอยู่แล้ว)
@@ -610,38 +629,56 @@ export function swapShift(params: {
 }
 
 /**
- * Undo / Rollback a shift swap
- * - Only permitted if isLocked === false
+ * Undo / Rollback a shift swap (DOMAIN_RULES.md 2.3.3 Bidirectional Rollback)
  * - Restores parentShift to 'active'
- * - Removes or cancels the received shift
+ * - Removes/cancels the shift received during the swap
+ * - Only permitted if isLocked === false
  */
 export function undoSwapShift(shiftId: string): boolean {
   const current = getShifts();
   const targetShift = current.find((s) => s.id === shiftId);
-  if (!targetShift || !targetShift.swapMeta) {
+  if (!targetShift) {
     return false;
   }
 
-  if (targetShift.swapMeta.isLocked) {
-    throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว");
+  if (targetShift.swapMeta?.isLocked || isShiftInPast(targetShift.date)) {
+    throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)");
   }
 
-  const updated = current.filter((s) => s.id !== shiftId);
+  let parentShift: ShiftRecord | undefined;
+  let childShift: ShiftRecord | undefined;
 
-  // If there is a parentShiftId, restore it to active
-  if (targetShift.swapMeta.parentShiftId) {
-    const parent = updated.find((s) => s.id === targetShift.swapMeta?.parentShiftId);
-    if (parent) {
-      parent.status = "active";
+  if (targetShift.swapMeta?.parentShiftId) {
+    // targetShift is the received shift
+    childShift = targetShift;
+    parentShift = current.find((s) => s.id === targetShift.swapMeta?.parentShiftId);
+  } else if (targetShift.status === "swapped_out") {
+    // targetShift is the original shift that was swapped out
+    parentShift = targetShift;
+    childShift = current.find((s) => s.swapMeta?.parentShiftId === targetShift.id);
+  } else {
+    childShift = current.find((s) => s.swapMeta?.parentShiftId === targetShift.id);
+    if (childShift) {
+      parentShift = targetShift;
     }
   }
+
+  // 1. Restore parent shift to active
+  if (parentShift) {
+    parentShift.status = "active";
+  }
+
+  // 2. Remove/Cancel the received child shift
+  const childIdToRemove = childShift?.id || (targetShift.swapMeta?.parentShiftId ? targetShift.id : undefined);
+  const updated = current.filter((s) => s.id !== childIdToRemove);
 
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
 
   // API Async Sync: undoSwapShift
   if (typeof window !== "undefined") {
-    shiftsApi.undoSwap(shiftId).catch((e) => console.warn("shiftsApi.undoSwap error:", e));
+    const apiTargetId = childIdToRemove || shiftId;
+    shiftsApi.undoSwap(apiTargetId).catch((e) => console.warn("shiftsApi.undoSwap error:", e));
   }
 
   return true;

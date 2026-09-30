@@ -2,14 +2,17 @@
   "mcpServers": {
     "command": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-commands"]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-commands"
+      ]
     },
     "filesystem": {
       "command": "npx",
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "D:\\ven-dee\\ven-dee-app"
+        "D:\\FakFah\\AURA-SECRET\\ven-dee\\ven-dee-app"
       ]
     }
   }

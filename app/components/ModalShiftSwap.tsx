@@ -101,11 +101,33 @@ export default function ModalShiftSwap({
     return null;
   }, [shift, newCategory, newDate]);
 
-  // Check if same date and same shift type (duplicate shift error protection)
+  const targetCategory = useMemo(() => {
+    return newShiftType === "r1" || newShiftType === "r2" ? "green" : newCategory;
+  }, [newShiftType, newCategory]);
+
+  const oldCategory = useMemo(() => {
+    return shift?.category || "black";
+  }, [shift]);
+
+  // Check if same date and same shift type
   const isSameShiftSameDate = useMemo(() => {
     if (!shift || !newDate) return false;
     return shift.date === newDate && shift.shiftType === newShiftType;
   }, [shift, newDate, newShiftType]);
+
+  // Valid same-day Black <-> Red category swap (DOMAIN_RULES.md 2.2.3)
+  const isSameDayBlackRedSwap = useMemo(() => {
+    if (!isSameShiftSameDate || !shift) return false;
+    return (
+      (oldCategory === "black" && targetCategory === "red") ||
+      (oldCategory === "red" && targetCategory === "black")
+    );
+  }, [isSameShiftSameDate, shift, oldCategory, targetCategory]);
+
+  // Invalid same shift type + same date swap (e.g. Black -> Black on same day)
+  const isInvalidSameShiftSameDate = useMemo(() => {
+    return isSameShiftSameDate && !isSameDayBlackRedSwap;
+  }, [isSameShiftSameDate, isSameDayBlackRedSwap]);
 
   // Check if same date but different shift type (switch shift on same day)
   const isSameDateDifferentShift = useMemo(() => {
@@ -130,12 +152,12 @@ export default function ModalShiftSwap({
       return;
     }
 
-    // ตรวจสอบกรณีแลกเวรประเภทเดียวกันในวันเดียวกัน ป้องกัน user error เลือกวันที่ผิด
-    if (isSameShiftSameDate) {
+    // ตรวจสอบกรณีแลกเวรประเภทเดียวกันในวันเดียวกัน (อนุญาตเฉพาะดำ ↔ แดง)
+    if (isInvalidSameShiftSameDate) {
       const shiftName = shiftInfo.label;
       const dateFormatted = moment(shift.date).locale("th").format("D MMMM YYYY");
       setErrorMsg(
-        `ไม่สามารถแลกเป็น${shiftName}ในวันเดียวกันได้ (${dateFormatted}) กรุณาตรวจสอบวันที่หรือประเภทเวรใหม่`
+        `การแลก${shiftName}ในวันเดียวกัน (${dateFormatted}) สามารถแลกได้เฉพาะกรณีเปลี่ยนหมวดระหว่างเวรดำและเวรแดงเท่านั้น (เช่น เช้าดำ ↔ เช้าแดง)`
       );
       return;
     }
@@ -260,14 +282,14 @@ export default function ModalShiftSwap({
                 placeholder="เช่น พว.สมใจ อิ่มเอม, พว.ก้อย"
                 value={swappedWith}
                 onChange={(e) => setSwappedWith(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
               />
               <User className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-slate-400" />
             </div>
           </div>
 
           {/* Field 2: Checkbox "เวรนี้รับต่อมาจากผู้อื่น" */}
-          <div className="rounded-2xl border border-slate-200 p-3.5 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-850/40">
+          <div className="rounded-2xl border border-slate-200 p-3.5 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-800/40">
             <label className="flex items-center gap-2.5 cursor-pointer">
               <input
                 type="checkbox"
@@ -293,7 +315,7 @@ export default function ModalShiftSwap({
                   placeholder="เช่น พว.วิภา มณีรัตน์ (เจ้าของเวรตามตารางต้นฉบับ)"
                   value={originalOwner}
                   onChange={(e) => setOriginalOwner(e.target.value)}
-                  className="w-full rounded-xl border border-teal-300 bg-white px-3.5 py-2 text-xs sm:text-sm text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 dark:border-teal-700 dark:bg-zinc-800 dark:text-white"
+                  className="w-full rounded-xl border border-teal-300 bg-white px-3.5 py-2 text-xs sm:text-sm text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 dark:border-teal-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                 />
                 <p className="mt-1 text-[10px] text-slate-500 dark:text-zinc-400">
                   *ระบุชื่อเจ้าของเวรดั้งเดิมตามตารางเวรหลักเพื่อสร้างประวัติ
@@ -316,7 +338,7 @@ export default function ModalShiftSwap({
                   required
                   value={newDate}
                   onChange={(e) => setNewDate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                 />
                 <Calendar className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-slate-400" />
               </div>
@@ -334,7 +356,7 @@ export default function ModalShiftSwap({
                   className={`flex flex-col items-center justify-center p-2.5 rounded-xl border-2 transition-all ${
                     newShiftType === "night"
                       ? "border-indigo-600 bg-indigo-50 text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-200"
-                      : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                      : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                   }`}
                 >
                   <Moon className="h-4 w-4 mb-1 text-indigo-600 dark:text-indigo-400" />
@@ -348,7 +370,7 @@ export default function ModalShiftSwap({
                   className={`flex flex-col items-center justify-center p-2.5 rounded-xl border-2 transition-all ${
                     newShiftType === "morning"
                       ? "border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200"
-                      : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                      : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                   }`}
                 >
                   <Sun className="h-4 w-4 mb-1 text-amber-500 dark:text-amber-400" />
@@ -362,7 +384,7 @@ export default function ModalShiftSwap({
                   className={`flex flex-col items-center justify-center p-2.5 rounded-xl border-2 transition-all ${
                     newShiftType === "afternoon"
                       ? "border-sky-600 bg-sky-50 text-sky-900 dark:bg-sky-950/60 dark:text-sky-200"
-                      : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                      : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                   }`}
                 >
                   <Sunset className="h-4 w-4 mb-1 text-sky-600 dark:text-sky-400" />
@@ -451,7 +473,7 @@ export default function ModalShiftSwap({
                     className={`flex flex-col items-start p-2.5 rounded-xl border-2 text-left transition-all ${
                       newCategory === "black"
                         ? "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-zinc-800"
-                        : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                        : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                     }`}
                   >
                     <span className="text-xs font-bold flex items-center gap-1.5">
@@ -469,7 +491,7 @@ export default function ModalShiftSwap({
                     className={`flex flex-col items-start p-2.5 rounded-xl border-2 text-left transition-all ${
                       newCategory === "red"
                         ? "border-rose-600 bg-rose-50 text-rose-950 dark:border-rose-500 dark:bg-rose-950/60 dark:text-rose-100"
-                        : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-300"
+                        : "border-slate-200 bg-white text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300"
                     }`}
                   >
                     <span className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
@@ -531,21 +553,21 @@ export default function ModalShiftSwap({
             )}
           </div>
 
-          {/* Validation Alert: แลกเวรประเภทเดียวกันในวันเดียวกัน */}
-          {isSameShiftSameDate && (
+          {/* Validation Alert: แลกเวรประเภทเดียวกันหมวดเดียวกันในวันเดียวกัน */}
+          {isInvalidSameShiftSameDate && (
             <div className="rounded-2xl border-2 border-rose-300 bg-rose-50/95 p-3.5 text-xs text-rose-950 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-100 animate-in fade-in duration-200 shadow-xs">
               <div className="flex items-start gap-2.5">
                 <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <h4 className="font-bold text-rose-900 dark:text-rose-200 text-xs">
-                    ⚠️ ไม่สามารถแลกเป็นเวรประเภทเดียวกันในวันเดียวกันได้
+                    ⚠️ ไม่สามารถแลกเป็นเวรประเภทและหมวดเดียวกันในวันเดียวกันได้
                   </h4>
                   <p className="text-[11px] leading-relaxed text-rose-800 dark:text-rose-300">
-                    เวรเดิมที่คุณกำลังจะแลกออกคือ <strong>{shiftInfo.label}</strong> ในวันที่{" "}
+                    การแลก <strong>{shiftInfo.label}</strong> ในวันที่{" "}
                     <strong>
                       {moment(shift.date).locale("th").format("D MMMM YYYY")}
                     </strong>{" "}
-                    การเลือกเวรใหม่เป็น <strong>{shiftInfo.label}</strong> ในวันเดียวกันอาจเกิดจากการเลือกวันที่ผิดพลาด กรุณาเลือกวันที่หรือประเภทเวรใหม่
+                    เป็นประเภทและหมวดเดียวกัน สามารถทำได้เฉพาะกรณีเปลี่ยนหมวดระหว่าง <strong>เวรดำ ↔ เวรแดง</strong> เท่านั้น (เช่น เช้าดำ ↔ เช้าแดง)
                   </p>
                 </div>
               </div>
@@ -607,7 +629,7 @@ export default function ModalShiftSwap({
               placeholder="เช่น ติดธุระครอบครัว, ขึ้นเวรช่วยแทนเพื่อนร่วมงาน"
               value={swapReason}
               onChange={(e) => setSwapReason(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
             />
           </div>
         </form>
@@ -624,16 +646,16 @@ export default function ModalShiftSwap({
           <button
             type="submit"
             form="shift-swap-form"
-            disabled={isSameShiftSameDate}
+            disabled={isInvalidSameShiftSameDate}
             className={`rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-md active:scale-95 transition-all ${
-              isSameShiftSameDate
+              isInvalidSameShiftSameDate
                 ? "bg-slate-300 dark:bg-zinc-700 cursor-not-allowed text-slate-500 dark:text-zinc-400 shadow-none active:scale-100"
                 : quotaWarning
                   ? "bg-gradient-to-r from-amber-600 to-shift-red hover:from-amber-700 hover:to-red-600 shadow-amber-500/20"
                   : "bg-gradient-to-r from-sky-500 to-emerald-600 hover:brightness-105 shadow-emerald-600/20"
             }`}
           >
-            {isSameShiftSameDate
+            {isInvalidSameShiftSameDate
               ? "ไม่สามารถแลกเวรเดียวกันได้"
               : quotaWarning
                 ? "ดำเนินการแลกเวร (มีคำเตือน)"

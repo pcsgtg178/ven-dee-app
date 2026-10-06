@@ -46,6 +46,7 @@ interface ModalAddTodoProps {
   initialCustomerId?: string;
   defaultDate?: string;
   onSuccess?: () => void;
+  onOpenPersonalEvent?: () => void;
 }
 
 const CLINIC_PRESETS: ClinicPresetShift[] = [
@@ -61,6 +62,7 @@ export default function ModalAddTodo({
   initialCustomerId,
   defaultDate,
   onSuccess,
+  onOpenPersonalEvent,
 }: ModalAddTodoProps) {
   const [activeTab, setActiveTab] = useState<"shift" | "service" | "clinic">(
     initialTab,
@@ -367,6 +369,20 @@ export default function ModalAddTodo({
               <span>คลินิก</span>
             </button>
           </div>
+          {onOpenPersonalEvent && (
+            <div className="mt-2 pt-1.5 border-t border-slate-200/60 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleModal();
+                  onOpenPersonalEvent();
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-950/40 dark:to-pink-950/40 px-3 py-2 text-xs font-bold text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 hover:border-rose-300 transition"
+              >
+                <span>🎈 บันทึกธุระส่วนตัว / กิจกรรม (งานแต่ง, วันเกิด)</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Error Alert */}

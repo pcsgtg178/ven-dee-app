@@ -34,6 +34,11 @@ import {
   SHIFT_CODE_MAP,
 } from "../../types/vendee";
 
+import {
+  PersonalEventRecord,
+  RELATIONSHIP_CONFIG,
+} from "../../types/vendee";
+
 export interface ActivityCardProps {
   item: ActivityItem;
   hideDateHeader?: boolean;
@@ -59,6 +64,68 @@ export default function ActivityCard({
   onEditService,
   onEditClinicLog,
 }: ActivityCardProps) {
+  // ─── PERSONAL EVENT CARD (ธุระส่วนตัว) ───
+  if (item.type === "personal_event") {
+    const pEvent = item as PersonalEventRecord;
+    const relConf = pEvent.relationshipTag ? (RELATIONSHIP_CONFIG[pEvent.relationshipTag] || RELATIONSHIP_CONFIG.other) : null;
+
+    return (
+      <div className="relative overflow-hidden rounded-2xl border border-rose-200 bg-card-bg p-3.5 shadow-xs transition-all hover:shadow-md dark:border-rose-900/60 dark:bg-zinc-900">
+        {/* Rose color stripe left */}
+        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-rose-500" />
+
+        <div className="flex items-start justify-between gap-2 pl-2">
+          <div className="space-y-1.5 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-rose-100 px-2.5 py-1 text-xs sm:text-sm font-bold text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                <span>🎈 ธุระส่วนตัว: {pEvent.title}</span>
+              </span>
+              {relConf && (
+                <span className={`rounded-xl px-2 py-0.5 text-[11px] font-semibold ${relConf.bg}`}>
+                  {relConf.label}
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted dark:text-zinc-400">
+              <div className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5 text-rose-500" />
+                <span>
+                  {pEvent.isAllDay
+                    ? "ไปทั้งวัน"
+                    : `${pEvent.startTime || "18:00"} - ${pEvent.endTime || "21:00"} น.`}
+                </span>
+              </div>
+              {pEvent.location && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5 text-rose-500" />
+                  <span>{pEvent.location}</span>
+                </div>
+              )}
+            </div>
+
+            {pEvent.notes && (
+              <div className="text-xs text-text-muted dark:text-zinc-400 pl-1">
+                <span>📝 {pEvent.notes}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red active:scale-95 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+              title="ลบธุระส่วนตัว"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ─── CLINIC WORK LOG CARD ───
   if (item.type === "clinic") {
     const clinicLog = item as ClinicWorkRecord;

@@ -17,6 +17,7 @@ import {
   Medications,
   ClinicWorkRecord,
   ClinicPresetShift,
+  PersonalEventRecord,
   ActivityItem,
 } from "../types/vendee";
 
@@ -26,6 +27,7 @@ const STORAGE_KEYS = {
   CUSTOMERS: "vendee_customers_v1",
   MEDICATIONS: "vendee_medications_v1",
   CLINIC_LOGS: "vendee_clinic_logs_v1",
+  PERSONAL_EVENTS: "vendee_personal_events_v1",
 };
 
 const SYNC_EVENT = "vendee_storage_updated";
@@ -995,22 +997,79 @@ export function deleteClinicLog(id: string): void {
   triggerSync();
 }
 
+export function getPersonalEvents(): PersonalEventRecord[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PERSONAL_EVENTS);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+export function savePersonalEvent(data: {
+  title: string;
+  eventDate: string;
+  startTime: string;
+  endTime: string;
+  isAllDay?: boolean;
+  relationshipTag: any;
+  location?: string;
+  notes?: string;
+}): PersonalEventRecord {
+  const events = getPersonalEvents();
+  const newRecord: PersonalEventRecord = {
+    id: `pevent-${Date.now()}`,
+    type: "personal_event",
+    title: data.title,
+    date: data.eventDate,
+    eventDate: data.eventDate,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    isAllDay: data.isAllDay,
+    relationshipTag: data.relationshipTag,
+    location: data.location,
+    notes: data.notes,
+    createdAt: new Date().toISOString(),
+  };
+
+  events.push(newRecord);
+  if (typeof window !== "undefined") {
+    localStorage.setItem(STORAGE_KEYS.PERSONAL_EVENTS, JSON.stringify(events));
+    triggerSync();
+  }
+  return newRecord;
+}
+
+export function deletePersonalEvent(id: string): void {
+  const events = getPersonalEvents().filter((e) => e.id !== id);
+  if (typeof window !== "undefined") {
+    localStorage.setItem(STORAGE_KEYS.PERSONAL_EVENTS, JSON.stringify(events));
+    triggerSync();
+  }
+}
+
 // All Activities combined sorted latest first
 export function getAllActivities(): ActivityItem[] {
   const shifts = getShifts();
   const visibleShifts = shifts.filter((s) => s.status !== "cancelled");
   const services = getServices();
   const clinicLogs = getClinicLogs();
+  const personalEvents = getPersonalEvents();
 
-  const combined: ActivityItem[] = [...visibleShifts, ...services, ...clinicLogs];
+  const combined: ActivityItem[] = [...visibleShifts, ...services, ...clinicLogs, ...personalEvents];
 
   return combined.sort((a, b) => {
-    const dateComp = b.date.localeCompare(a.date);
+    const dateA = a.type === "personal_event" ? (a as PersonalEventRecord).eventDate : a.date;
+    const dateB = b.type === "personal_event" ? (b as PersonalEventRecord).eventDate : b.date;
+    const dateComp = dateB.localeCompare(dateA);
     if (dateComp !== 0) return dateComp;
 
     const getTimeStr = (item: ActivityItem) => {
       if (item.type === "service") return (item as CustomerServiceRecord).time || "00:00";
       if (item.type === "clinic") return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "00:00";
+      if (item.type === "personal_event") return (item as PersonalEventRecord).startTime || "00:00";
       const shift = item as ShiftRecord;
       const conf = SHIFT_CONFIG[shift.shiftType];
       return conf?.period ? conf.period.split(" - ")[0] : "00:00";

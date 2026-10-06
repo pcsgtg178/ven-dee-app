@@ -38,6 +38,7 @@ import {
 } from "../../lib/storage";
 import { RefreshCw, Wifi } from "lucide-react";
 import ModalAddTodo from "./ModalAddTodo";
+import ModalAddPersonalEvent from "./ModalAddPersonalEvent";
 import ModalShiftSwap from "./ModalShiftSwap";
 import ModalSwapTrail from "./ModalSwapTrail";
 import ModalEditShift from "./ModalEditShift";
@@ -70,8 +71,9 @@ export default function ScheduleOverview() {
     "all",
   );
 
-  // Add Todo Modal states
+  // Add Todo / Personal Event Modal states
   const [openAddModal, setOpenAddModal] = useState(false);
+  const [openAddPersonalEventModal, setOpenAddPersonalEventModal] = useState(false);
   const [modalDefaultDate, setModalDefaultDate] = useState<string | undefined>(
     undefined,
   );
@@ -1013,6 +1015,7 @@ export default function ScheduleOverview() {
         initialTab={modalInitialTab}
         defaultDate={modalDefaultDate}
         onSuccess={reloadData}
+        onOpenPersonalEvent={() => setOpenAddPersonalEventModal(true)}
       />
 
       {/* Modal Shift Swap (การแลกเวร) */}
@@ -1080,6 +1083,22 @@ export default function ScheduleOverview() {
         }}
         onSuccess={() => {
           setToastMessage("บันทึกการแก้ไขกะคลินิกเรียบร้อยแล้ว");
+          setTimeout(() => setToastMessage(null), 3500);
+          reloadData();
+        }}
+      />
+
+      {/* Modal Add Personal Event (ธุระส่วนตัว) */}
+      <ModalAddPersonalEvent
+        isOpen={openAddPersonalEventModal}
+        defaultDate={modalDefaultDate}
+        onClose={() => setOpenAddPersonalEventModal(false)}
+        onSwitchToOtherWork={() => {
+          setOpenAddPersonalEventModal(false);
+          setOpenAddModal(true);
+        }}
+        onSuccess={(_, warning) => {
+          setToastMessage(warning || "บันทึกธุระส่วนตัวเรียบร้อยแล้ว 🎈");
           setTimeout(() => setToastMessage(null), 3500);
           reloadData();
         }}

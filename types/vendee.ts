@@ -82,7 +82,39 @@ export interface CustomerServiceRecord {
   medications?: string[]; // รายการยา (เพิ่ม/ลบได้หลายตัว โผล่เมื่อเลือกฉีดยา)
   note?: string;
   price?: number;
+  // External Gig & Service Financial Ledger (Satang Standard: 1 THB = 100 Satang)
+  serviceFeeSatang?: number;
+  medicationCostSatang?: number;
+  durationHours?: number;
+  travelExpenseSatang?: number;
+  otherExpensesSatang?: number;
   status?: "upcoming" | "completed" | "cancelled";
+  createdAt: string;
+}
+
+export type RelationshipTag = "friend" | "sibling" | "relative" | "acquaintance" | "family" | "other";
+
+export const RELATIONSHIP_CONFIG: Record<RelationshipTag, { label: string; bg: string }> = {
+  friend: { label: "เพื่อน", bg: "bg-pink-100 text-pink-800 dark:bg-pink-950/60 dark:text-pink-300" },
+  sibling: { label: "พี่/น้อง", bg: "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300" },
+  relative: { label: "ญาติ", bg: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300" },
+  acquaintance: { label: "คนรู้จัก", bg: "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300" },
+  family: { label: "ครอบครัว", bg: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300" },
+  other: { label: "อื่นๆ", bg: "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-zinc-300" },
+};
+
+export interface PersonalEventRecord {
+  id: string;
+  type: "personal_event";
+  title: string; // ไปทำอะไร / กิจกรรมส่วนตัว
+  date: string; // YYYY-MM-DD (Standard date for ActivityItem compatibility)
+  eventDate: string; // YYYY-MM-DD
+  startTime: string; // HH:mm (กี่โมง)
+  endTime: string; // HH:mm
+  isAllDay?: boolean;
+  relationshipTag?: RelationshipTag;
+  location?: string;
+  notes?: string; // เพิ่มเติม
   createdAt: string;
 }
 
@@ -97,7 +129,11 @@ export interface ClinicWorkRecord {
   createdAt: string;
 }
 
-export type ActivityItem = ShiftRecord | CustomerServiceRecord | ClinicWorkRecord;
+export type ActivityItem = ShiftRecord | CustomerServiceRecord | ClinicWorkRecord | PersonalEventRecord;
+
+export type ActionResult<T = any> =
+  | { success: true; data: T; message?: string }
+  | { success: false; error: { code: string; message: string; details?: any[] } };
 
 export const DEFAULT_BLACK_SHIFT_QUOTA = 14; // กฎเวรดำ x วันต่อเดือน
 

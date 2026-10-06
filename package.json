@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@fullcalendar/react": "^7.1.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.2",
     "lucide-react": "^1.47.0",
     "moment": "^2.31.0",
     "next": "16.3.5",

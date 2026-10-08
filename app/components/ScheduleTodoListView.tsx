@@ -12,6 +12,7 @@ import {
   Pencil,
   Building2,
   ArrowLeftRight,
+  Trash2,
 } from "lucide-react";
 import moment from "moment";
 import "moment/locale/th";
@@ -20,6 +21,7 @@ import {
   CustomerServiceRecord,
   ShiftRecord,
   ClinicWorkRecord,
+  PersonalEventRecord,
   SHIFT_CONFIG,
   SHIFT_CATEGORY_CONFIG,
   SHIFT_CODE_MAP,
@@ -58,9 +60,9 @@ export interface ScheduleTodoListViewProps {
   /** Past activities, sorted descending */
   pastActivities: ActivityItem[];
   /** Currently active filter tab */
-  filterType: "all" | "shift" | "service" | "clinic";
+  filterType: "all" | "shift" | "service" | "clinic" | "personal_event";
   /** Callback to change active filter */
-  onFilterChange: (filter: "all" | "shift" | "service" | "clinic") => void;
+  onFilterChange: (filter: "all" | "shift" | "service" | "clinic" | "personal_event") => void;
   /** Callback to open add modal when empty */
   onOpenAddModal: (defaultDate?: string) => void;
   /** ActivityCard action callbacks */
@@ -122,12 +124,14 @@ function TimelineRow({
   onEditService,
   onSwapShift,
   onEditClinicLog,
+  onRequestDelete,
 }: {
   item: ActivityItem;
   onEditShift?: (shift: ShiftRecord) => void;
   onEditService?: (service: CustomerServiceRecord) => void;
   onSwapShift?: (shift: ShiftRecord) => void;
   onEditClinicLog?: (clinicLog: ClinicWorkRecord) => void;
+  onRequestDelete?: (item: ActivityItem) => void;
 }) {
   if (item.type === "clinic") {
     const log = item as ClinicWorkRecord;
@@ -229,6 +233,34 @@ function TimelineRow({
             </button>
           )}
         </div>
+      </div>
+    );
+  }
+  
+  if (item.type === "personal_event") {
+    const pEvent = item as PersonalEventRecord;
+    return (
+      <div className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs bg-card-bg dark:bg-zinc-900 border border-rose-100 dark:border-rose-950/60">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500" />
+        <span className="font-bold text-rose-600 dark:text-rose-400">
+          {pEvent.isAllDay ? "ทั้งวัน" : `${pEvent.startTime} น.`}
+        </span>
+        <span className="font-semibold text-text-main dark:text-white truncate">
+          🎈 {pEvent.title} {pEvent.location ? `(${pEvent.location})` : ""}
+        </span>
+        {onRequestDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestDelete(pEvent);
+            }}
+            className="ml-auto rounded-lg p-1 text-text-muted hover:bg-rose-50 hover:text-shift-red dark:hover:bg-zinc-800 transition-all cursor-pointer"
+            title="ลบธุระส่วนตัว"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
     );
   }
@@ -393,6 +425,20 @@ export default function ScheduleTodoListView({
             <Building2 className="h-3 w-3" />
             <span>
               คลินิก ({activities.filter((a) => a.type === "clinic").length})
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onFilterChange("personal_event")}
+            className={`flex items-center gap-1 rounded-full px-3 py-1.5 font-medium transition-all ${
+              filterType === "personal_event"
+                ? "bg-rose-500 text-white font-bold shadow-2xs"
+                : "bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300"
+            }`}
+          >
+            <span>🎈</span>
+            <span>
+              ธุระ ({activities.filter((a) => a.type === "personal_event").length})
             </span>
           </button>
         </div>
@@ -622,6 +668,7 @@ export default function ScheduleTodoListView({
                           onEditService={onEditService}
                           onSwapShift={onInitiateSwap}
                           onEditClinicLog={onEditClinicLog}
+                          onRequestDelete={onRequestDelete}
                         />
                       ))}
                     </div>
@@ -667,6 +714,7 @@ export default function ScheduleTodoListView({
                           onEditShift={onEditShift}
                           onEditService={onEditService}
                           onEditClinicLog={onEditClinicLog}
+                          onRequestDelete={onRequestDelete}
                         />
                       ))}
                     </div>

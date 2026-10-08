@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { PersonalEventRecord } from "../../types/vendee";
 import { createPersonalEventAction } from "../actions/personalEventActions";
-import { savePersonalEvent } from "../../lib/storage";
+import { savePersonalEvent, getPersonalEvents, triggerSync } from "../../lib/storage";
 
 interface ModalAddPersonalEventProps {
   isOpen: boolean;
@@ -99,7 +99,7 @@ export default function ModalAddPersonalEvent({
         returnedWarning = res.data.warning;
       } else {
         // Fallback to local storage persistence
-        createdEvent = savePersonalEvent({
+        createdEvent = await savePersonalEvent({
           title: title.trim(),
           eventDate,
           startTime: isAllDay ? "00:00" : startTime,
@@ -109,6 +109,17 @@ export default function ModalAddPersonalEvent({
           notes: notes.trim() || undefined,
         });
       }
+
+      // Always ensure local storage cache contains the created event and sync is triggered
+      const currentEvents = getPersonalEvents();
+      const existingIdx = currentEvents.findIndex((e) => e.id === createdEvent.id);
+      if (existingIdx >= 0) {
+        currentEvents[existingIdx] = createdEvent;
+      } else {
+        currentEvents.unshift(createdEvent);
+      }
+      localStorage.setItem("vendee_personal_events_v1", JSON.stringify(currentEvents));
+      triggerSync();
 
       if (returnedWarning) {
         setWarningMsg(returnedWarning);
@@ -124,7 +135,7 @@ export default function ModalAddPersonalEvent({
       onClose();
     } catch (err: any) {
       // Local storage fallback on error
-      const createdEvent = savePersonalEvent({
+      const createdEvent = await savePersonalEvent({
         title: title.trim(),
         eventDate,
         startTime: isAllDay ? "00:00" : startTime,

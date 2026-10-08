@@ -1,7 +1,7 @@
 # Project Tech Stack & Architecture Rules
 
 ## 1. Core Stack & Framework Rules
-- **Architecture**: Next.js Fullstack PWA (Single repository containing UI, Server Actions / Route Handlers, and Database integration — NO external Express.js API backend required).
+- **Architecture**: Next.js Fullstack PWA — **Single-User Personal Companion App** (ออกแบบสำหรับพยาบาลใช้งานคนเดียว ไม่ต้องมี Multi-tenant / Multi-user login isolation, จัดเก็บข้อมูลตารางเวร, งานเคหะบริบาล, ธุระส่วนตัว และ Todo ภายใต้ชุดข้อมูลส่วนตัวเดี่ยว).
 - **Framework**: Next.js 15+ (App Router only — do NOT use Pages router or legacy data fetching like `getStaticProps` / `getServerSideProps`).
 - **Database & Backend**: **Supabase** (PostgreSQL) connected directly via Next.js Server Actions & API Route Handlers, hosted on Supabase and deployed on **Vercel**.
   - Client SDK: `@supabase/supabase-js` and `@supabase/ssr`.

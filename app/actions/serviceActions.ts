@@ -158,3 +158,52 @@ export async function createServiceAction(data: {
     };
   }
 }
+
+/**
+ * Update service status
+ */
+export async function updateServiceStatusAction(
+  id: string,
+  status: "upcoming" | "completed" | "cancelled"
+): Promise<ActionResult<{ updatedId: string; status: string }>> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("customer_services")
+      .update({ status })
+      .eq("id", id);
+
+    if (error) {
+      return { success: false, error: { code: "DATABASE_ERROR", message: error.message } };
+    }
+
+    return { success: true, data: { updatedId: id, status }, message: "อัปเดตสถานะบริการเรียบร้อยแล้ว" };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: { code: "SERVER_ERROR", message: err.message || "Failed to update service status" },
+    };
+  }
+}
+
+/**
+ * Delete customer service
+ */
+export async function deleteServiceAction(id: string): Promise<ActionResult<{ deletedId: string }>> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.from("customer_services").delete().eq("id", id);
+
+    if (error) {
+      return { success: false, error: { code: "DATABASE_ERROR", message: error.message } };
+    }
+
+    return { success: true, data: { deletedId: id }, message: "ลบนัดหมายบริการเรียบร้อยแล้ว" };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: { code: "SERVER_ERROR", message: err.message || "Failed to delete service" },
+    };
+  }
+}
+

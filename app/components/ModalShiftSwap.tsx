@@ -167,14 +167,14 @@ export default function ModalShiftSwap({
     setShowConfirmModal(true);
   };
 
-  const handleExecuteSwap = () => {
+  const handleExecuteSwap = async () => {
     if (!shift) return;
 
     const categoryToSave: ShiftCategory =
       newShiftType === "r1" || newShiftType === "r2" ? "green" : newCategory;
 
     try {
-      swapShift({
+      await swapShift({
         shiftId: shift.id,
         swappedWith: swappedWith.trim(),
         originalOwner: isTopUp ? originalOwner.trim() : undefined,

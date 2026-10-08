@@ -106,6 +106,9 @@ export default function ScheduleCalendarView({
     const isService = Boolean(
       extendedProps?.isService || extendedProps?.item?.type === "service",
     );
+    const isPersonalEvent = Boolean(
+      extendedProps?.isPersonalEvent || extendedProps?.item?.type === "personal_event",
+    );
 
     if (shiftDetails && shiftDetails.length > 0) {
       return (
@@ -134,6 +137,14 @@ export default function ScheduleCalendarView({
               </React.Fragment>
             );
           })}
+        </div>
+      );
+    }
+
+    if (isPersonalEvent) {
+      return (
+        <div className="truncate text-[10px] sm:text-[11px] font-semibold leading-tight px-1 py-0.5 text-white bg-rose-500 rounded-md shadow-2xs">
+          {title}
         </div>
       );
     }

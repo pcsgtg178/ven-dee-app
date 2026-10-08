@@ -29,7 +29,7 @@ console.log("Checking Supabase connection to:", url);
 const supabase = createClient(url, key);
 
 async function check() {
-  const tables = ["shifts", "personal_events", "customer_services", "nurses", "todos"];
+  const tables = ["shifts", "personal_events", "customer_services", "user_profile", "todos"];
   let allReady = true;
 
   for (const table of tables) {

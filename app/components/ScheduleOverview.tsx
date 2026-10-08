@@ -20,6 +20,7 @@ import {
   CustomerServiceRecord,
   ShiftRecord,
   ClinicWorkRecord,
+  PersonalEventRecord,
   SHIFT_CONFIG,
   SHIFT_CATEGORY_CONFIG,
   SHIFT_CODE_MAP,
@@ -30,6 +31,7 @@ import {
   deleteShift,
   deleteService,
   deleteClinicLog,
+  deletePersonalEvent,
   saveService,
   undoSwapShift,
   restoreShift,
@@ -67,7 +69,7 @@ type ConfirmModalState =
 export default function ScheduleOverview() {
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [filterType, setFilterType] = useState<"all" | "shift" | "service" | "clinic">(
+  const [filterType, setFilterType] = useState<"all" | "shift" | "service" | "clinic" | "personal_event">(
     "all",
   );
 
@@ -226,6 +228,9 @@ export default function ScheduleOverview() {
       if (item.type === "clinic") {
         return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "12:30";
       }
+      if (item.type === "personal_event") {
+        return (item as PersonalEventRecord).startTime || "00:00";
+      }
       return (item as CustomerServiceRecord).time || "12:00";
     };
 
@@ -286,6 +291,9 @@ export default function ScheduleOverview() {
           }
           if (item.type === "clinic") {
             return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "12:30";
+          }
+          if (item.type === "personal_event") {
+            return (item as PersonalEventRecord).startTime || "00:00";
           }
           return (item as CustomerServiceRecord).time || "12:00";
         };
@@ -393,7 +401,7 @@ export default function ScheduleOverview() {
       return timeStr;
     };
 
-    // แปลงรายการอื่นๆ (คลินิก & นัดหมายบริการ)
+    // แปลงรายการอื่นๆ (คลินิก, นัดหมายบริการ, ธุระส่วนตัว)
     nonShifts.forEach((item) => {
       if (item.type === "clinic") {
         const clinicLog = item as ClinicWorkRecord;
@@ -410,6 +418,22 @@ export default function ScheduleOverview() {
           contrastColor: "#ffffff",
           order: 3,
           extendedProps: { item, order: 3 },
+        });
+      } else if (item.type === "personal_event") {
+        const pEvent = item as PersonalEventRecord;
+        const timeDisplay = pEvent.isAllDay ? "ทั้งวัน" : `${pEvent.startTime || "18:00"}`;
+        const eventTitle = `🎈 ${timeDisplay} ${pEvent.title}`;
+        eventsResult.push({
+          id: item.id,
+          title: eventTitle,
+          date: pEvent.eventDate || pEvent.date,
+          start: `${pEvent.eventDate || pEvent.date}T${pEvent.startTime || "00:00"}:00`,
+          allDay: Boolean(pEvent.isAllDay),
+          color: "#f43f5e",
+          textColor: "#ffffff",
+          contrastColor: "#ffffff",
+          order: 4,
+          extendedProps: { item, order: 4, isPersonalEvent: true },
         });
       } else {
         const service = item as CustomerServiceRecord;
@@ -567,6 +591,10 @@ export default function ScheduleOverview() {
       } else if (item.type === "clinic") {
         deleteClinicLog(item.id);
         setToastMessage("ลบบันทึกกะคลินิกเรียบร้อยแล้ว");
+        setTimeout(() => setToastMessage(null), 3000);
+      } else if (item.type === "personal_event") {
+        await deletePersonalEvent(item.id);
+        setToastMessage("ลบธุระส่วนตัวเรียบร้อยแล้ว");
         setTimeout(() => setToastMessage(null), 3000);
       } else {
         await deleteService(item.id);
@@ -804,6 +832,50 @@ export default function ScheduleOverview() {
               คุณต้องการลบบันทึกกะคลินิกนี้ใช่หรือไม่?
             </span>
           ),
+          onConfirm: () => handleExecuteDelete(item),
+        };
+      }
+
+      if (item.type === "personal_event") {
+        const pEvent = item as PersonalEventRecord;
+        return {
+          title: "ยืนยันการลบธุระส่วนตัว",
+          subtitle: `กิจกรรม: ${pEvent.title}`,
+          variant: "danger" as ConfirmVariant,
+          iconType: "trash" as const,
+          confirmText: "ยืนยันลบธุระ",
+          cancelText: "ยกเลิก",
+          items: [
+            {
+              label: "กิจกรรม",
+              value: pEvent.title,
+            },
+            {
+              label: "วันที่",
+              value: formatThaiDate(pEvent.eventDate || pEvent.date),
+            },
+            {
+              label: "เวลา",
+              value: pEvent.isAllDay ? "ไปทั้งวัน" : `${pEvent.startTime} - ${pEvent.endTime} น.`,
+            },
+            ...(pEvent.location
+              ? [
+                  {
+                    label: "สถานที่",
+                    value: pEvent.location,
+                  },
+                ]
+              : []),
+            ...(pEvent.notes
+              ? [
+                  {
+                    label: "บันทึกเพิ่มเติม",
+                    value: pEvent.notes,
+                  },
+                ]
+              : []),
+          ],
+          warningNotice: <span>คุณต้องการลบธุระส่วนตัวนี้ใช่หรือไม่?</span>,
           onConfirm: () => handleExecuteDelete(item),
         };
       }

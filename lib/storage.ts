@@ -2,7 +2,25 @@
 
 import moment from "moment";
 import "moment/locale/th";
-import { shiftsApi, customersApi, servicesApi, analyticsApi } from "./api";
+import {
+  getShiftsAction,
+  createShiftAction,
+  updateShiftAction,
+  swapShiftAction,
+  undoSwapShiftAction,
+  restoreShiftAction,
+  deleteShiftAction,
+} from "../app/actions/shiftActions";
+import {
+  getServicesAction,
+  createServiceAction,
+  deleteServiceAction,
+} from "../app/actions/serviceActions";
+import {
+  getPersonalEventsAction,
+  createPersonalEventAction,
+  deletePersonalEventAction,
+} from "../app/actions/personalEventActions";
 
 import {
   Customer,
@@ -120,64 +138,99 @@ export const initialServices: CustomerServiceRecord[] = [];
 
 
 /**
- * Synchronize local storage with live backend REST API (http://localhost:8080/api/v1)
+ * Synchronize local storage with Supabase database via Next.js Server Actions
  */
 export async function syncAllDataFromApi(): Promise<{
   shifts: ShiftRecord[];
   customers: Customer[];
   services: CustomerServiceRecord[];
+  personalEvents: PersonalEventRecord[];
   isOnline: boolean;
 }> {
   if (typeof window === "undefined") {
-    return { shifts: initialShifts, customers: initialCustomers, services: initialServices, isOnline: false };
+    return {
+      shifts: initialShifts,
+      customers: initialCustomers,
+      services: initialServices,
+      personalEvents: [],
+      isOnline: false,
+    };
   }
 
   try {
-    const [shiftsRes, customersRes, servicesRes] = await Promise.allSettled([
-      shiftsApi.getAll(),
-      customersApi.getAll(),
-      servicesApi.getAll(),
+    const [shiftsRes, servicesRes, personalEventsRes] = await Promise.allSettled([
+      getShiftsAction(),
+      getServicesAction(),
+      getPersonalEventsAction(),
     ]);
 
     let shifts = getShifts();
-    let customers = getCustomers();
     let services = getServices();
+    let personalEvents = getPersonalEvents();
     let isOnline = false;
 
-    if (shiftsRes.status === "fulfilled" && Array.isArray(shiftsRes.value) && shiftsRes.value.length > 0) {
-      shifts = shiftsRes.value;
-      localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
+    if (shiftsRes.status === "fulfilled" && shiftsRes.value.success && Array.isArray(shiftsRes.value.data)) {
+      if (shiftsRes.value.data.length > 0) {
+        shifts = shiftsRes.value.data;
+        localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
+      } else if (shifts.length > 0) {
+        // Automatically migrate any unpersisted local shifts to Supabase
+        for (const localShift of shifts) {
+          try {
+            await createShiftAction({
+              date: localShift.date,
+              shiftType: localShift.shiftType,
+              category: localShift.category,
+              department: localShift.department,
+              note: localShift.note,
+            });
+          } catch (_) {}
+        }
+        const refreshed = await getShiftsAction();
+        if (refreshed.success && refreshed.data.length > 0) {
+          shifts = refreshed.data;
+          localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
+        }
+      }
       isOnline = true;
     }
 
-    if (customersRes.status === "fulfilled" && Array.isArray(customersRes.value) && customersRes.value.length > 0) {
-      customers = customersRes.value;
-      localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+    if (servicesRes.status === "fulfilled" && servicesRes.value.success && Array.isArray(servicesRes.value.data)) {
+      if (servicesRes.value.data.length > 0) {
+        services = servicesRes.value.data;
+        localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+      }
       isOnline = true;
     }
 
-    if (servicesRes.status === "fulfilled" && Array.isArray(servicesRes.value) && servicesRes.value.length > 0) {
-      services = servicesRes.value;
-      localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+    if (personalEventsRes.status === "fulfilled" && personalEventsRes.value.success && Array.isArray(personalEventsRes.value.data)) {
+      personalEvents = personalEventsRes.value.data;
+      localStorage.setItem(STORAGE_KEYS.PERSONAL_EVENTS, JSON.stringify(personalEvents));
       isOnline = true;
     }
 
     triggerSync();
-    return { shifts, customers, services, isOnline };
+    return {
+      shifts,
+      customers: getCustomers(),
+      services,
+      personalEvents,
+      isOnline,
+    };
   } catch (err) {
-    console.warn("[VenDee Storage] Failed to sync with backend API:", err);
-    return { shifts: getShifts(), customers: getCustomers(), services: getServices(), isOnline: false };
+    console.warn("[VenDee Storage] Failed to sync with Supabase:", err);
+    return {
+      shifts: getShifts(),
+      customers: getCustomers(),
+      services: getServices(),
+      personalEvents: getPersonalEvents(),
+      isOnline: false,
+    };
   }
 }
 
 export async function fetchMonthlyQuotaFromApi(yearMonth: string = "2026-09") {
-  try {
-    const data = await analyticsApi.getMonthlyQuota(yearMonth);
-    return data;
-  } catch (err) {
-    console.warn("[VenDee Storage] Failed to fetch quota from API:", err);
-    return null;
-  }
+  return getMonthlyBlackShiftStats(yearMonth);
 }
 
 export function triggerSync() {
@@ -223,28 +276,7 @@ export async function saveCustomer(customer: Omit<Customer, "id"> & { id?: strin
 
   const existingIdx = current.findIndex((c) => c.id === id);
 
-  // 1. Sync with API if online
-  if (typeof window !== "undefined") {
-    try {
-      if (existingIdx >= 0) {
-        const res = await customersApi.update(newCustomer.id, {
-          name: newCustomer.name,
-          avatarColor: newCustomer.avatarColor,
-        });
-        if (res) newCustomer = { ...newCustomer, ...res };
-      } else {
-        const created = await customersApi.create({
-          name: newCustomer.name,
-          avatarColor: newCustomer.avatarColor,
-        });
-        if (created?.id) {
-          newCustomer = { ...newCustomer, ...created };
-        }
-      }
-    } catch (e) {
-      console.warn("API saveCustomer warning:", e);
-    }
-  }
+  // 1. Local Customer Storage (Customers are managed locally and referenced by services)
 
   // 2. Save locally
   const latestList = getCustomers();
@@ -313,34 +345,34 @@ export async function saveShift(
     status?: ShiftRecord["status"];
     createdAt?: string;
     swapMeta?: any;
+    department?: string;
   }
 ): Promise<ShiftRecord> {
   const current = getShifts();
-  const id = shift.id || `shift-${Date.now()}`;
   const targetStatus = shift.status || "active";
 
   // Prevent duplicate active shift on the same date and same shift type
   if (targetStatus === "active") {
     const isDuplicate = current.some(
       (s) =>
-        s.id !== id &&
+        s.id !== shift.id &&
         s.date === shift.date &&
         s.shiftType === shift.shiftType &&
         s.status === "active"
     );
     if (isDuplicate) {
-      const label = SHIFT_CONFIG[shift.shiftType].label;
+      const label = SHIFT_CONFIG[shift.shiftType]?.label || "เวร";
       throw new Error(`มี${label}ในวันที่ ${shift.date} อยู่แล้ว ไม่สามารถบันทึกซ้ำช่วงเวลาเดียวกันได้`);
     }
 
-    // Check conflict with customer services on the same date (เวร R / Refer สามารถเพิ่มเข้ามาได้แม้มีงานอื่นอยู่แล้ว)
+    // Check conflict with customer services on the same date
     if (shift.shiftType !== "r1" && shift.shiftType !== "r2") {
       const conflictingServices = findConflictingServices(shift.date, shift.shiftType);
       if (conflictingServices.length > 0) {
         const shiftInfo = SHIFT_CONFIG[shift.shiftType];
         const firstConf = conflictingServices[0];
         throw new Error(
-          `ไม่สามารถบันทึก${shiftInfo.label} (${shiftInfo.period}) ได้ เนื่องจากมีนัดหมายบริการ "${firstConf.customerName}" เวลา ${firstConf.time} น. อยู่ในช่วงเวลานี้`
+          `ไม่สามารถบันทึก${shiftInfo?.label} (${shiftInfo?.period}) ได้ เนื่องจากมีนัดหมายบริการ "${firstConf.customerName}" เวลา ${firstConf.time} น. อยู่ในช่วงเวลานี้`
         );
       }
     }
@@ -351,57 +383,69 @@ export async function saveShift(
       ? "green"
       : shift.category || "black";
 
-  const existingIdx = current.findIndex((s) => s.id === id);
+  let createdOrUpdatedShift: ShiftRecord | null = null;
+
+  // 1. Sync with Supabase via Server Action
+  const isExistingInDb = Boolean(shift.id && !shift.id.startsWith("shift-"));
+  try {
+    if (isExistingInDb) {
+      const res = await updateShiftAction(shift.id!, {
+        shiftType: shift.shiftType,
+        category: resolvedCategory,
+        department: shift.department,
+        note: shift.note,
+        status: targetStatus,
+      });
+      if (res.success && res.data) {
+        createdOrUpdatedShift = res.data;
+      } else if (!res.success) {
+        throw new Error(res.error.message);
+      }
+    } else {
+      const res = await createShiftAction({
+        date: shift.date,
+        shiftType: shift.shiftType,
+        category: resolvedCategory,
+        department: shift.department,
+        note: shift.note,
+      });
+      if (res.success && res.data) {
+        createdOrUpdatedShift = res.data;
+      } else if (!res.success) {
+        throw new Error(res.error.message);
+      }
+    }
+  } catch (err: any) {
+    if (err.message && !err.message.includes("fetch")) {
+      throw err;
+    }
+    console.warn("Supabase saveShift warning:", err);
+  }
+
+  const finalId = createdOrUpdatedShift?.id || shift.id || `shift-${Date.now()}`;
+  const existingIdx = current.findIndex((s) => s.id === finalId || s.id === shift.id);
   const existingShift = existingIdx >= 0 ? current[existingIdx] : undefined;
 
-  let newShift: ShiftRecord = {
+  const newShift: ShiftRecord = createdOrUpdatedShift || {
     ...existingShift,
     ...shift,
     category: resolvedCategory,
-    id,
+    id: finalId,
     type: "shift",
     status: targetStatus,
     createdAt: existingShift?.createdAt || shift.createdAt || new Date().toISOString(),
   };
 
-  // 1. Sync with API if online
-  if (typeof window !== "undefined") {
-    try {
-      if (existingIdx >= 0) {
-        const res = await shiftsApi.update(newShift.id, {
-          department: newShift.department || undefined,
-          note: newShift.note || undefined,
-        });
-        if (res) newShift = { ...newShift, ...res };
-      } else {
-        const created = await shiftsApi.create({
-          date: newShift.date,
-          shiftType: newShift.shiftType,
-          category: newShift.category,
-          department: newShift.department || undefined,
-          note: newShift.note || undefined,
-        });
-        if (created?.id) {
-          newShift = { ...newShift, ...created };
-        }
-      }
-    } catch (e) {
-      console.warn("API saveShift warning:", e);
-    }
-  }
-
   // 2. Save locally
-  const latestList = getShifts();
-  const idx = latestList.findIndex((s) => s.id === id || s.id === newShift.id);
-  let updated: ShiftRecord[];
-  if (idx >= 0) {
-    updated = [...latestList];
-    updated[idx] = newShift;
+  let updatedList: ShiftRecord[];
+  if (existingIdx >= 0) {
+    updatedList = [...current];
+    updatedList[existingIdx] = newShift;
   } else {
-    updated = [newShift, ...latestList];
+    updatedList = [newShift, ...current];
   }
 
-  localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
+  localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updatedList));
   triggerSync();
 
   return newShift;
@@ -426,20 +470,24 @@ export async function deleteShift(id: string): Promise<{ restoredParentId?: stri
     );
   }
 
-  // 3. Call backend API if online
-  if (typeof window !== "undefined") {
+  // 3. Call Supabase Server Action if online
+  let restoredParentId: string | undefined = undefined;
+  if (!id.startsWith("shift-")) {
     try {
-      await shiftsApi.delete(id);
-    } catch (err: any) {
-      if (err?.status && err.status >= 400) {
-        throw new Error(err.message || "ไม่สามารถลบเวรที่ถูกล็อกหรือผ่านเวลาไปแล้วได้");
+      const res = await deleteShiftAction(id);
+      if (!res.success) {
+        throw new Error(res.error.message);
       }
-      console.warn("Backend API offline during deleteShift, performing local delete:", err);
+      restoredParentId = res.data?.restoredParentId;
+    } catch (err: any) {
+      if (err.message && !err.message.includes("fetch")) {
+        throw err;
+      }
+      console.warn("Supabase deleteShift warning:", err);
     }
   }
 
   // 4. Perform local delete & restore parent if applicable (for a received shift)
-  let restoredParentId: string | undefined = undefined;
   const updated = current.filter((s) => s.id !== id);
 
   if (target.swapMeta?.parentShiftId) {
@@ -459,7 +507,7 @@ export async function deleteShift(id: string): Promise<{ restoredParentId?: stri
 /**
  * Manually reactivate a swapped_out or inactive shift
  */
-export function restoreShift(shiftId: string): ShiftRecord {
+export async function restoreShift(shiftId: string): Promise<ShiftRecord> {
   const current = getShifts();
   const target = current.find((s) => s.id === shiftId);
   if (!target) {
@@ -470,9 +518,13 @@ export function restoreShift(shiftId: string): ShiftRecord {
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(current));
   triggerSync();
 
-  // API Async Sync: restoreShift
-  if (typeof window !== "undefined") {
-    shiftsApi.restore(shiftId).catch((e) => console.warn("shiftsApi.restore error:", e));
+  // Supabase restore
+  if (!shiftId.startsWith("shift-")) {
+    try {
+      await restoreShiftAction(shiftId);
+    } catch (e) {
+      console.warn("restoreShiftAction error:", e);
+    }
   }
 
   return target;
@@ -484,7 +536,7 @@ export function restoreShift(shiftId: string): ShiftRecord {
  * - Creates a new shift with the received date, type, and category
  * - Populates swapMeta including direct partner, optional original owner, and trail
  */
-export function swapShift(params: {
+export async function swapShift(params: {
   shiftId: string;
   swappedWith: string; // Direct Partner
   originalOwner?: string; // Original Owner (if top-up)
@@ -492,7 +544,7 @@ export function swapShift(params: {
   newShiftType: ShiftType;
   newCategory: ShiftCategory;
   swapReason?: string;
-}): { newShift: ShiftRecord; oldShift: ShiftRecord } {
+}): Promise<{ newShift: ShiftRecord; oldShift: ShiftRecord }> {
   const current = getShifts();
   const oldShift = current.find((s) => s.id === params.shiftId);
   if (!oldShift) {
@@ -579,9 +631,32 @@ export function swapShift(params: {
       ? "green"
       : params.newCategory;
 
-  const newShiftId = `shift-${Date.now()}`;
-  const newShift: ShiftRecord = {
-    id: newShiftId,
+  let dbResult: { newShift: ShiftRecord; oldShift: ShiftRecord } | null = null;
+  if (!oldShift.id.startsWith("shift-")) {
+    try {
+      const res = await swapShiftAction({
+        shiftId: oldShift.id,
+        swappedWith: params.swappedWith,
+        originalOwner: params.originalOwner,
+        newDate: params.newDate,
+        newShiftType: params.newShiftType,
+        newCategory: resolvedCategory,
+        swapReason: params.swapReason,
+        swapHistory: trail,
+      });
+      if (res.success && res.data) {
+        dbResult = res.data;
+      }
+    } catch (err) {
+      console.warn("swapShiftAction warning:", err);
+    }
+  }
+
+  // Update old shift status to swapped_out
+  oldShift.status = "swapped_out";
+
+  const newShift: ShiftRecord = dbResult?.newShift || {
+    id: `shift-${Date.now()}`,
     type: "shift",
     date: params.newDate,
     shiftType: params.newShiftType,
@@ -605,29 +680,7 @@ export function swapShift(params: {
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
 
-  // API Async Sync: swapShift
-  if (typeof window !== "undefined") {
-    shiftsApi.swap(oldShift.id, {
-      newDate: params.newDate,
-      newShiftType: params.newShiftType,
-      newCategory: params.newCategory,
-      swappedWith: params.swappedWith,
-      originalOwner: params.originalOwner || undefined,
-      swapReason: params.swapReason || undefined,
-    }).then((res) => {
-      if (res?.newShift?.id && res.newShift.id !== newShift.id) {
-        const list = getShifts();
-        const sIdx = list.findIndex((s) => s.id === newShift.id);
-        if (sIdx >= 0) {
-          list[sIdx] = { ...list[sIdx], id: res.newShift.id };
-          localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(list));
-          triggerSync();
-        }
-      }
-    }).catch((e) => console.warn("shiftsApi.swap error:", e));
-  }
-
-  return { newShift, oldShift };
+  return { newShift, oldShift: dbResult?.oldShift || oldShift };
 }
 
 /**
@@ -636,7 +689,7 @@ export function swapShift(params: {
  * - Removes/cancels the shift received during the swap
  * - Only permitted if isLocked === false
  */
-export function undoSwapShift(shiftId: string): boolean {
+export async function undoSwapShift(shiftId: string): Promise<boolean> {
   const current = getShifts();
   const targetShift = current.find((s) => s.id === shiftId);
   if (!targetShift) {
@@ -677,10 +730,14 @@ export function undoSwapShift(shiftId: string): boolean {
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
 
-  // API Async Sync: undoSwapShift
-  if (typeof window !== "undefined") {
+  // Supabase rollback
+  try {
     const apiTargetId = childIdToRemove || shiftId;
-    shiftsApi.undoSwap(apiTargetId).catch((e) => console.warn("shiftsApi.undoSwap error:", e));
+    if (!apiTargetId.startsWith("shift-")) {
+      await undoSwapShiftAction(apiTargetId);
+    }
+  } catch (e) {
+    console.warn("undoSwapShiftAction warning:", e);
   }
 
   return true;
@@ -795,47 +852,40 @@ export async function saveService(
   const existingIdx = current.findIndex((s) => s.id === id);
   const existingService = existingIdx >= 0 ? current[existingIdx] : undefined;
 
-  let newService: CustomerServiceRecord = {
+  let createdService: CustomerServiceRecord | null = null;
+  if (!id.startsWith("srv-") || existingIdx < 0) {
+    try {
+      const res = await createServiceAction({
+        customerId: service.customerId,
+        customerName: service.customerName,
+        date: service.date,
+        time: service.time,
+        services: service.services || ["injection"],
+        otherServiceText: service.otherServiceText,
+        medications: service.medications,
+        note: service.note,
+        price: service.price,
+      });
+      if (res.success && res.data) {
+        createdService = res.data;
+      }
+    } catch (e) {
+      console.warn("createServiceAction warning:", e);
+    }
+  }
+
+  const finalId = createdService?.id || id;
+  const newService: CustomerServiceRecord = createdService || {
     ...existingService,
     ...service,
-    id,
+    id: finalId,
     type: "service",
     createdAt: existingService?.createdAt || service.createdAt || new Date().toISOString(),
   };
 
-  // 1. Sync with API if online
-  if (typeof window !== "undefined") {
-    try {
-      if (existingIdx >= 0) {
-        if (newService.status) {
-          const res = await servicesApi.updateStatus(newService.id, newService.status);
-          if (res) newService = { ...newService, ...res };
-        }
-      } else {
-        const created = await servicesApi.create({
-          customerId: newService.customerId,
-          customerName: newService.customerName,
-          date: newService.date,
-          time: newService.time,
-          services: newService.services || ["injection"],
-          otherServiceText: newService.otherServiceText,
-          medications: newService.medications,
-          note: newService.note,
-          price: newService.price,
-          status: newService.status,
-        });
-        if (created?.id) {
-          newService = { ...newService, ...created };
-        }
-      }
-    } catch (e) {
-      console.warn("API saveService warning:", e);
-    }
-  }
-
   // 2. Save locally
   const latestList = getServices();
-  const idx = latestList.findIndex((s) => s.id === id || s.id === newService.id);
+  const idx = latestList.findIndex((s) => s.id === finalId || s.id === id);
   let updated: CustomerServiceRecord[];
   if (idx >= 0) {
     updated = [...latestList];
@@ -859,15 +909,12 @@ export async function deleteService(id: string): Promise<void> {
     throw new Error("ไม่สามารถลบบริการย้อนหลังหรือที่ผ่านเวลาไปแล้วได้ (Overtime / Past service)");
   }
 
-  // 2. Call backend API if online
-  if (typeof window !== "undefined") {
+  // 2. Call Supabase delete action
+  if (!id.startsWith("srv-")) {
     try {
-      await servicesApi.delete(id);
+      await deleteServiceAction(id);
     } catch (err: any) {
-      if (err?.status && err.status >= 400) {
-        throw new Error(err.message || "ไม่สามารถลบบริการย้อนหลังหรือที่ผ่านเวลาไปแล้วได้");
-      }
-      console.warn("Backend API offline during deleteService, performing local delete:", err);
+      console.warn("deleteServiceAction warning:", err);
     }
   }
 
@@ -1008,45 +1055,82 @@ export function getPersonalEvents(): PersonalEventRecord[] {
   }
 }
 
-export function savePersonalEvent(data: {
+export async function savePersonalEvent(data: {
   title: string;
   eventDate: string;
   startTime: string;
   endTime: string;
   isAllDay?: boolean;
-  relationshipTag: any;
+  relationshipTag?: any;
   location?: string;
   notes?: string;
-}): PersonalEventRecord {
-  const events = getPersonalEvents();
-  const newRecord: PersonalEventRecord = {
-    id: `pevent-${Date.now()}`,
-    type: "personal_event",
-    title: data.title,
-    date: data.eventDate,
-    eventDate: data.eventDate,
-    startTime: data.startTime,
-    endTime: data.endTime,
-    isAllDay: data.isAllDay,
-    relationshipTag: data.relationshipTag,
-    location: data.location,
-    notes: data.notes,
-    createdAt: new Date().toISOString(),
-  };
+}): Promise<PersonalEventRecord> {
+  let createdRecord: PersonalEventRecord | null = null;
 
-  events.push(newRecord);
+  try {
+    const res = await createPersonalEventAction({
+      title: data.title,
+      eventDate: data.eventDate,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      isAllDay: data.isAllDay,
+      relationshipTag: data.relationshipTag,
+      location: data.location,
+      notes: data.notes,
+    });
+    if (res.success && res.data?.event) {
+      createdRecord = res.data.event;
+    }
+  } catch (err) {
+    console.warn("createPersonalEventAction warning:", err);
+  }
+
+  if (!createdRecord) {
+    createdRecord = {
+      id: `pevent-${Date.now()}`,
+      type: "personal_event",
+      title: data.title,
+      date: data.eventDate,
+      eventDate: data.eventDate,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      isAllDay: data.isAllDay,
+      relationshipTag: data.relationshipTag,
+      location: data.location,
+      notes: data.notes,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  const events = getPersonalEvents();
+  const existingIdx = events.findIndex((e) => e.id === createdRecord!.id);
+  if (existingIdx >= 0) {
+    events[existingIdx] = createdRecord;
+  } else {
+    events.unshift(createdRecord);
+  }
+
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEYS.PERSONAL_EVENTS, JSON.stringify(events));
     triggerSync();
   }
-  return newRecord;
+
+  return createdRecord;
 }
 
-export function deletePersonalEvent(id: string): void {
+export async function deletePersonalEvent(id: string): Promise<void> {
   const events = getPersonalEvents().filter((e) => e.id !== id);
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEYS.PERSONAL_EVENTS, JSON.stringify(events));
     triggerSync();
+  }
+
+  if (!id.startsWith("pevent-")) {
+    try {
+      await deletePersonalEventAction(id);
+    } catch (e) {
+      console.warn("deletePersonalEventAction warning:", e);
+    }
   }
 }
 

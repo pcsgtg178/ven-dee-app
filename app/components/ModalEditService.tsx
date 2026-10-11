@@ -23,7 +23,7 @@ import {
   CustomerServiceRecord,
   Medications,
 } from "../../types/vendee";
-import { saveService, getMedications } from "../../lib/storage";
+import { saveService, getMedications, syncMedicationsFromApi } from "../../lib/storage";
 import ModalMedicationManager from "./ModalMedicationManager";
 
 interface ModalEditServiceProps {
@@ -64,6 +64,13 @@ export default function ModalEditService({
   useEffect(() => {
     if (service && isOpen) {
       setMasterMeds(getMedications());
+      syncMedicationsFromApi()
+        .then((res) => {
+          if (res.isOnline && res.medications) {
+            setMasterMeds(res.medications);
+          }
+        })
+        .catch(() => {});
       setServiceDate(service.date || "");
       setServiceTime((service.time || "09:00").slice(0, 5));
       const parsed =

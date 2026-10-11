@@ -12,6 +12,7 @@ import {
   ShiftCategory,
   ShiftStatus,
   ServiceType,
+  Medications,
 } from "../types/vendee";
 
 export const API_BASE_URL =
@@ -289,3 +290,46 @@ export const analyticsApi = {
     }>("/schedule/activities");
   },
 };
+
+/**
+ * Medications API (/api/medications)
+ */
+export const medicationsApi = {
+  getAll: () => request<Medications[]>("/medications"),
+
+  create: (data: {
+    name: string;
+    size?: string;
+    unit?: string;
+    price?: number | string;
+    description?: string;
+  }) => {
+    return request<Medications>("/medications", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: (
+    id: string,
+    data: {
+      name?: string;
+      size?: string;
+      unit?: string;
+      price?: number | string;
+      description?: string;
+    }
+  ) => {
+    return request<Medications>(`/medications/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: (id: string) => {
+    return request<{ id: string }>(`/medications/${id}`, {
+      method: "DELETE",
+    });
+  },
+};
+

@@ -278,6 +278,7 @@ export async function syncAllDataFromApi(): Promise<{
   customers: Customer[];
   services: CustomerServiceRecord[];
   personalEvents: PersonalEventRecord[];
+  medications: Medications[];
   isOnline: boolean;
 }> {
   if (typeof window === "undefined") {
@@ -286,20 +287,23 @@ export async function syncAllDataFromApi(): Promise<{
       customers: initialCustomers,
       services: initialServices,
       personalEvents: [],
+      medications: initialMedications,
       isOnline: false,
     };
   }
 
   try {
-    const [shiftsRes, servicesRes, personalEventsRes] = await Promise.allSettled([
+    const [shiftsRes, servicesRes, personalEventsRes, medicationsRes] = await Promise.allSettled([
       getShiftsAction(),
       getServicesAction(),
       getPersonalEventsAction(),
+      getMedicationsAction(),
     ]);
 
     let shifts = getShifts();
     let services = getServices();
     let personalEvents = getPersonalEvents();
+    let medications = getMedications();
     let isOnline = false;
 
     if (shiftsRes.status === "fulfilled" && shiftsRes.value.success && Array.isArray(shiftsRes.value.data)) {
@@ -349,12 +353,44 @@ export async function syncAllDataFromApi(): Promise<{
       isOnline = true;
     }
 
+    if (medicationsRes.status === "fulfilled" && medicationsRes.value.success && Array.isArray(medicationsRes.value.data)) {
+      if (medicationsRes.value.data.length > 0) {
+        const remoteMeds = medicationsRes.value.data;
+        const remoteIds = new Set(remoteMeds.map((m) => m.id));
+        const localOnly = medications.filter(
+          (m) => !remoteIds.has(m.id) && m.id.startsWith("med-")
+        );
+        medications = [...remoteMeds, ...localOnly];
+        localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
+      } else if (medications.length > 0) {
+        // Automatically migrate / seed initial local medications to Supabase
+        for (const localMed of medications) {
+          try {
+            await createMedicationAction({
+              name: localMed.name,
+              size: localMed.size,
+              unit: localMed.unit,
+              price: localMed.price,
+              description: localMed.description || localMed.note,
+            });
+          } catch (_) {}
+        }
+        const refreshed = await getMedicationsAction();
+        if (refreshed.success && refreshed.data.length > 0) {
+          medications = refreshed.data;
+          localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
+        }
+      }
+      isOnline = true;
+    }
+
     triggerSync();
     return {
       shifts,
       customers: getCustomers(),
       services,
       personalEvents,
+      medications,
       isOnline,
     };
   } catch (err) {
@@ -364,6 +400,7 @@ export async function syncAllDataFromApi(): Promise<{
       customers: getCustomers(),
       services: getServices(),
       personalEvents: getPersonalEvents(),
+      medications: getMedications(),
       isOnline: false,
     };
   }
@@ -1234,6 +1271,64 @@ export function getMedications(): Medications[] {
   }
 }
 
+/**
+ * Synchronize medications with Supabase database via Server Actions
+ */
+export async function syncMedicationsFromApi(): Promise<{
+  medications: Medications[];
+  isOnline: boolean;
+}> {
+  if (typeof window === "undefined") {
+    return {
+      medications: initialMedications,
+      isOnline: false,
+    };
+  }
+
+  let medications = getMedications();
+  try {
+    const res = await getMedicationsAction();
+    if (res.success && Array.isArray(res.data)) {
+      if (res.data.length > 0) {
+        const remoteMeds = res.data;
+        const remoteIds = new Set(remoteMeds.map((m) => m.id));
+        const localOnly = medications.filter(
+          (m) => !remoteIds.has(m.id) && m.id.startsWith("med-")
+        );
+        medications = [...remoteMeds, ...localOnly];
+        localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
+        triggerSync();
+        return { medications, isOnline: true };
+      } else if (medications.length > 0) {
+        // Automatically migrate / seed initial local medications to Supabase
+        for (const localMed of medications) {
+          try {
+            await createMedicationAction({
+              name: localMed.name,
+              size: localMed.size,
+              unit: localMed.unit,
+              price: localMed.price,
+              description: localMed.description || localMed.note,
+            });
+          } catch (_) {}
+        }
+        const refreshed = await getMedicationsAction();
+        if (refreshed.success && refreshed.data.length > 0) {
+          medications = refreshed.data;
+          localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
+          triggerSync();
+          return { medications, isOnline: true };
+        }
+      }
+      return { medications, isOnline: true };
+    }
+    return { medications, isOnline: false };
+  } catch (err) {
+    console.warn("[VenDee Storage] Failed to sync medications from Supabase:", err);
+    return { medications, isOnline: false };
+  }
+}
+
 export async function saveMedication(
   med: Omit<Medications, "id"> & { id?: string }
 ): Promise<Medications> {
@@ -1296,15 +1391,31 @@ export async function saveMedication(
 }
 
 export async function deleteMedication(id: string): Promise<void> {
+  const current = getMedications();
+  const target = current.find((m) => m.id === id);
+
   if (!id.startsWith("med-")) {
     try {
       await deleteMedicationAction(id);
     } catch (err) {
       console.warn("deleteMedicationAction warning:", err);
     }
+  } else if (target) {
+    try {
+      const res = await getMedicationsAction();
+      if (res.success && res.data) {
+        const matched = res.data.find(
+          (m) =>
+            m.name.toLowerCase() === target.name.toLowerCase() &&
+            (m.size || "") === (target.size || "")
+        );
+        if (matched) {
+          await deleteMedicationAction(matched.id);
+        }
+      }
+    } catch (_) {}
   }
 
-  const current = getMedications();
   const updated = current.filter((m) => m.id !== id);
   localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(updated));
   triggerSync();

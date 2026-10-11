@@ -13,12 +13,15 @@ import {
   Check,
   AlertCircle,
   Sparkles,
+  RotateCw,
+  Database,
 } from "lucide-react";
 import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
 import { Medications } from "../../types/vendee";
 import {
   getMedications,
+  syncMedicationsFromApi,
   saveMedication,
   deleteMedication,
   subscribeToStorage,
@@ -27,6 +30,9 @@ import {
 export default function MedicationsPage() {
   const [medications, setMedications] = useState<Medications[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Modal / Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,13 +45,30 @@ export default function MedicationsPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const loadData = useCallback(() => {
-    setMedications(getMedications());
+  const loadData = useCallback(async (syncFromDb = true) => {
+    // 1. Instant load from local storage cache
+    const local = getMedications();
+    setMedications(local);
+
+    // 2. Asynchronously synchronize with Supabase API / Database
+    if (syncFromDb) {
+      setIsSyncing(true);
+      try {
+        const res = await syncMedicationsFromApi();
+        setMedications(res.medications);
+        setIsOnline(res.isOnline);
+      } catch (err) {
+        console.warn("Failed to load medications from API:", err);
+        setIsOnline(false);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
-    loadData();
-    const unsub = subscribeToStorage(loadData);
+    loadData(true);
+    const unsub = subscribeToStorage(() => loadData(false));
     return () => unsub();
   }, [loadData]);
 
@@ -76,15 +99,18 @@ export default function MedicationsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setErrorMsg("กรุณาระบุชื่อตัวยา");
       return;
     }
 
+    setIsSubmitting(true);
+    setErrorMsg("");
+
     try {
-      saveMedication({
+      await saveMedication({
         id: editingMed ? editingMed.id : undefined,
         name: name.trim(),
         size: size.trim() || undefined,
@@ -95,18 +121,24 @@ export default function MedicationsPage() {
       });
 
       setIsModalOpen(false);
-      loadData();
+      await loadData(false);
       showToast(editingMed ? `อัปเดตตัวยา "${name.trim()}" เรียบร้อยแล้ว` : `เพิ่มตัวยา "${name.trim()}" เรียบร้อยแล้ว`);
     } catch (err: any) {
       setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูลตัวยา");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDelete = (med: Medications) => {
+  const handleDelete = async (med: Medications) => {
     if (confirm(`คุณต้องการลบตัวยา "${med.name}" ออกจากคลังใช่หรือไม่?`)) {
-      deleteMedication(med.id);
-      loadData();
-      showToast(`ลบตัวยา "${med.name}" เรียบร้อยแล้ว`);
+      try {
+        await deleteMedication(med.id);
+        await loadData(false);
+        showToast(`ลบตัวยา "${med.name}" เรียบร้อยแล้ว`);
+      } catch (err: any) {
+        showToast(`เกิดข้อผิดพลาดในการลบ: ${err.message || err}`);
+      }
     }
   };
 
@@ -141,27 +173,61 @@ export default function MedicationsPage() {
 
       <main className="mx-auto max-w-lg px-4 pt-3 space-y-4">
         {/* Top Summary & Action Bar */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg font-extrabold tracking-tight text-text-main dark:text-white flex items-center gap-1.5">
-              <span>รายการตัวยา</span>
-              <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
-                {medications.length} รายการ
-              </span>
-            </h1>
-            <p className="text-xs text-text-muted dark:text-zinc-400">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-extrabold tracking-tight text-text-main dark:text-white flex items-center gap-1.5">
+                <span>รายการตัวยา</span>
+                <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
+                  {medications.length} รายการ
+                </span>
+              </h1>
+
+              {/* Database / Sync Status Badge */}
+              {isSyncing ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-semibold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60">
+                  <RotateCw className="h-3 w-3 animate-spin text-purple-600" />
+                  <span>กำลังซิงค์...</span>
+                </span>
+              ) : isOnline === true ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>เชื่อมต่อฐานข้อมูลแล้ว</span>
+                </span>
+              ) : isOnline === false ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                  <AlertCircle className="h-3 w-3 text-amber-500" />
+                  <span>โหมดออฟไลน์ (แคช)</span>
+                </span>
+              ) : null}
+            </div>
+
+            <p className="text-xs text-text-muted dark:text-zinc-400 mt-0.5">
               กำหนดต้นทุนและหน่วยนับสำหรับใช้ในเคสบริการ
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleOpenAdd}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-purple-600/20 hover:brightness-105 active:scale-95 transition-all cursor-pointer"
-          >
-            <Plus className="h-4 w-4" />
-            <span>เพิ่มตัวยา</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => loadData(true)}
+              disabled={isSyncing}
+              className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-surface-subtle bg-white px-3 py-2 text-xs font-semibold text-text-muted hover:text-text-main hover:bg-slate-50 active:scale-95 transition-all dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800 cursor-pointer disabled:opacity-60"
+              title="ดึงข้อมูลล่าสุดจาก Supabase / API"
+            >
+              <RotateCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin text-purple-600" : ""}`} />
+              <span>รีเฟรช</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenAdd}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-purple-600/20 hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              <span>เพิ่มตัวยา</span>
+            </button>
+          </div>
         </div>
 
         {/* Search Input */}
@@ -406,16 +472,19 @@ export default function MedicationsPage() {
               <div className="flex items-center gap-2 pt-2">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 py-2.5 text-xs font-bold text-white shadow-md shadow-purple-600/25 hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+                  disabled={isSubmitting}
+                  className="flex-1 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 py-2.5 text-xs font-bold text-white shadow-md shadow-purple-600/25 hover:brightness-105 active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
                 >
-                  {editingMed ? "บันทึกการแก้ไข" : "เพิ่มตัวยา"}
+                  {isSubmitting && <RotateCw className="h-3.5 w-3.5 animate-spin" />}
+                  <span>{isSubmitting ? "กำลังบันทึก..." : editingMed ? "บันทึกการแก้ไข" : "เพิ่มตัวยา"}</span>
                 </button>
               </div>
             </form>

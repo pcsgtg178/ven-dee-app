@@ -36,6 +36,7 @@ import {
   saveShift,
   saveClinicLog,
   getMedications,
+  syncMedicationsFromApi,
 } from "../../lib/storage";
 import ModalMedicationManager from "./ModalMedicationManager";
 
@@ -104,6 +105,13 @@ export default function ModalAddTodo({
   const loadMasterData = () => {
     setCustomers(getCustomers());
     setMasterMedications(getMedications());
+    syncMedicationsFromApi()
+      .then((res) => {
+        if (res.isOnline && res.medications) {
+          setMasterMedications(res.medications);
+        }
+      })
+      .catch(() => {});
   };
 
   const resetAllFormInputs = () => {

@@ -1,9 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Plus, Pencil, Trash2, Pill, Search, Check, DollarSign, Package } from "lucide-react";
+import { X, Plus, Pencil, Trash2, Pill, Search, Check, DollarSign, Package, RotateCw } from "lucide-react";
 import { Medications } from "../../types/vendee";
-import { getMedications, saveMedication, deleteMedication, subscribeToStorage } from "../../lib/storage";
+import {
+  getMedications,
+  syncMedicationsFromApi,
+  saveMedication,
+  deleteMedication,
+  subscribeToStorage,
+} from "../../lib/storage";
 
 interface ModalMedicationManagerProps {
   isOpen: boolean;
@@ -18,6 +24,8 @@ export default function ModalMedicationManager({
 }: ModalMedicationManagerProps) {
   const [medications, setMedications] = useState<Medications[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form State for Add / Edit
   const [editingMedId, setEditingMedId] = useState<string | null>(null);
@@ -29,20 +37,34 @@ export default function ModalMedicationManager({
   const [errorMsg, setErrorMsg] = useState("");
   const [showForm, setShowForm] = useState(false);
 
-  const loadData = () => {
+  const loadData = async (syncFromDb = false) => {
+    // 1. Instant load from local storage
     setMedications(getMedications());
+
+    // 2. Background sync from Supabase API / database
+    if (syncFromDb) {
+      setIsSyncing(true);
+      try {
+        const res = await syncMedicationsFromApi();
+        setMedications(res.medications);
+      } catch (err) {
+        console.warn("Sync medications in modal warning:", err);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
   };
 
   useEffect(() => {
     if (isOpen) {
-      loadData();
+      loadData(true);
       setShowForm(false);
       resetForm();
     }
   }, [isOpen]);
 
   useEffect(() => {
-    const unsub = subscribeToStorage(loadData);
+    const unsub = subscribeToStorage(() => loadData(false));
     return () => unsub();
   }, []);
 
@@ -74,32 +96,45 @@ export default function ModalMedicationManager({
     setShowForm(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setErrorMsg("กรุณากรอกชื่อตัวยา");
       return;
     }
 
-    saveMedication({
-      id: editingMedId || undefined,
-      name: name.trim(),
-      size: size.trim() || undefined,
-      price: price.trim() || undefined,
-      unit: unit.trim() || undefined,
-      description: description.trim() || undefined,
-      note: description.trim() || undefined,
-    });
+    setIsSubmitting(true);
+    setErrorMsg("");
 
-    setShowForm(false);
-    resetForm();
-    loadData();
+    try {
+      await saveMedication({
+        id: editingMedId || undefined,
+        name: name.trim(),
+        size: size.trim() || undefined,
+        price: price.trim() || undefined,
+        unit: unit.trim() || undefined,
+        description: description.trim() || undefined,
+        note: description.trim() || undefined,
+      });
+
+      setShowForm(false);
+      resetForm();
+      await loadData(false);
+    } catch (err: any) {
+      setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกตัวยา");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDelete = (id: string, medName: string) => {
+  const handleDelete = async (id: string, medName: string) => {
     if (confirm(`ยืนยันลบรายการยา "${medName}"?`)) {
-      deleteMedication(id);
-      loadData();
+      try {
+        await deleteMedication(id);
+        await loadData(false);
+      } catch (err: any) {
+        console.warn("Failed to delete medication:", err);
+      }
     }
   };
 
@@ -117,21 +152,37 @@ export default function ModalMedicationManager({
               <Pill className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-text-main dark:text-white">
-                จัดการรายการยา (Medication Master)
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-text-main dark:text-white">
+                  จัดการรายการยา (Medication Master)
+                </h2>
+                {isSyncing && (
+                  <RotateCw className="h-3.5 w-3.5 animate-spin text-purple-600" />
+                )}
+              </div>
               <p className="text-xs text-text-muted dark:text-zinc-400">
                 เพิ่ม/แก้ไข รายการยาสำหรับใช้ในระบบบริการ
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-2 text-text-muted hover:bg-slate-200 dark:hover:bg-zinc-800"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => loadData(true)}
+              disabled={isSyncing}
+              className="rounded-full p-2 text-text-muted hover:bg-slate-200 dark:hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
+              title="ดึงข้อมูลจาก API / ฐานข้อมูล"
+            >
+              <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-purple-600" : ""}`} />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full p-2 text-text-muted hover:bg-slate-200 dark:hover:bg-zinc-800 cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -253,17 +304,23 @@ export default function ModalMedicationManager({
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setShowForm(false)}
-                  className="rounded-xl px-4 py-2 text-xs font-semibold text-text-muted hover:bg-slate-100 dark:hover:bg-zinc-800"
+                  className="rounded-xl px-4 py-2 text-xs font-semibold text-text-muted hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-50"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white hover:brightness-105 shadow-xs"
+                  disabled={isSubmitting}
+                  className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white hover:brightness-105 shadow-xs disabled:opacity-60 cursor-pointer"
                 >
-                  <Check className="h-4 w-4" />
-                  <span>บันทึก</span>
+                  {isSubmitting ? (
+                    <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  <span>{isSubmitting ? "กำลังบันทึก..." : "บันทึก"}</span>
                 </button>
               </div>
             </form>

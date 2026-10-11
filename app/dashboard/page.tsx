@@ -30,6 +30,7 @@ import {
 import {
   getServices,
   getMedications,
+  syncAllDataFromApi,
   subscribeToStorage,
 } from "../../lib/storage";
 
@@ -53,6 +54,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
+    syncAllDataFromApi().catch((err) => console.warn("Dashboard sync warning:", err));
     const unsub = subscribeToStorage(loadData);
     return () => unsub();
   }, [loadData]);

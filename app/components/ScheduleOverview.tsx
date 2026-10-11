@@ -50,6 +50,8 @@ import BottomSheet from "./BottomModalSheet";
 import BottomNav from "./BottomNav";
 import ThemeToggle from "./ThemeToggle";
 import ModalConfirmAction, { ConfirmVariant } from "./ModalConfirmAction";
+import ModalExportCalendar from "./ModalExportCalendar";
+import { CalendarPlus } from "lucide-react";
 
 type ConfirmModalState =
   | {
@@ -108,6 +110,9 @@ export default function ScheduleOverview() {
 
   const [editingClinicLog, setEditingClinicLog] = useState<ClinicWorkRecord | null>(null);
   const [openEditClinicLogModal, setOpenEditClinicLogModal] = useState(false);
+
+  // Calendar Export Modal state
+  const [openExportCalendarModal, setOpenExportCalendarModal] = useState(false);
 
   const handleEditShift = useCallback((shift: ShiftRecord) => {
     setEditingShift(shift);
@@ -951,8 +956,17 @@ export default function ScheduleOverview() {
             </div>
           </div>
 
-          {/* Right Controls: [ Theme Toggle ] & Segmented Control: [ รายการ | ปฏิทิน ] */}
-          <div className="flex items-center gap-2">
+          {/* Right Controls: [ Export iPhone ] [ Theme Toggle ] & Segmented Control: [ รายการ | ปฏิทิน ] */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setOpenExportCalendarModal(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-zinc-800 dark:hover:text-sky-300 transition-colors"
+              title="ส่งออกปฏิทิน iPhone / iOS"
+              aria-label="ส่งออกปฏิทิน iPhone / iOS"
+            >
+              <CalendarPlus className="h-4 w-4" />
+            </button>
             <ThemeToggle size="sm" />
             <div className="flex items-center rounded-full bg-surface-subtle p-1 dark:bg-zinc-800 shadow-inner">
               <button
@@ -1036,6 +1050,7 @@ export default function ScheduleOverview() {
             events={calendarEvents}
             onDateClick={handleDateClick}
             onEventClick={handleEventClick}
+            onOpenExportModal={() => setOpenExportCalendarModal(true)}
           />
         )}
       </main>
@@ -1211,6 +1226,13 @@ export default function ScheduleOverview() {
           warningNotice={confirmModalProps.warningNotice}
         />
       )}
+
+      {/* iPhone / Apple Calendar Export Modal */}
+      <ModalExportCalendar
+        isOpen={openExportCalendarModal}
+        onClose={() => setOpenExportCalendarModal(false)}
+        defaultMonth={currentMonthKey}
+      />
     </div>
   );
 }

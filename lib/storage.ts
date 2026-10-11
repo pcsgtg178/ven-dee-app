@@ -23,6 +23,12 @@ import {
   createPersonalEventAction,
   deletePersonalEventAction,
 } from "../app/actions/personalEventActions";
+import {
+  getMedicationsAction,
+  createMedicationAction,
+  updateMedicationAction,
+  deleteMedicationAction,
+} from "../app/actions/medicationActions";
 
 import {
   Customer,
@@ -39,7 +45,10 @@ import {
   ClinicPresetShift,
   PersonalEventRecord,
   ActivityItem,
+  CalendarFeedConfig,
 } from "../types/vendee";
+import { generateSecureFeedToken, DEFAULT_FEED_TOKEN } from "./calendar/feedToken";
+import { regenerateFeedTokenAction } from "../app/actions/calendarActions";
 
 const STORAGE_KEYS = {
   SHIFTS: "vendee_shifts_v2", // bumped to v2 for swap schema
@@ -48,6 +57,7 @@ const STORAGE_KEYS = {
   MEDICATIONS: "vendee_medications_v1",
   CLINIC_LOGS: "vendee_clinic_logs_v1",
   PERSONAL_EVENTS: "vendee_personal_events_v1",
+  CALENDAR_FEED: "vendee_calendar_feed_v1",
 };
 
 const SYNC_EVENT = "vendee_storage_updated";
@@ -1126,11 +1136,83 @@ export async function deleteService(id: string): Promise<void> {
 
 // Medications Storage Management
 export const initialMedications: Medications[] = [
-  { id: "med-1", name: "Vitamin B12", price: "200", unit: "เข็ม" },
-  { id: "med-2", name: "NSS 100ml", price: "150", unit: "ขวด" },
-  { id: "med-3", name: "Fat Burner", price: "500", unit: "เข็ม" },
-  { id: "med-4", name: "Collagen IV Drip", price: "800", unit: "ชุด" },
-  { id: "med-5", name: "Paracetamol", price: "50", unit: "แผง" },
+  {
+    id: "med-botox-100",
+    name: "Botox",
+    size: "100",
+    unit: "ยูนิต",
+    price: "2500",
+    priceSatang: 250000,
+    description: "นาบูตะ *นำเข้า",
+    note: "นาบูตะ *นำเข้า",
+    createdAt: "2026-10-11T08:00:00Z",
+  },
+  {
+    id: "med-botox-50",
+    name: "Botox",
+    size: "50",
+    unit: "ยูนิต",
+    price: "1500",
+    priceSatang: 150000,
+    description: "นาบูตะ *นำเข้า",
+    note: "นาบูตะ *นำเข้า",
+    createdAt: "2026-10-11T08:00:00Z",
+  },
+  {
+    id: "med-1",
+    name: "Vitamin B12",
+    size: "1",
+    unit: "เข็ม",
+    price: "200",
+    priceSatang: 20000,
+    description: "วิตามินบำรุงประสาทและร่างกาย",
+    note: "วิตามินบำรุงประสาทและร่างกาย",
+    createdAt: "2026-09-01T08:00:00Z",
+  },
+  {
+    id: "med-2",
+    name: "NSS 100ml",
+    size: "100",
+    unit: "ขวด",
+    price: "150",
+    priceSatang: 15000,
+    description: "น้ำเกลือ 0.9% Normal Saline Solution",
+    note: "น้ำเกลือ 0.9% Normal Saline Solution",
+    createdAt: "2026-09-01T08:00:00Z",
+  },
+  {
+    id: "med-3",
+    name: "Fat Burner",
+    size: "1",
+    unit: "เข็ม",
+    price: "500",
+    priceSatang: 50000,
+    description: "สูตรเร่งเผาผลาญไขมันเฉพาะจุด",
+    note: "สูตรเร่งเผาผลาญไขมันเฉพาะจุด",
+    createdAt: "2026-09-01T08:00:00Z",
+  },
+  {
+    id: "med-4",
+    name: "Collagen IV Drip",
+    size: "1",
+    unit: "ชุด",
+    price: "800",
+    priceSatang: 80000,
+    description: "ดริปวิตามินผิวเข้มข้น",
+    note: "ดริปวิตามินผิวเข้มข้น",
+    createdAt: "2026-09-01T08:00:00Z",
+  },
+  {
+    id: "med-5",
+    name: "Paracetamol",
+    size: "10",
+    unit: "แผง",
+    price: "50",
+    priceSatang: 5000,
+    description: "ยาลดไข้ บรรเทาปวด 500mg",
+    note: "ยาลดไข้ บรรเทาปวด 500mg",
+    createdAt: "2026-09-01T08:00:00Z",
+  },
 ];
 
 export function getMedications(): Medications[] {
@@ -1141,22 +1223,65 @@ export function getMedications(): Medications[] {
       localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(initialMedications));
       return initialMedications;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(initialMedications));
+      return initialMedications;
+    }
+    return parsed;
   } catch {
     return initialMedications;
   }
 }
 
-export function saveMedication(med: Omit<Medications, "id"> & { id?: string }): Medications {
+export async function saveMedication(
+  med: Omit<Medications, "id"> & { id?: string }
+): Promise<Medications> {
   const current = getMedications();
   const id = med.id || `med-${Date.now()}`;
-  const newMed: Medications = {
+  const priceVal = med.price !== undefined ? String(med.price) : undefined;
+  const priceNum = priceVal ? Number(priceVal) : 0;
+  const priceSatang = med.priceSatang || Math.round(priceNum * 100);
+
+  let remoteMed: Medications | null = null;
+  const isDbId = med.id && !med.id.startsWith("med-");
+
+  try {
+    if (isDbId) {
+      const res = await updateMedicationAction(med.id!, {
+        name: med.name,
+        size: med.size,
+        unit: med.unit,
+        price: priceVal,
+        description: med.description || med.note,
+      });
+      if (res.success && res.data) remoteMed = res.data;
+    } else {
+      const res = await createMedicationAction({
+        name: med.name,
+        size: med.size,
+        unit: med.unit,
+        price: priceVal,
+        description: med.description || med.note,
+      });
+      if (res.success && res.data) remoteMed = res.data;
+    }
+  } catch (err) {
+    console.warn("Supabase saveMedication warning:", err);
+  }
+
+  const finalId = remoteMed?.id || id;
+  const newMed: Medications = remoteMed || {
     ...med,
-    id,
+    id: finalId,
+    price: priceVal,
+    priceSatang,
+    description: med.description || med.note,
+    note: med.description || med.note,
     createdAt: med.createdAt || new Date().toISOString(),
   };
 
-  const idx = current.findIndex((m) => m.id === id);
+  const idx = current.findIndex((m) => m.id === finalId || m.id === id);
   let updated: Medications[];
   if (idx >= 0) {
     updated = [...current];
@@ -1170,7 +1295,15 @@ export function saveMedication(med: Omit<Medications, "id"> & { id?: string }): 
   return newMed;
 }
 
-export function deleteMedication(id: string): void {
+export async function deleteMedication(id: string): Promise<void> {
+  if (!id.startsWith("med-")) {
+    try {
+      await deleteMedicationAction(id);
+    } catch (err) {
+      console.warn("deleteMedicationAction warning:", err);
+    }
+  }
+
   const current = getMedications();
   const updated = current.filter((m) => m.id !== id);
   localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(updated));
@@ -1362,3 +1495,63 @@ export function getAllActivities(): ActivityItem[] {
     return getTimeStr(b).localeCompare(getTimeStr(a));
   });
 }
+
+// ─── Calendar Feed Management (WebCal / iPhone Sync) ──────────────────────────
+
+export function getCalendarFeedConfig(): CalendarFeedConfig {
+  const defaultConfig: CalendarFeedConfig = {
+    feedToken: DEFAULT_FEED_TOKEN,
+    isEnabled: true,
+    calendarName: "ตารางเวร VenDee",
+    lastSyncedAt: undefined,
+  };
+
+  if (typeof window === "undefined") return defaultConfig;
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.CALENDAR_FEED);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.CALENDAR_FEED, JSON.stringify(defaultConfig));
+      return defaultConfig;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.feedToken) {
+      localStorage.setItem(STORAGE_KEYS.CALENDAR_FEED, JSON.stringify(defaultConfig));
+      return defaultConfig;
+    }
+    return parsed;
+  } catch {
+    return defaultConfig;
+  }
+}
+
+export function saveCalendarFeedConfig(config: CalendarFeedConfig): CalendarFeedConfig {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(STORAGE_KEYS.CALENDAR_FEED, JSON.stringify(config));
+    triggerSync();
+  }
+  return config;
+}
+
+export async function regenerateCalendarFeedToken(): Promise<string> {
+  let newToken = generateSecureFeedToken();
+
+  try {
+    const res = await regenerateFeedTokenAction();
+    if (res.success && res.data?.token) {
+      newToken = res.data.token;
+    }
+  } catch (err) {
+    console.warn("regenerateFeedTokenAction warning:", err);
+  }
+
+  const current = getCalendarFeedConfig();
+  const updated: CalendarFeedConfig = {
+    ...current,
+    feedToken: newToken,
+  };
+
+  saveCalendarFeedConfig(updated);
+  return newToken;
+}
+

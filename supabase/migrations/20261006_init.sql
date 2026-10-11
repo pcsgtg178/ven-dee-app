@@ -92,15 +92,45 @@ CREATE TABLE IF NOT EXISTS public.todos (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 6. Medications Table (ข้อมูลยาและเวชภัณฑ์)
+CREATE TABLE IF NOT EXISTS public.medications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,                         -- ชื่อยา เช่น Botox, Vitamin B12
+    size TEXT,                                  -- ขนาด เช่น 100, 50, 100ml
+    unit TEXT DEFAULT 'ยูนิต',                   -- หน่วย เช่น ยูนิต, เข็ม, ขวด, แผง, ชุด
+    price NUMERIC DEFAULT 0,                    -- ราคา (บาท) เช่น 2500, 1500
+    description TEXT,                           -- รายละเอียด เช่น นาบูตะ *นำเข้า
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for Medications
+CREATE INDEX IF NOT EXISTS idx_medications_name ON public.medications(name);
+
 -- Row Level Security (RLS) Policies (Single User App: Full Access)
 ALTER TABLE public.user_profile ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.personal_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.todos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.medications ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow all operations on user_profile" ON public.user_profile FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations on shifts" ON public.shifts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations on customer_services" ON public.customer_services FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations on personal_events" ON public.personal_events FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations on todos" ON public.todos FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all operations on medications" ON public.medications FOR ALL USING (true) WITH CHECK (true);
+
+-- Seed Starter Medications Data
+INSERT INTO public.medications (name, size, unit, price, description)
+VALUES
+    ('Botox', '100', 'ยูนิต', 2500, 'นาบูตะ *นำเข้า'),
+    ('Botox', '50', 'ยูนิต', 1500, 'นาบูตะ *นำเข้า'),
+    ('Vitamin B12', '1', 'เข็ม', 200, 'วิตามินบำรุงประสาทและร่างกาย'),
+    ('NSS 100ml', '100', 'ขวด', 150, 'น้ำเกลือ 0.9% Normal Saline Solution'),
+    ('Fat Burner', '1', 'เข็ม', 500, 'สูตรเร่งเผาผลาญไขมันเฉพาะจุด'),
+    ('Collagen IV Drip', '1', 'ชุด', 800, 'ดริปวิตามินผิวเข้มข้น'),
+    ('Paracetamol', '10', 'แผง', 50, 'ยาลดไข้ บรรเทาปวด 500mg')
+ON CONFLICT DO NOTHING;
+

@@ -32,9 +32,10 @@ export default function MedicationsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMed, setEditingMed] = useState<Medications | null>(null);
   const [name, setName] = useState("");
+  const [size, setSize] = useState("");
   const [price, setPrice] = useState("");
-  const [unit, setUnit] = useState("เข็ม");
-  const [note, setNote] = useState("");
+  const [unit, setUnit] = useState("ยูนิต");
+  const [description, setDescription] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -56,9 +57,10 @@ export default function MedicationsPage() {
   const handleOpenAdd = () => {
     setEditingMed(null);
     setName("");
+    setSize("");
     setPrice("");
-    setUnit("เข็ม");
-    setNote("");
+    setUnit("ยูนิต");
+    setDescription("");
     setErrorMsg("");
     setIsModalOpen(true);
   };
@@ -66,9 +68,10 @@ export default function MedicationsPage() {
   const handleOpenEdit = (med: Medications) => {
     setEditingMed(med);
     setName(med.name);
-    setPrice(med.price || "");
-    setUnit(med.unit || "เข็ม");
-    setNote(med.note || "");
+    setSize(med.size || "");
+    setPrice(med.price !== undefined ? String(med.price) : "");
+    setUnit(med.unit || "ยูนิต");
+    setDescription(med.description || med.note || "");
     setErrorMsg("");
     setIsModalOpen(true);
   };
@@ -84,9 +87,11 @@ export default function MedicationsPage() {
       saveMedication({
         id: editingMed ? editingMed.id : undefined,
         name: name.trim(),
+        size: size.trim() || undefined,
         price: price.trim() || undefined,
         unit: unit.trim() || undefined,
-        note: note.trim() || undefined,
+        description: description.trim() || undefined,
+        note: description.trim() || undefined,
       });
 
       setIsModalOpen(false);
@@ -112,7 +117,10 @@ export default function MedicationsPage() {
     return medications.filter(
       (m) =>
         m.name.toLowerCase().includes(q) ||
-        (m.unit && m.unit.toLowerCase().includes(q))
+        (m.size && m.size.toLowerCase().includes(q)) ||
+        (m.unit && m.unit.toLowerCase().includes(q)) ||
+        (m.description && m.description.toLowerCase().includes(q)) ||
+        (m.note && m.note.toLowerCase().includes(q))
     );
   }, [medications, searchQuery]);
 
@@ -211,25 +219,25 @@ export default function MedicationsPage() {
                         <span className="font-bold text-sm text-text-main dark:text-white truncate">
                           {med.name}
                         </span>
-                        {med.unit && (
-                          <span className="shrink-0 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/80 dark:text-purple-300">
-                            {med.unit}
+                        {(med.size || med.unit) && (
+                          <span className="shrink-0 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60">
+                            {med.size ? `${med.size} ` : ""}{med.unit || ""}
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-text-muted dark:text-zinc-400 mt-0.5">
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-text-muted dark:text-zinc-400 mt-0.5">
                         <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                          <span>ต้นทุน:</span>
+                          <span>ราคา:</span>
                           <span className="font-bold">
                             {numericCost > 0 ? `฿${numericCost.toLocaleString()}` : "ไม่ระบุ"}
                           </span>
                           {med.unit && <span className="text-[10px] text-text-muted">/{med.unit}</span>}
                         </span>
 
-                        {med.note && (
-                          <span className="truncate max-w-[150px] text-[11px] text-text-muted dark:text-zinc-400">
-                            · {med.note}
+                        {(med.description || med.note) && (
+                          <span className="truncate max-w-[220px] text-[11px] text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                            {med.description || med.note}
                           </span>
                         )}
                       </div>
@@ -304,19 +312,48 @@ export default function MedicationsPage() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="เช่น Vitamin B12, Collagen IV Drip"
+                  placeholder="เช่น Botox, Vitamin B12, NSS 100ml"
                   className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3.5 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900"
                 />
               </div>
 
-              {/* Price & Unit Grid */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Size, Unit & Price Grid */}
+              <div className="grid grid-cols-3 gap-2.5">
+                {/* Size */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                    ราคาต้นทุน (บาท)
+                    ขนาด
+                  </label>
+                  <input
+                    type="text"
+                    value={size}
+                    onChange={(e) => setSize(e.target.value)}
+                    placeholder="เช่น 100, 50"
+                    className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900 font-semibold"
+                  />
+                </div>
+
+                {/* Unit */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                    หน่วย
+                  </label>
+                  <input
+                    type="text"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder="เช่น ยูนิต, เข็ม"
+                    className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900 font-semibold"
+                  />
+                </div>
+
+                {/* Price */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                    ราคา (บาท)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-text-muted">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-text-muted">
                       ฿
                     </span>
                     <input
@@ -325,30 +362,17 @@ export default function MedicationsPage() {
                       min="0"
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
-                      placeholder="เช่น 200"
-                      className="w-full rounded-xl border border-surface-subtle bg-slate-50 pl-7 pr-3 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900 font-semibold"
+                      placeholder="เช่น 2500"
+                      className="w-full rounded-xl border border-surface-subtle bg-slate-50 pl-6 pr-2.5 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900 font-semibold"
                     />
                   </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                    หน่วยนับ
-                  </label>
-                  <input
-                    type="text"
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    placeholder="เช่น เข็ม, ขวด, ชุด"
-                    className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3.5 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900"
-                  />
                 </div>
               </div>
 
               {/* Preset Unit Suggestions */}
               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                 <span className="text-[11px] text-text-muted">หน่วยที่พบบ่อย:</span>
-                {["เข็ม", "ขวด", "ชุด", "แผง", "กระปุก", "cc"].map((u) => (
+                {["ยูนิต", "เข็ม", "ขวด", "ชุด", "แผง", "กระปุก", "cc"].map((u) => (
                   <button
                     key={u}
                     type="button"
@@ -364,16 +388,16 @@ export default function MedicationsPage() {
                 ))}
               </div>
 
-              {/* Note */}
+              {/* Description */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                  หมายเหตุเพิ่มเติม (ถ้ามี)
+                  รายละเอียด / คุณสมบัติ
                 </label>
                 <textarea
                   rows={2}
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="เช่น เก็บในอุณหภูมิห้อง, ฉีดเข้ากล้ามเนื้อ..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="เช่น นาบูตะ *นำเข้า, เก็บในอุณหภูมิห้อง 2-8°C..."
                   className="w-full rounded-xl border border-surface-subtle bg-slate-50 p-3 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900"
                 />
               </div>

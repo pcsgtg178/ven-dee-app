@@ -51,18 +51,18 @@
   - Validate dark mode support and micro-interactions.
 
 ### Phase 5: iPhone / Apple Calendar Export & Synchronization
-- [ ] **5.1 RFC 5545 iCalendar Generation Engine (`lib/calendar/icsGenerator.ts`)**
+- [x] **5.1 RFC 5545 iCalendar Generation Engine (`lib/calendar/icsGenerator.ts`)**
   - Implement pure TypeScript RFC 5545 generator supporting shifts, services, clinic records, and personal events.
   - Enforce CRLF (`\r\n`), line folding (75 octets limit), special char escaping, and `Asia/Bangkok` VTIMEZONE.
   - Implement deterministic UIDs (`vendee-{type}-{id}@vendee.app`) and VALARM notification triggers.
-- [ ] **5.2 Next.js Calendar Route Handlers (`app/api/calendar/`)**
+- [x] **5.2 Next.js Calendar Route Handlers (`app/api/calendar/`)**
   - `app/api/calendar/export/route.ts`: On-demand `.ics` file generation and download with date range & filter support.
   - `app/api/calendar/feed/route.ts`: Live WebCal subscription endpoint with token authentication (`webcal://` and `https://`).
-- [ ] **5.3 iOS Calendar UX & Export Modal (`ModalExportCalendar.tsx`)**
+- [x] **5.3 iOS Calendar UX & Export Modal (`ModalExportCalendar.tsx`)**
   - Create export modal with choices: (1) One-tap direct `.ics` download for current month, (2) One-tap subscribe via `webcal://` scheme or copy feed link.
   - Filter toggles: รวมเวรออฟ (Off days), รวมงานเคหะบริบาล, รวมธุระส่วนตัว.
   - Step-by-step guidance card for adding Subscribed Calendar in iPhone Settings.
-- [ ] **5.4 WebCal Feed Token Management & Security**
+- [x] **5.4 WebCal Feed Token Management & Security**
   - Store and generate cryptographically secure feed token per user.
   - Add option to regenerate token if the subscription link is compromised.
 
@@ -98,12 +98,17 @@
   - Add `deleteServicesByCustomerIdAction` in `app/actions/serviceActions.ts` for database cleanup.
   - Create confirmation modal `ModalDeleteCustomer.tsx` displaying breakdown of upcoming and completed records to be deleted.
   - Add delete buttons on Customer Card (`/customers`), Customer Detail Page (`/customers/[id]`), Edit Modal (`ModalEditCustomer`), and Edit Page (`/customers/[id]/edit`).
+- [x] **7.6 Medications Master Schema & Fullstack Data Persistence**
+  - Define `public.medications` table schema in `supabase/migrations/20261011_medications.sql` and `20261006_init.sql` with 5 required fields: ชื่อ (`name`), ขนาด (`size`), หน่วย (`unit`), ราคา (`price`, `price_satang`), รายละเอียด (`description`).
+  - Seed initial Botox records: `Botox, 100, ยูนิต, 2500, นาบูตะ *นำเข้า` and `Botox, 50, ยูนิต, 1500, นาบูตะ *นำเข้า`.
+  - Implement Next.js Server Actions in `app/actions/medicationActions.ts` and client synchronization in `lib/storage.ts`.
+  - Complete UI integration with form inputs, badges, and preset units in `app/medications/page.tsx` and `app/components/ModalMedicationManager.tsx`.
 
 ---
 
 ## 📌 Task Status Summary
-- **Total Tasks**: 20
-- **Completed**: 11
+- **Total Tasks**: 21
+- **Completed**: 16
 - **In Progress**: 0
-- **Pending**: 9
+- **Pending**: 5
 

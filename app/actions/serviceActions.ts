@@ -16,6 +16,9 @@ import { getShiftsAction } from "./shiftActions";
 export async function getServicesAction(params?: {
   date?: string;
   customerId?: string;
+  month?: string;
+  startDate?: string;
+  endDate?: string;
 }): Promise<ActionResult<CustomerServiceRecord[]>> {
   try {
     const supabase = await createClient();
@@ -23,6 +26,13 @@ export async function getServicesAction(params?: {
 
     if (params?.date) query = query.eq("service_date", params.date);
     if (params?.customerId) query = query.eq("customer_id", params.customerId);
+    if (params?.startDate && params?.endDate) {
+      query = query.gte("service_date", params.startDate).lte("service_date", params.endDate);
+    } else if (params?.month) {
+      query = query
+        .gte("service_date", `${params.month}-01`)
+        .lte("service_date", `${params.month}-31`);
+    }
 
     const { data, error } = await query;
 

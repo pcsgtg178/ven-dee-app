@@ -6,7 +6,7 @@ import themePlugin from "@fullcalendar/react/themes/monarch";
 import dayGridPlugin from "@fullcalendar/react/daygrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
 import thLocale from "@fullcalendar/react/locales/th";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, CalendarPlus } from "lucide-react";
 import { ActivityItem } from "../../types/vendee";
 
 export interface ShiftDetail {
@@ -45,12 +45,15 @@ export interface ScheduleCalendarViewProps {
   onDateClick: (info: { dateStr: string }) => void;
   /** Callback เมื่อผู้ใช้แตะที่ Event Badge บนปฏิทิน */
   onEventClick: (info: any) => void;
+  /** Callback เพื่อเปิด Modal ส่งออกปฏิทิน iPhone / iOS */
+  onOpenExportModal?: () => void;
 }
 
 export default function ScheduleCalendarView({
   events,
   onDateClick,
   onEventClick,
+  onOpenExportModal,
 }: ScheduleCalendarViewProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const calendarRef = useRef<any>(null);
@@ -244,8 +247,20 @@ export default function ScheduleCalendarView({
           : "flex-1 min-h-0 flex flex-col rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-1.5 sm:p-2.5 shadow-sm overflow-hidden text-slate-900"
       }
     >
-      {/* Top Bar: Color Legend + Fullscreen Toggle Button */}
+      {/* Top Bar: Export to iPhone Calendar + Fullscreen Toggle Button */}
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-white pb-2 mb-1 px-1 text-[11px] text-slate-800 shrink-0">
+        {/* iPhone / Apple Calendar Export Button */}
+        <button
+          type="button"
+          onClick={onOpenExportModal}
+          className="flex shrink-0 min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 dark:bg-sky-950/40 dark:border-sky-800 px-3 py-1 text-xs font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/50 shadow-2xs transition-all active:scale-95 touch-manipulation cursor-pointer"
+          aria-label="ส่งออกปฏิทิน iPhone / iOS"
+          title="ส่งออกปฏิทิน iPhone / iOS (Apple Calendar & WebCal)"
+        >
+          <CalendarPlus className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+          <span className="text-[11px] font-semibold">ส่งออก iPhone</span>
+        </button>
+
         {/* Fullscreen Toggle Action Button */}
         <button
           type="button"

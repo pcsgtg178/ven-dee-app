@@ -86,7 +86,7 @@ export default function DashboardPage() {
   const medCostMap = useMemo(() => {
     const map = new Map<string, { cost: number; unit?: string }>();
     masterMedications.forEach((m) => {
-      const priceNum = parseFloat(m.price || "0") || 0;
+      const priceNum = typeof m.price === "number" ? m.price : parseFloat(String(m.price || "0")) || 0;
       map.set(m.name.trim().toLowerCase(), {
         cost: priceNum,
         unit: m.unit,

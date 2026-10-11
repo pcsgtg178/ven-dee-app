@@ -22,8 +22,10 @@ export default function ModalMedicationManager({
   // Form State for Add / Edit
   const [editingMedId, setEditingMedId] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [size, setSize] = useState("");
   const [price, setPrice] = useState("");
-  const [unit, setUnit] = useState("");
+  const [unit, setUnit] = useState("ยูนิต");
+  const [description, setDescription] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [showForm, setShowForm] = useState(false);
 
@@ -49,8 +51,10 @@ export default function ModalMedicationManager({
   const resetForm = () => {
     setEditingMedId(null);
     setName("");
+    setSize("");
     setPrice("");
-    setUnit("");
+    setUnit("ยูนิต");
+    setDescription("");
     setErrorMsg("");
   };
 
@@ -62,8 +66,10 @@ export default function ModalMedicationManager({
   const handleOpenEdit = (med: Medications) => {
     setEditingMedId(med.id);
     setName(med.name);
-    setPrice(med.price || "");
-    setUnit(med.unit || "");
+    setSize(med.size || "");
+    setPrice(med.price !== undefined ? String(med.price) : "");
+    setUnit(med.unit || "ยูนิต");
+    setDescription(med.description || med.note || "");
     setErrorMsg("");
     setShowForm(true);
   };
@@ -78,8 +84,11 @@ export default function ModalMedicationManager({
     saveMedication({
       id: editingMedId || undefined,
       name: name.trim(),
+      size: size.trim() || undefined,
       price: price.trim() || undefined,
       unit: unit.trim() || undefined,
+      description: description.trim() || undefined,
+      note: description.trim() || undefined,
     });
 
     setShowForm(false);
@@ -157,13 +166,41 @@ export default function ModalMedicationManager({
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="เช่น Vitamin B12, NSS 100ml"
+                  placeholder="เช่น Botox, Vitamin B12, Paracetamol"
                   className="w-full rounded-xl border border-surface-subtle bg-white p-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
                   autoFocus
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                    ขนาด
+                  </label>
+                  <input
+                    type="text"
+                    value={size}
+                    onChange={(e) => setSize(e.target.value)}
+                    placeholder="เช่น 100, 50"
+                    className="w-full rounded-xl border border-surface-subtle bg-white p-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                    หน่วย
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={unit}
+                      onChange={(e) => setUnit(e.target.value)}
+                      placeholder="เช่น ยูนิต"
+                      className="w-full rounded-xl border border-surface-subtle bg-white p-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
                     ราคา (บาท)
@@ -173,31 +210,47 @@ export default function ModalMedicationManager({
                       type="number"
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
-                      placeholder="เช่น 200"
-                      className="w-full rounded-xl border border-surface-subtle bg-white pl-8 pr-2.5 py-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                      placeholder="เช่น 2500"
+                      className="w-full rounded-xl border border-surface-subtle bg-white pl-6 pr-2 py-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
                     />
-                    <DollarSign className="absolute left-2.5 top-3 h-3.5 w-3.5 text-text-muted" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
-                    หน่วยเรียก
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={unit}
-                      onChange={(e) => setUnit(e.target.value)}
-                      placeholder="เช่น เข็ม, ขวด, เม็ด"
-                      className="w-full rounded-xl border border-surface-subtle bg-white pl-8 pr-2.5 py-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
-                    />
-                    <Package className="absolute left-2.5 top-3 h-3.5 w-3.5 text-text-muted" />
+                    <DollarSign className="absolute left-2 top-3 h-3 w-3 text-text-muted" />
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Unit preset buttons */}
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="text-[11px] text-text-muted">หน่วยแนะนำ:</span>
+                {["ยูนิต", "เข็ม", "ขวด", "ชุด", "แผง", "cc"].map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => setUnit(u)}
+                    className={`rounded-lg px-2 py-0.5 text-[11px] font-medium transition-all ${
+                      unit === u
+                        ? "bg-primary text-white"
+                        : "bg-surface-subtle/60 text-text-muted hover:bg-surface-subtle dark:bg-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                  รายละเอียด / ข้อกำหนด
+                </label>
+                <textarea
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="เช่น นาบูตะ *นำเข้า, ผสม NSS 100ml"
+                  className="w-full rounded-xl border border-surface-subtle bg-white p-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
@@ -254,11 +307,21 @@ export default function ModalMedicationManager({
                       💊
                     </span>
                     <div className="min-w-0">
-                      <div className="font-bold text-xs text-text-main dark:text-white truncate">
-                        {med.name}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-xs text-text-main dark:text-white truncate">
+                          {med.name}
+                        </span>
+                        {med.size && (
+                          <span className="rounded-md bg-secondary/15 px-1.5 py-0.2 text-[10px] font-semibold text-secondary dark:bg-secondary/25">
+                            {med.size} {med.unit || ""}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-text-muted dark:text-zinc-400">
-                        {med.price ? `฿${med.price}` : "ไม่ระบุราคา"} {med.unit ? `/ ${med.unit}` : ""}
+                        {med.price ? `฿${Number(med.price).toLocaleString()}` : "ไม่ระบุราคา"} {med.unit && !med.size ? `/ ${med.unit}` : ""}
+                        {(med.description || med.note) && (
+                          <span className="text-text-muted/80 dark:text-zinc-500"> • {med.description || med.note}</span>
+                        )}
                       </div>
                     </div>
                   </div>

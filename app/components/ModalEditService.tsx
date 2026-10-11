@@ -379,18 +379,21 @@ export default function ModalEditService({
           const updatedMaster = getMedications();
           setMasterMeds(updatedMaster);
           const found = updatedMaster.find((m) => m.name === newMedName);
+          const defaultDose = found?.size && found?.unit
+            ? `${found.size} ${found.unit}`
+            : (found?.unit ? `1 ${found.unit}` : "");
           setMedications((prev) => {
             const copy = [...prev];
             const emptyIdx = copy.findIndex((m) => !m.name);
             if (emptyIdx >= 0) {
               copy[emptyIdx] = {
                 name: newMedName,
-                dose: found?.unit ? `1 ${found.unit}` : "",
+                dose: defaultDose,
               };
             } else {
               copy.push({
                 name: newMedName,
-                dose: found?.unit ? `1 ${found.unit}` : "",
+                dose: defaultDose,
               });
             }
             return copy;

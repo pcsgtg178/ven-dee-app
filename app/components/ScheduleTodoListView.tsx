@@ -725,11 +725,6 @@ export default function ScheduleTodoListView({
           )}
         </div>
       )}
-
-      <div
-        className="h-24 sm:h-28 pb-safe pointer-events-none"
-        aria-hidden="true"
-      />
     </div>
   );
 }

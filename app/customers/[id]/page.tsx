@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import moment from "moment";
 import "moment/locale/th";
@@ -30,9 +30,8 @@ import BottomNav from "../../components/BottomNav";
 import ModalAddTodo from "../../components/ModalAddTodo";
 import ModalEditCustomer from "../../components/ModalEditCustomer";
 import ModalEditService from "../../components/ModalEditService";
+import ModalDeleteCustomer from "../../components/ModalDeleteCustomer";
 import { Customer, CustomerServiceRecord, SERVICE_CONFIG } from "../../../types/vendee";
-import { customersApi, servicesApi } from "../../../lib/api";
-import { RefreshCw } from "lucide-react";
 import {
   getCustomerById,
   canEditService,
@@ -44,16 +43,17 @@ import {
 
 export default function CustomerDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const customerId = params?.id as string;
 
   const [customer, setCustomer] = useState<Customer | undefined>(undefined);
   const [services, setServices] = useState<CustomerServiceRecord[]>([]);
   const [activeTab, setActiveTab] = useState<"upcoming" | "history">("upcoming");
-  const [isSyncing, setIsSyncing] = useState(false);
 
   // Modals
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditCustomerModal, setOpenEditCustomerModal] = useState(false);
+  const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [editingService, setEditingService] = useState<CustomerServiceRecord | null>(null);
   const [openEditServiceModal, setOpenEditServiceModal] = useState(false);
 
@@ -62,7 +62,7 @@ export default function CustomerDetailPage() {
     setOpenEditServiceModal(true);
   };
 
-  // Load customer detail from local storage (fast, no network side-effects)
+  // Load customer detail from local storage
   const loadLocalData = useCallback(() => {
     if (!customerId) return;
     const localCust = getCustomerById(customerId);
@@ -74,40 +74,15 @@ export default function CustomerDetailPage() {
     }
   }, [customerId]);
 
-  // Fetch live data from backend API (http://localhost:8080/api/v1/customers/:id)
-  const syncApiData = useCallback(async () => {
-    if (!customerId) return;
-    try {
-      setIsSyncing(true);
-      const apiCust = await customersApi.getById(customerId);
-      if (apiCust) {
-        setCustomer(apiCust);
-        const combined = [
-          ...(apiCust.upcomingServices || []),
-          ...(apiCust.historyServices || []),
-        ];
-        if (combined.length > 0) {
-          setServices(combined);
-        }
-      }
-    } catch (err) {
-      console.warn("API customer detail fetch warning:", err);
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [customerId]);
-
   const loadData = useCallback(() => {
     loadLocalData();
-    syncApiData();
-  }, [loadLocalData, syncApiData]);
+  }, [loadLocalData]);
 
   useEffect(() => {
     loadLocalData();
-    syncApiData();
     const unsubscribe = subscribeToStorage(loadLocalData);
     return () => unsubscribe();
-  }, [loadLocalData, syncApiData]);
+  }, [loadLocalData]);
 
   // Upcoming appointments (status === 'upcoming' or future date)
   const upcomingServices = useMemo(() => {
@@ -134,25 +109,20 @@ export default function CustomerDetailPage() {
   const handleDeleteService = async (serviceId: string) => {
     try {
       await deleteService(serviceId);
-      loadData();
+      loadLocalData();
     } catch (err: any) {
       alert(err.message || "เกิดข้อผิดพลาดในการลบบริการ");
     }
   };
 
-  // Toggle status between upcoming and completed with API sync
+  // Toggle status between upcoming and completed
   const handleToggleStatus = async (srv: CustomerServiceRecord) => {
     const nextStatus = srv.status === "completed" ? "upcoming" : "completed";
-    try {
-      await servicesApi.updateStatus(srv.id, nextStatus);
-    } catch (err) {
-      console.warn("API status update error, saving locally:", err);
-    }
-    saveService({
+    await saveService({
       ...srv,
       status: nextStatus,
     });
-    loadData();
+    loadLocalData();
   };
 
   if (!customer) {
@@ -177,7 +147,7 @@ export default function CustomerDetailPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 pb-32">
+    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
       {/* Header with back button */}
       <AppBar
         title={customer.name}
@@ -216,12 +186,32 @@ export default function CustomerDetailPage() {
             </div>
           </div>
 
-          {/* Quick Actions Row: Call button + Add Appointment */}
-          <div className="mt-4 flex items-center gap-2 border-t border-surface-subtle pt-3 dark:border-zinc-800">
+          {/* Quick Actions Row: Edit + Delete + Add Appointment */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-surface-subtle pt-3 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setOpenEditCustomerModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-surface-subtle px-3 py-2 text-xs font-bold text-text-main hover:bg-slate-200 active:scale-95 dark:bg-zinc-800 dark:text-zinc-200 transition-all border border-surface-subtle dark:border-zinc-700"
+              title="แก้ไขข้อมูลลูกค้า"
+            >
+              <Pencil className="h-3.5 w-3.5 text-secondary" />
+              <span>แก้ไข</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setOpenDeleteModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100 active:scale-95 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-950/60 transition-all border border-rose-200/60 dark:border-rose-900/40"
+              title="ลบข้อมูลลูกค้าและประวัติทั้งหมด"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>ลบลูกค้า</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setOpenAddModal(true)}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-600 py-2.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all min-w-[130px]"
             >
               <CalendarPlus className="h-3.5 w-3.5" />
               <span>+ นัดหมายบริการ</span>
@@ -318,8 +308,6 @@ export default function CustomerDetailPage() {
             )}
           </div>
         )}
-        {/* Bottom Navigation Spacer */}
-        <div className="h-20 sm:h-24 pb-safe pointer-events-none" aria-hidden="true" />
       </main>
 
       {/* Modal Edit Customer */}
@@ -329,6 +317,16 @@ export default function CustomerDetailPage() {
         onClose={() => setOpenEditCustomerModal(false)}
         onSuccess={() => {
           loadData();
+        }}
+      />
+
+      {/* Modal Delete Customer */}
+      <ModalDeleteCustomer
+        customer={customer || null}
+        isOpen={openDeleteModal}
+        onClose={() => setOpenDeleteModal(false)}
+        onSuccess={() => {
+          router.push("/customers");
         }}
       />
 

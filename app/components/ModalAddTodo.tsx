@@ -85,7 +85,9 @@ export default function ModalAddTodo({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [serviceDate, setServiceDate] = useState("");
   const [serviceTime, setServiceTime] = useState("09:00");
-  const [medications, setMedications] = useState<string[]>([""]);
+  const [medications, setMedications] = useState<{ name: string; dose: string }[]>([
+    { name: "", dose: "" },
+  ]);
   const [serviceNote, setServiceNote] = useState("");
   const [servicePrice, setServicePrice] = useState("");
 
@@ -97,6 +99,7 @@ export default function ModalAddTodo({
 
   // Loading & error
   const [errorMsg, setErrorMsg] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadMasterData = () => {
     setCustomers(getCustomers());
@@ -111,7 +114,7 @@ export default function ModalAddTodo({
 
     // Reset Customer Service form state
     setServiceTime("09:00");
-    setMedications([""]);
+    setMedications([{ name: "", dose: "" }]);
     setServiceNote("");
     setServicePrice("");
 
@@ -168,6 +171,8 @@ export default function ModalAddTodo({
             ? "purple"
             : shiftCategory;
 
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await saveShift({
         date: shiftDate,
@@ -181,12 +186,16 @@ export default function ModalAddTodo({
       if (onSuccess) onSuccess();
     } catch (err: any) {
       setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกเวร");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Customer service form submit
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!selectedCustomerId) {
       setErrorMsg("กรุณาเลือกลูกค้า");
       return;
@@ -202,15 +211,27 @@ export default function ModalAddTodo({
       return;
     }
 
-    const validMeds = medications.map((m) => m.trim()).filter(Boolean);
+    const validMeds = medications
+      .map((m) => {
+        const name = m.name.trim();
+        const dose = m.dose.trim();
+        if (!name && !dose) return "";
+        if (name && dose) {
+          if (name.includes(dose)) return name;
+          return `${name} (${dose})`;
+        }
+        return name || dose;
+      })
+      .filter(Boolean);
 
+    setIsSubmitting(true);
     try {
       await saveService({
         customerId: currentCustomer.id,
         customerName: currentCustomer.name,
         date: serviceDate,
         time: serviceTime,
-        medications: validMeds && validMeds.length > 0 ? validMeds : undefined,
+        medications: validMeds.length > 0 ? validMeds : undefined,
         note: serviceNote.trim() || undefined,
         price: servicePrice ? Number(servicePrice) : undefined,
       });
@@ -220,17 +241,22 @@ export default function ModalAddTodo({
       if (onSuccess) onSuccess();
     } catch (err: any) {
       setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกบริการลูกค้า");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Clinic form submit
   const handleSaveClinicLog = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!clinicDate) {
       setErrorMsg("กรุณาระบุวันที่เข้าเวรคลินิก");
       return;
     }
 
+    setIsSubmitting(true);
     try {
       saveClinicLog({
         date: clinicDate,
@@ -243,18 +269,24 @@ export default function ModalAddTodo({
       if (onSuccess) onSuccess();
     } catch (err: any) {
       setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกงานคลินิก");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Medication handlers
   const handleAddMedication = () => {
-    setMedications((prev) => [...prev, ""]);
+    setMedications((prev) => [...prev, { name: "", dose: "" }]);
   };
 
-  const handleUpdateMedication = (index: number, val: string) => {
+  const handleUpdateMedication = (
+    index: number,
+    field: "name" | "dose",
+    val: string
+  ) => {
     setMedications((prev) => {
       const copy = [...prev];
-      copy[index] = val;
+      copy[index] = { ...copy[index], [field]: val };
       return copy;
     });
   };
@@ -796,53 +828,80 @@ export default function ModalAddTodo({
                 </div>
 
                 <div className="space-y-2">
-                  {medications.map((med, idx) => (
-                    <div key={idx} className="flex items-center gap-1.5 sm:gap-2">
-                      <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 w-3.5 sm:w-4 text-right shrink-0">
-                        {idx + 1}.
-                      </span>
-                      {/* Dropdown / Input Combination */}
-                      <div className="flex-1 flex items-center gap-1.5 min-w-0">
-                        {masterMedications.length > 0 && (
+                  {medications.map((med, idx) => {
+                    const isKnownMaster = masterMedications.some((m) => m.name === med.name);
+                    return (
+                      <div
+                        key={idx}
+                        className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 p-2 rounded-xl bg-white/80 dark:bg-zinc-800/60 border border-emerald-200/80 dark:border-emerald-800/60"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 w-4 text-center shrink-0">
+                            {idx + 1}.
+                          </span>
+                          {/* Dropdown with master medications */}
                           <select
+                            value={isKnownMaster ? med.name : med.name ? "__custom__" : ""}
                             onChange={(e) => {
-                              if (e.target.value)
-                                handleUpdateMedication(idx, e.target.value);
+                              const val = e.target.value;
+                              if (val === "__custom__") {
+                                handleUpdateMedication(idx, "name", "");
+                              } else {
+                                const found = masterMedications.find((m) => m.name === val);
+                                handleUpdateMedication(idx, "name", val);
+                                if (found?.unit && !med.dose) {
+                                  handleUpdateMedication(idx, "dose", `1 ${found.unit}`);
+                                }
+                              }
                             }}
-                            defaultValue=""
-                            className="w-28 sm:w-36 shrink-0 min-w-0 truncate rounded-xl border border-emerald-300 bg-white px-2 py-1.5 text-xs text-slate-800 dark:border-emerald-800 dark:bg-zinc-800/50"
+                            className="flex-1 min-w-0 truncate rounded-lg border border-emerald-300 bg-white px-2 py-1.5 text-xs text-slate-800 dark:border-emerald-800 dark:bg-zinc-800 dark:text-zinc-100"
                           >
-                            <option value="" disabled>
-                              -- เลือกจากคลัง --
-                            </option>
+                            <option value="">-- เลือกจากคลังยา --</option>
                             {masterMedications.map((m) => (
                               <option key={m.id} value={m.name}>
                                 {m.name} {m.price ? `(฿${m.price})` : ""}
                               </option>
                             ))}
+                            <option value="__custom__">+ ระบุชื่อยาเอง (Custom)</option>
                           </select>
+                        </div>
+
+                        {/* If custom name or not in master, show input field */}
+                        {(!isKnownMaster || !masterMedications.length) && (
+                          <div className="flex-1 min-w-0 pl-5 sm:pl-0">
+                            <input
+                              type="text"
+                              placeholder="พิมพ์ชื่อตัวยา..."
+                              value={med.name}
+                              onChange={(e) => handleUpdateMedication(idx, "name", e.target.value)}
+                              className="w-full rounded-lg border border-emerald-300 bg-white px-2 py-1.5 text-xs text-slate-800 outline-none focus:border-emerald-500 dark:border-emerald-800 dark:bg-zinc-800 dark:text-white"
+                            />
+                          </div>
                         )}
-                        <input
-                          type="text"
-                          placeholder="ชื่อยา / ขนาดยา"
-                          value={med}
-                          onChange={(e) =>
-                            handleUpdateMedication(idx, e.target.value)
-                          }
-                          className="flex-1 min-w-0 w-full rounded-xl border border-emerald-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 outline-none focus:border-emerald-500 dark:border-emerald-800 dark:bg-zinc-800/50 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
-                        />
+
+                        {/* Dose / Amount Input & Delete Button */}
+                        <div className="flex items-center gap-1 pl-5 sm:pl-0 shrink-0">
+                          <input
+                            type="text"
+                            placeholder="ขนาด/ปริมาณ เช่น 100 ยู"
+                            value={med.dose}
+                            onChange={(e) => handleUpdateMedication(idx, "dose", e.target.value)}
+                            className="w-full sm:w-36 rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-xs text-slate-800 outline-none focus:border-emerald-500 dark:border-emerald-800 dark:bg-zinc-800 dark:text-white"
+                          />
+                          {medications.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMedication(idx)}
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950/40 transition-colors"
+                              title="ลบรายการยานี้"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {medications.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMedication(idx)}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-100 transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -963,6 +1022,7 @@ export default function ModalAddTodo({
           </button>
           <button
             type="submit"
+            disabled={isSubmitting}
             form={
               activeTab === "shift"
                 ? "shift-form"
@@ -971,6 +1031,8 @@ export default function ModalAddTodo({
                   : "clinic-form"
             }
             className={`flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:brightness-105 transition-all ${
+              isSubmitting ? "opacity-60 cursor-not-allowed" : ""
+            } ${
               activeTab === "shift"
                 ? "bg-secondary"
                 : activeTab === "service"
@@ -978,13 +1040,19 @@ export default function ModalAddTodo({
                   : "bg-purple-600"
             }`}
           >
-            <Check className="h-4 w-4" />
+            {isSubmitting ? (
+              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
             <span>
-              {activeTab === "shift"
-                ? "บันทึกการขึ้นเวร"
-                : activeTab === "service"
-                  ? "บันทึกบริการลูกค้า"
-                  : "บันทึกกะคลินิก"}
+              {isSubmitting
+                ? "กำลังบันทึก..."
+                : activeTab === "shift"
+                  ? "บันทึกการขึ้นเวร"
+                  : activeTab === "service"
+                    ? "บันทึกบริการลูกค้า"
+                    : "บันทึกกะคลินิก"}
             </span>
           </button>
         </div>
@@ -993,6 +1061,28 @@ export default function ModalAddTodo({
       {/* Medication Manager Modal nested */}
       <ModalMedicationManager
         isOpen={openMedManagerModal}
+        onSelectMedication={(newMedName) => {
+          setOpenMedManagerModal(false);
+          const updatedMaster = getMedications();
+          setMasterMedications(updatedMaster);
+          const found = updatedMaster.find((m) => m.name === newMedName);
+          setMedications((prev) => {
+            const copy = [...prev];
+            const emptyIdx = copy.findIndex((m) => !m.name);
+            if (emptyIdx >= 0) {
+              copy[emptyIdx] = {
+                name: newMedName,
+                dose: found?.unit ? `1 ${found.unit}` : "",
+              };
+            } else {
+              copy.push({
+                name: newMedName,
+                dose: found?.unit ? `1 ${found.unit}` : "",
+              });
+            }
+            return copy;
+          });
+        }}
         onClose={() => {
           setOpenMedManagerModal(false);
           setMasterMedications(getMedications());

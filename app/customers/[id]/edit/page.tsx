@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { User, Tag, MapPin, Check, AlertCircle } from "lucide-react";
+import { User, Tag, MapPin, Check, AlertCircle, Trash2 } from "lucide-react";
 import AppBar from "../../../components/AppBar";
 import BottomNav from "../../../components/BottomNav";
+import ModalDeleteCustomer from "../../../components/ModalDeleteCustomer";
 import { Customer } from "../../../../types/vendee";
 import { getCustomerById, saveCustomer } from "../../../../lib/storage";
-import { customersApi } from "../../../../lib/api";
 
 export default function EditCustomerPage() {
   const params = useParams();
@@ -17,6 +17,7 @@ export default function EditCustomerPage() {
   const [customer, setCustomer] = useState<Customer | undefined>(undefined);
   const [name, setName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [openDeleteModal, setOpenDeleteModal] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -52,14 +53,7 @@ export default function EditCustomerPage() {
         name: name.trim(),
       };
 
-      // Live API customer update
-      try {
-        await customersApi.update(customer.id, payload);
-      } catch (apiErr) {
-        console.warn("API update warning, persisting locally:", apiErr);
-      }
-
-      saveCustomer({
+      await saveCustomer({
         id: customer.id,
         ...payload,
         avatarColor: customer.avatarColor,
@@ -73,7 +67,7 @@ export default function EditCustomerPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 pb-20">
+    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
       <AppBar
         title="แก้ไขข้อมูลลูกค้า"
         showBack
@@ -144,9 +138,31 @@ export default function EditCustomerPage() {
                 <span>บันทึกการแก้ไข</span>
               </button>
             </div>
+
+            {/* Danger zone: ลบลูกค้า */}
+            <div className="pt-2 border-t border-surface-subtle dark:border-zinc-800 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setOpenDeleteModal(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline dark:text-rose-400 py-1 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>ลบลูกค้ารายนี้และประวัติทั้งหมด</span>
+              </button>
+            </div>
           </form>
         </div>
       </main>
+
+      {/* Modal Delete Customer */}
+      <ModalDeleteCustomer
+        customer={customer}
+        isOpen={openDeleteModal}
+        onClose={() => setOpenDeleteModal(false)}
+        onSuccess={() => {
+          router.push("/customers");
+        }}
+      />
 
       <BottomNav />
     </div>

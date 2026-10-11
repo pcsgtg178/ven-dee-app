@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, User, Check, AlertCircle } from "lucide-react";
+import { X, User, Check, AlertCircle, Trash2 } from "lucide-react";
 import { Customer } from "../../types/vendee";
 import { saveCustomer } from "../../lib/storage";
+import ModalDeleteCustomer from "./ModalDeleteCustomer";
 
 interface ModalEditCustomerProps {
   customer: Customer | null;
@@ -20,6 +21,7 @@ export default function ModalEditCustomer({
 }: ModalEditCustomerProps) {
   const [name, setName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [openDeleteModal, setOpenDeleteModal] = useState(false);
 
   useEffect(() => {
     if (customer && isOpen) {
@@ -126,8 +128,32 @@ export default function ModalEditCustomer({
               <span>บันทึกการแก้ไข</span>
             </button>
           </div>
+
+          {/* Danger zone: ลบลูกค้า */}
+          <div className="pt-2 border-t border-surface-subtle dark:border-zinc-800 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setOpenDeleteModal(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline dark:text-rose-400 py-1 transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>ลบลูกค้ารายนี้และประวัติทั้งหมด</span>
+            </button>
+          </div>
         </form>
       </div>
+
+      {/* Modal Delete Customer */}
+      <ModalDeleteCustomer
+        customer={customer}
+        isOpen={openDeleteModal}
+        onClose={() => setOpenDeleteModal(false)}
+        onSuccess={() => {
+          setOpenDeleteModal(false);
+          onClose();
+          if (onSuccess) onSuccess(customer);
+        }}
+      />
     </div>
   );
 }

@@ -12,9 +12,9 @@ All project rules, coding standards, architecture conventions, nurse domain inva
 
 Agents working on this repository MUST reference and adhere to the rules in the following files:
 
-- **[.agent/PROJECT_RULES.md](file:///.agent/PROJECT_RULES.md)**: Tech stack standards (Next.js 15 App Router, TypeScript `strict: true`, Tailwind CSS), directory structure, component standards, form state reset policies, and API standards (JSON envelope, domain error codes, deletion safety & rollback handling).
-- **[.agent/DOMAIN_RULES.md](file:///.agent/DOMAIN_RULES.md)**: Nurse domain invariants, shift types, quotas, color codes, conflict detection rules, shift swap rules (top-up swap, same-day category swap), and locking/rollback lifecycle rules.
-- **[.agent/BACKLOG.md](file:///.agent/BACKLOG.md)**: Active feature backlog, task tracking, and work roadmap.
+- **[.agent/PROJECT_RULES.md](file:///.agent/PROJECT_RULES.md)**: Tech stack standards (Next.js 15 App Router, TypeScript `strict: true`, Tailwind CSS), directory structure, component standards, form state reset policies, API standards (JSON envelope, domain error codes, deletion safety & rollback handling, Refer shift selling lifecycle), and iPhone/Apple Calendar integration standards (RFC 5545 iCalendar, WebCal feed sync).
+- **[.agent/DOMAIN_RULES.md](file:///.agent/DOMAIN_RULES.md)**: Nurse domain invariants, shift types, quotas, color codes, conflict detection rules, shift swap & Refer shift selling rules (one-way transfer, Satang compensation, black quota exemption), locking/rollback lifecycle rules, and iPhone Calendar export domain invariants (time boundaries, glanceable emojis, privacy guard, alarms).
+- **[.agent/BACKLOG.md](file:///.agent/BACKLOG.md)**: Active feature backlog, task tracking, and work roadmap (including Phase 5 iPhone Calendar export and Phase 6 Refer Shift Selling).
 
 ---
 

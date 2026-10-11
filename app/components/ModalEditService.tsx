@@ -41,24 +41,36 @@ export default function ModalEditService({
 }: ModalEditServiceProps) {
   const [serviceDate, setServiceDate] = useState("");
   const [serviceTime, setServiceTime] = useState("09:00");
-  const [medications, setMedications] = useState<string[]>([""]);
+  const [medications, setMedications] = useState<{ name: string; dose: string }[]>([
+    { name: "", dose: "" },
+  ]);
   const [serviceNote, setServiceNote] = useState("");
   const [servicePrice, setServicePrice] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [masterMeds, setMasterMeds] = useState<Medications[]>([]);
   const [openMedManagerModal, setOpenMedManagerModal] = useState(false);
+
+  const parseMedicationString = (str: string): { name: string; dose: string } => {
+    const trimmed = str.trim();
+    const match = trimmed.match(/^(.+?)\s*\(([^)]+)\)$/);
+    if (match) {
+      return { name: match[1].trim(), dose: match[2].trim() };
+    }
+    return { name: trimmed, dose: "" };
+  };
 
   useEffect(() => {
     if (service && isOpen) {
       setMasterMeds(getMedications());
       setServiceDate(service.date || "");
-      setServiceTime(service.time || "09:00");
-      setMedications(
+      setServiceTime((service.time || "09:00").slice(0, 5));
+      const parsed =
         service.medications && service.medications.length > 0
-          ? [...service.medications]
-          : [""]
-      );
+          ? service.medications.map(parseMedicationString)
+          : [{ name: "", dose: "" }];
+      setMedications(parsed);
       setServiceNote(service.note || "");
       setServicePrice(service.price ? String(service.price) : "");
       setErrorMsg("");
@@ -68,30 +80,48 @@ export default function ModalEditService({
   if (!isOpen || !service) return null;
 
   const handleAddMedication = () => {
-    setMedications((prev) => [...prev, ""]);
+    setMedications((prev) => [...prev, { name: "", dose: "" }]);
   };
 
   const handleRemoveMedication = (index: number) => {
     setMedications((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleMedicationChange = (index: number, val: string) => {
+  const handleMedicationChange = (
+    index: number,
+    field: "name" | "dose",
+    val: string
+  ) => {
     setMedications((prev) => {
       const copy = [...prev];
-      copy[index] = val;
+      copy[index] = { ...copy[index], [field]: val };
       return copy;
     });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!serviceDate || !serviceTime) {
       setErrorMsg("กรุณาระบุวันที่และเวลานัดหมาย");
       return;
     }
 
-    const validMeds = medications.map((m) => m.trim()).filter(Boolean);
+    const validMeds = medications
+      .map((m) => {
+        const name = m.name.trim();
+        const dose = m.dose.trim();
+        if (!name && !dose) return "";
+        if (name && dose) {
+          if (name.includes(dose)) return name;
+          return `${name} (${dose})`;
+        }
+        return name || dose;
+      })
+      .filter(Boolean);
 
+    setIsSubmitting(true);
     try {
       const updated = await saveService({
         id: service.id,
@@ -99,7 +129,7 @@ export default function ModalEditService({
         customerName: service.customerName,
         date: serviceDate,
         time: serviceTime,
-        medications: validMeds && validMeds.length > 0 ? validMeds : undefined,
+        medications: validMeds.length > 0 ? validMeds : undefined,
         note: serviceNote.trim() || undefined,
         price: servicePrice ? Number(servicePrice) : undefined,
         createdAt: service.createdAt,
@@ -109,6 +139,8 @@ export default function ModalEditService({
       onClose();
     } catch (err: any) {
       setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูลบริการ");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -206,47 +238,80 @@ export default function ModalEditService({
             </div>
 
             <div className="space-y-2">
-              {medications.map((med, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 sm:gap-2">
-                  <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 w-3.5 sm:w-4 text-right shrink-0">
-                    {idx + 1}.
-                  </span>
-                  <div className="flex-1 flex items-center gap-1.5 min-w-0">
-                    {masterMeds.length > 0 && (
+              {medications.map((med, idx) => {
+                const isKnownMaster = masterMeds.some((m) => m.name === med.name);
+                return (
+                  <div
+                    key={idx}
+                    className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 p-2 rounded-xl bg-white/80 dark:bg-zinc-800/60 border border-primary/20 dark:border-emerald-800/60"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 w-4 text-center shrink-0">
+                        {idx + 1}.
+                      </span>
+                      {/* Dropdown with master medications */}
                       <select
+                        value={isKnownMaster ? med.name : med.name ? "__custom__" : ""}
                         onChange={(e) => {
-                          if (e.target.value) handleMedicationChange(idx, e.target.value);
+                          const val = e.target.value;
+                          if (val === "__custom__") {
+                            handleMedicationChange(idx, "name", "");
+                          } else {
+                            const found = masterMeds.find((m) => m.name === val);
+                            handleMedicationChange(idx, "name", val);
+                            if (found?.unit && !med.dose) {
+                              handleMedicationChange(idx, "dose", `1 ${found.unit}`);
+                            }
+                          }
                         }}
-                        defaultValue=""
-                        className="w-28 sm:w-36 shrink-0 min-w-0 truncate rounded-xl border border-primary/30 bg-white px-2 py-1.5 text-xs text-text-main dark:bg-zinc-900 dark:text-white"
+                        className="flex-1 min-w-0 truncate rounded-lg border border-primary/30 bg-white px-2 py-1.5 text-xs text-text-main dark:bg-zinc-900 dark:text-white"
                       >
-                        <option value="" disabled>-- เลือกจากคลัง --</option>
+                        <option value="">-- เลือกจากคลังยา --</option>
                         {masterMeds.map((m) => (
                           <option key={m.id} value={m.name}>
                             {m.name} {m.price ? `(฿${m.price})` : ""}
                           </option>
                         ))}
+                        <option value="__custom__">+ ระบุชื่อยาเอง (Custom)</option>
                       </select>
+                    </div>
+
+                    {/* If custom name or not in master, show input field */}
+                    {(!isKnownMaster || !masterMeds.length) && (
+                      <div className="flex-1 min-w-0 pl-5 sm:pl-0">
+                        <input
+                          type="text"
+                          placeholder="พิมพ์ชื่อตัวยา..."
+                          value={med.name}
+                          onChange={(e) => handleMedicationChange(idx, "name", e.target.value)}
+                          className="w-full rounded-lg border border-primary/30 bg-white px-2 py-1.5 text-xs text-text-main outline-none focus:border-primary dark:bg-zinc-900 dark:text-white"
+                        />
+                      </div>
                     )}
-                    <input
-                      type="text"
-                      value={med}
-                      onChange={(e) => handleMedicationChange(idx, e.target.value)}
-                      placeholder="ชื่อยา / ขนาดยา"
-                      className="flex-1 min-w-0 w-full rounded-xl border border-primary/30 bg-card-bg px-2.5 py-1.5 text-xs text-text-main outline-none focus:border-primary dark:bg-zinc-900 dark:text-white dark:border-emerald-800"
-                    />
+
+                    {/* Dose / Amount Input & Delete Button */}
+                    <div className="flex items-center gap-1 pl-5 sm:pl-0 shrink-0">
+                      <input
+                        type="text"
+                        placeholder="ขนาด/ปริมาณ เช่น 100 ยู"
+                        value={med.dose}
+                        onChange={(e) => handleMedicationChange(idx, "dose", e.target.value)}
+                        className="w-full sm:w-36 rounded-lg border border-primary/20 bg-white px-2 py-1.5 text-xs text-text-main outline-none focus:border-primary dark:bg-zinc-900 dark:text-white"
+                      />
+                      {medications.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMedication(idx)}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors"
+                          title="ลบรายการยานี้"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {medications.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMedication(idx)}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -291,10 +356,17 @@ export default function ModalEditService({
             </button>
             <button
               type="submit"
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-600 py-2.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all"
+              disabled={isSubmitting}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-600 py-2.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all ${
+                isSubmitting ? "opacity-60 cursor-not-allowed" : ""
+              }`}
             >
-              <Check className="h-4 w-4" />
-              <span>บันทึกการแก้ไขนัดหมาย</span>
+              {isSubmitting ? (
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              <span>{isSubmitting ? "กำลังบันทึก..." : "บันทึกการแก้ไขนัดหมาย"}</span>
             </button>
           </div>
         </form>
@@ -302,6 +374,28 @@ export default function ModalEditService({
 
       <ModalMedicationManager
         isOpen={openMedManagerModal}
+        onSelectMedication={(newMedName) => {
+          setOpenMedManagerModal(false);
+          const updatedMaster = getMedications();
+          setMasterMeds(updatedMaster);
+          const found = updatedMaster.find((m) => m.name === newMedName);
+          setMedications((prev) => {
+            const copy = [...prev];
+            const emptyIdx = copy.findIndex((m) => !m.name);
+            if (emptyIdx >= 0) {
+              copy[emptyIdx] = {
+                name: newMedName,
+                dose: found?.unit ? `1 ${found.unit}` : "",
+              };
+            } else {
+              copy.push({
+                name: newMedName,
+                dose: found?.unit ? `1 ${found.unit}` : "",
+              });
+            }
+            return copy;
+          });
+        }}
         onClose={() => {
           setOpenMedManagerModal(false);
           setMasterMeds(getMedications());

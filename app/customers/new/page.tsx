@@ -31,7 +31,7 @@ export default function NewCustomerPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-zinc-950 dark:text-zinc-100 pb-20">
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
       <AppBar title="เพิ่มลูกค้าใหม่" showBack backHref="/customers" />
 
       <main className="mx-auto w-full max-w-lg flex-1 p-4">

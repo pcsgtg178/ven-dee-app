@@ -2,7 +2,7 @@ export type ShiftType = "morning" | "afternoon" | "night" | "r1" | "r2" | "off" 
 
 export type ShiftCategory = "black" | "red" | "green" | "gray" | "purple"; // ดำ = ปกติแลกได้ขึ้นครบ, แดง = OT, เขียว = เวร R (Refer)
 
-export type ShiftStatus = "active" | "swapped_out" | "cancelled";
+export type ShiftStatus = "active" | "swapped_out" | "cancelled" | "sold_out";
 
 export interface SwapTrailNode {
   id: string;
@@ -23,6 +23,14 @@ export interface SwapMetadata {
   swapHistory?: SwapTrailNode[]; // ประวัติการแลกต่อยอดสำหรับ Timeline
 }
 
+export interface SaleMetadata {
+  buyerName: string; // ชื่อพยาบาลผู้ซื้อเวร/ขึ้นแทน [Required]
+  salePriceSatang: number; // ราคาขายเวรในหน่วยสตางค์ (1 THB = 100 Satang)
+  soldDate: string; // วันที่ทำรายการขาย (YYYY-MM-DD)
+  paymentStatus: "unpaid" | "paid"; // สถานะการชำระเงิน
+  note?: string; // บันทึกเพิ่มเติม
+}
+
 export interface ShiftRecord {
   id: string;
   type: "shift";
@@ -31,6 +39,7 @@ export interface ShiftRecord {
   category: ShiftCategory;
   status: ShiftStatus;
   swapMeta?: SwapMetadata;
+  saleMeta?: SaleMetadata;
   department?: string;
   note?: string;
   createdAt: string;
@@ -268,4 +277,31 @@ export const SHIFT_CATEGORY_CONFIG: Record<
     pill: "bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300",
   },
 };
+
+/**
+ * iPhone / Apple Calendar Export & Synchronization Domain Interfaces
+ * (Adheres to DOMAIN_RULES.md Section 4 & PROJECT_RULES.md Section 5)
+ */
+export interface CalendarExportOptions {
+  /** Month key (YYYY-MM) or date boundaries */
+  month?: string;
+  startDate?: string;
+  endDate?: string;
+  /** Flags to toggle event scopes */
+  includeShifts?: boolean;
+  includeServices?: boolean;
+  includePersonalEvents?: boolean;
+  includeClinic?: boolean;
+  includeOffDays?: boolean; // Default: false per DOMAIN_RULES 4.1.2
+  /** Specific shift categories to export (default: all) */
+  categories?: ShiftCategory[];
+}
+
+export interface CalendarFeedConfig {
+  feedToken: string;
+  isEnabled: boolean;
+  calendarName?: string;
+  lastSyncedAt?: string;
+}
+
 

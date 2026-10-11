@@ -6,6 +6,7 @@ import {
   Search,
   UserPlus,
   Pencil,
+  Trash2,
   CalendarPlus,
   ChevronRight,
   Users,
@@ -15,14 +16,13 @@ import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
 import ModalAddTodo from "../components/ModalAddTodo";
 import ModalEditCustomer from "../components/ModalEditCustomer";
+import ModalDeleteCustomer from "../components/ModalDeleteCustomer";
 import { Customer } from "../../types/vendee";
 import { getCustomers, saveCustomer, subscribeToStorage } from "../../lib/storage";
-import { customersApi } from "../../lib/api";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isSyncing, setIsSyncing] = useState(false);
 
   // Modals
   const [openAddServiceModal, setOpenAddServiceModal] = useState(false);
@@ -31,41 +31,25 @@ export default function CustomersPage() {
   const [openNewCustomerModal, setOpenNewCustomerModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [openEditCustomerModal, setOpenEditCustomerModal] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [newCustName, setNewCustName] = useState("");
   const [newCustError, setNewCustError] = useState("");
 
-  // Load customers from local storage (fast, no network side-effects)
+  // Load customers from local storage
   const loadLocalData = useCallback(() => {
     setCustomers(getCustomers());
   }, []);
 
-  // Fetch live customers from API (http://localhost:8080/api/v1/customers)
-  const syncApiData = useCallback(async () => {
-    try {
-      setIsSyncing(true);
-      const apiCusts = await customersApi.getAll();
-      if (apiCusts && Array.isArray(apiCusts) && apiCusts.length > 0) {
-        setCustomers(apiCusts);
-        localStorage.setItem("vendee_customers_v1", JSON.stringify(apiCusts));
-      }
-    } catch (err) {
-      console.warn("API customer fetch warning:", err);
-    } finally {
-      setIsSyncing(false);
-    }
-  }, []);
-
   const reloadData = useCallback(() => {
     loadLocalData();
-    syncApiData();
-  }, [loadLocalData, syncApiData]);
+  }, [loadLocalData]);
 
   useEffect(() => {
     loadLocalData();
-    syncApiData();
     const unsubscribe = subscribeToStorage(loadLocalData);
     return () => unsubscribe();
-  }, [loadLocalData, syncApiData]);
+  }, [loadLocalData]);
 
   // Search filter across Name
   const filteredCustomers = useMemo(() => {
@@ -93,27 +77,20 @@ export default function CustomersPage() {
       return;
     }
 
-    // Create via API first
     const payload = {
       name: newCustName.trim(),
     };
 
-    try {
-      const created = await customersApi.create(payload);
-      saveCustomer(created);
-    } catch (err) {
-      console.warn("API customer create error, saving locally:", err);
-      saveCustomer(payload);
-    }
+    await saveCustomer(payload);
 
     setOpenNewCustomerModal(false);
     setNewCustName("");
     setNewCustError("");
-    reloadData();
+    loadLocalData();
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 pb-32">
+    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
       {/* Header */}
       <AppBar
         title="รายชื่อลูกค้า"
@@ -209,11 +186,11 @@ export default function CustomersPage() {
                     <div className="flex items-start gap-3">
                       {/* Avatar with Initials */}
                       <div
-                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-xs ${
+                        className={`flex shrink-0 items-center justify-center rounded-2xl p-1 font-bold text-white shadow-xs ${
                           cust.avatarColor || "bg-primary"
                         }`}
                       >
-                        {cust.name.substring(0, 2)}
+                        {cust.name}
                       </div>
                     </div>
 
@@ -223,7 +200,7 @@ export default function CustomersPage() {
 
                 {/* Bottom Action Bar */}
                 <div className="mt-3 flex items-center justify-between border-t border-surface-subtle pt-2.5 dark:border-zinc-800">
-                  {/* Actions: ปุ่มแก้ไขลูกค้า + ปุ่มเพิ่มนัดหมาย */}
+                  {/* Actions: ปุ่มแก้ไขลูกค้า + ปุ่มลบลูกค้า */}
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
@@ -242,20 +219,33 @@ export default function CustomersPage() {
 
                     <button
                       type="button"
-                      onClick={(e) => handleOpenAddService(cust.id, e)}
-                      className="inline-flex items-center gap-1 rounded-xl bg-primary-light px-3 py-1.5 text-xs font-bold text-primary-dark hover:bg-emerald-100 active:scale-95 dark:bg-primary-dark/40 dark:text-primary-light transition-all shadow-2xs border border-primary/20"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setCustomerToDelete(cust);
+                        setOpenDeleteModal(true);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-xl bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 active:scale-95 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-950/60 transition-all border border-rose-200/60 dark:border-rose-900/40"
+                      title="ลบข้อมูลลูกค้าและประวัติทั้งหมด"
                     >
-                      <CalendarPlus className="h-3.5 w-3.5" />
-                      <span>+ นัดหมายบริการ</span>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>ลบ</span>
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleOpenAddService(cust.id, e)}
+                    className="inline-flex items-center gap-1 rounded-xl bg-primary-light px-3 py-1.5 text-xs font-bold text-primary-dark hover:bg-emerald-100 active:scale-95 dark:bg-primary-dark/40 dark:text-primary-light transition-all shadow-2xs border border-primary/20"
+                  >
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                    <span>+ นัดหมายบริการ</span>
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
-        {/* Bottom Navigation Spacer */}
-        <div className="h-20 sm:h-24 pb-safe pointer-events-none" aria-hidden="true" />
       </main>
 
       {/* Modal Edit Customer */}
@@ -265,6 +255,19 @@ export default function CustomersPage() {
         onClose={() => {
           setOpenEditCustomerModal(false);
           setEditingCustomer(null);
+        }}
+        onSuccess={() => {
+          reloadData();
+        }}
+      />
+
+      {/* Modal Delete Customer */}
+      <ModalDeleteCustomer
+        customer={customerToDelete}
+        isOpen={openDeleteModal}
+        onClose={() => {
+          setOpenDeleteModal(false);
+          setCustomerToDelete(null);
         }}
         onSuccess={() => {
           reloadData();

@@ -353,12 +353,14 @@ export default function ScheduleOverview() {
           shift.shiftType === "r2" ||
           shift.category === "green";
         const isSwapped = Boolean(shift.swapMeta);
+        const swappedWith = shift.swapMeta?.swappedWith;
 
         return {
           code,
           isRed,
           isRefer,
           isSwapped,
+          swappedWith,
           shiftType: shift.shiftType,
           category: shift.category,
         };
@@ -366,7 +368,7 @@ export default function ScheduleOverview() {
 
       // หากมีหลายเวรในวันเดียวกัน ให้รวมเป็น <code> / <code> เช่น 2 / 3
       const titleText = shiftDetails
-        .map((d) => `${d.isSwapped ? "🔄" : ""}${d.code}`)
+        .map((d) => `${d.code}${d.swappedWith ? `(${d.swappedWith})` : ""}`)
         .join(" / ");
 
       eventsResult.push({
@@ -391,21 +393,22 @@ export default function ScheduleOverview() {
     // Helper สำหรับจัดรูปแบบเวลาบริการนัดหมายลูกค้า (14:00 -> 14, 14:30 -> 14:30)
     const formatServiceTime = (timeStr?: string) => {
       if (!timeStr) return "";
-      const parts = timeStr.split(":");
-      if (parts.length < 2) return timeStr;
+      const clean = timeStr.slice(0, 5);
+      const parts = clean.split(":");
+      if (parts.length < 2) return clean;
       const hours = parseInt(parts[0], 10).toString();
       const minutes = parts[1];
       if (minutes === "00") {
         return hours;
       }
-      return timeStr;
+      return `${hours}:${minutes}`;
     };
 
     // แปลงรายการอื่นๆ (คลินิก, นัดหมายบริการ, ธุระส่วนตัว)
     nonShifts.forEach((item) => {
       if (item.type === "clinic") {
         const clinicLog = item as ClinicWorkRecord;
-        const startTime = clinicLog.presetShift.split(" - ")[0] || "12:30";
+        const startTime = (clinicLog.presetShift.split(" - ")[0] || "12:30").slice(0, 5);
         const clinicTitle = `🏥 ${clinicLog.presetShift}`;
         eventsResult.push({
           id: item.id,
@@ -421,13 +424,15 @@ export default function ScheduleOverview() {
         });
       } else if (item.type === "personal_event") {
         const pEvent = item as PersonalEventRecord;
-        const timeDisplay = pEvent.isAllDay ? "ทั้งวัน" : `${pEvent.startTime || "18:00"}`;
+        const cleanStartTime = (pEvent.startTime || "18:00").slice(0, 5);
+        const timeDisplay = pEvent.isAllDay ? "ทั้งวัน" : cleanStartTime;
         const eventTitle = `🎈 ${timeDisplay} ${pEvent.title}`;
+        const eventDate = pEvent.eventDate || pEvent.date;
         eventsResult.push({
           id: item.id,
           title: eventTitle,
-          date: pEvent.eventDate || pEvent.date,
-          start: `${pEvent.eventDate || pEvent.date}T${pEvent.startTime || "00:00"}:00`,
+          date: eventDate,
+          start: `${eventDate}T${cleanStartTime}:00`,
           allDay: Boolean(pEvent.isAllDay),
           color: "#f43f5e",
           textColor: "#ffffff",
@@ -437,13 +442,14 @@ export default function ScheduleOverview() {
         });
       } else {
         const service = item as CustomerServiceRecord;
-        const formattedTime = formatServiceTime(service.time);
-        const serviceTitle = `${formattedTime} ${service.customerName}`;
+        const cleanTime = (service.time || "12:00").slice(0, 5);
+        const formattedTime = formatServiceTime(cleanTime);
+        const serviceTitle = `${formattedTime ? `${formattedTime}น. ` : ""}${service.customerName}`;
         eventsResult.push({
           id: item.id,
           title: serviceTitle,
           date: item.date,
-          start: `${item.date}T${service.time || "12:00"}:00`,
+          start: `${item.date}T${cleanTime}:00`,
           allDay: true,
           color: "#0284c7",
           textColor: "#ffffff",
@@ -917,7 +923,11 @@ export default function ScheduleOverview() {
   }, [confirmActionState]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 pb-28">
+    <div
+      className={`flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 ${
+        viewMode === "calendar" ? "h-screen overflow-hidden" : ""
+      }`}
+    >
       {/* Top Header */}
       <header className="sticky top-0 z-30 border-b border-surface-subtle bg-white/90 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/90 pt-safe">
         <div className="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
@@ -980,8 +990,8 @@ export default function ScheduleOverview() {
       <main
         className={`w-full flex-1 ${
           viewMode === "calendar"
-            ? "flex flex-col h-[calc(100dvh-3.5rem)] overflow-hidden p-1 sm:p-2.5 max-w-5xl mx-auto"
-            : "max-w-lg mx-auto p-3 sm:p-4 space-y-3.5 pb-20 sm:pb-24"
+            ? "flex flex-col h-[calc(100dvh-7.5rem)] sm:h-[calc(100dvh-8rem)] pb-safe overflow-hidden p-1 sm:p-2.5 max-w-5xl mx-auto"
+            : "max-w-lg mx-auto p-3 sm:p-4 space-y-3.5"
         }`}
       >
         {/* Toast feedback */}
@@ -1178,6 +1188,7 @@ export default function ScheduleOverview() {
 
       {/* Bottom Navigation */}
       <BottomNav
+        hideSpacer={viewMode === "calendar"}
         onOpenAdd={() => {
           setModalDefaultDate(new Date().toISOString().split("T")[0]);
           setOpenAddModal(true);

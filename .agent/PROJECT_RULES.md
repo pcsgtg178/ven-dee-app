@@ -38,7 +38,7 @@ ven-dee-app/
 - **Props Interfaces**: Explicitly define component props interfaces using TypeScript (`interface ShiftCardProps`).
 - **Icons & Visual Indicators**: Standardize shift badge colors and icons via `SHIFT_CONFIG` and `SHIFT_CATEGORY_CONFIG` in `types/vendee.ts`.
 - **Form State Reset Policy (Creation Forms)**:
-  - When creating/adding a new Todo or record (e.g., `ModalAddTodo`), all input fields (notes, price, extra fields, medications) MUST default to empty/blank values.
+  - When creating/adding a new Todo or record (e.g., `ModalAddTodo`, `ModalSellShift`), all input fields (notes, price, extra fields, medications, buyer name, sale price) MUST default to empty/blank values.
   - Form state MUST NOT retain inputs from previously submitted forms. All fields must be explicitly cleared/reset when opening the form and immediately after successful form submission.
 
 ## 4. API, Data Layer & Supabase Integration Standards
@@ -50,10 +50,49 @@ ven-dee-app/
   ```json
   { "success": false, "error": { "code": "ERROR_CODE", "message": "...", "details": [] } }
   ```
-- **Error Codes**: Use standard domain error codes (`DUPLICATE_SHIFT`, `CONFLICT_WITH_SHIFT`, `CONFLICT_WITH_SERVICE`, `SHIFT_IS_LOCKED`, `QUOTA_DEFICIT_WARNING`, `DATABASE_ERROR`).
+- **Error Codes**: Use standard domain error codes (`DUPLICATE_SHIFT`, `CONFLICT_WITH_SHIFT`, `CONFLICT_WITH_SERVICE`, `SHIFT_IS_LOCKED`, `QUOTA_DEFICIT_WARNING`, `SHIFT_ALREADY_SOLD`, `CANNOT_SELL_LOCKED_SHIFT`, `INVALID_SALE_OPERATION`, `DATABASE_ERROR`).
 - **Data Mutability & Deletion Safety**:
-  - Shift swap transactions and service creation must validate concurrency and business invariants before persisting to Supabase.
-  - Transactions modifying shift ownership must update `status`, `swapMeta`, and append `SwapTrailNode` entries atomically using Supabase transactions or RPC / stored procedure if necessary.
-  - Deletion of shifts involved in swap chains (`status: "swapped_out"`, `parentShiftId` references) or locked shifts (`isLocked: true`) must be rejected to prevent broken parent references (`PARENT_SHIFT_NOT_FOUND`).
+  - Shift swap & shift sale transactions and service creation must validate concurrency and business invariants before persisting to Supabase.
+  - Transactions modifying shift ownership (Swap or Sale) must update `status`, `swapMeta` or `saleMeta`, and append audit trails atomically using Supabase transactions or Server Actions.
+  - **Refer Shift Selling Standards**:
+    - Selling Refer shifts (`r1`, `r2`) operates as a one-way transfer (`status: "sold_out"`).
+    - Must record `saleMeta` containing `buyerName`, `salePriceSatang` (Satang Standard: Integer, 1 THB = 100 Satang), `soldDate`, `paymentStatus` (`unpaid` / `paid`), and optional `note`.
+    - Does NOT impact mandatory monthly black shift quota (`DEFAULT_BLACK_SHIFT_QUOTA = 14`).
+    - Once sold, seller is freed from 24-hr Standby constraint on that date.
+  - Deletion of shifts involved in swap chains (`status: "swapped_out"`, `parentShiftId` references), sold shifts (`status: "sold_out"`), or locked shifts (`isLocked: true`) must be rejected to prevent data corruption and loss of financial audit trails.
   - Rollback (Undo Swap) operations must execute atomically on both sides: restoring the original parent shift (`parentShiftId`) to `active` while cancelling/reverting the shift received during that swap (`status: "cancelled"`).
+  - Rollback (Undo Sale) operations for sold Refer shifts must restore the shift to `active`, purge `saleMeta`, and update financial summaries, permitted only if `shiftDate >= CURRENT_DATE` and `isLocked: false`.
   - Same-day same-shift-type swaps are permitted ONLY when converting between Black (`black`) and Red (`red`) categories (e.g., Morning Black ↔ Morning Red). Swapping into the exact same category on the same date must be rejected (`DUPLICATE_SHIFT`).
+
+## 5. iPhone / Apple Calendar Export & Protocol Standards
+
+### 5.1 iCalendar (RFC 5545) Specification Standards
+- **MIME Types & HTTP Header Policies**:
+  - Direct File Download: `Content-Type: text/calendar; charset=utf-8`, `Content-Disposition: attachment; filename="vendee-{month}.ics"`
+  - Live WebCal Feed: `Content-Type: text/calendar; charset=utf-8`, `Content-Disposition: inline; filename="vendee-feed.ics"`, `Cache-Control: no-cache, no-store, max-age=0, must-revalidate`
+- **RFC 5545 Formatting Rules**:
+  - Line terminators MUST be CRLF (`\r\n`). Bare LF (`\n`) is strictly prohibited.
+  - Line folding: Lines exceeding 75 octets MUST be folded with `\r\n ` (CRLF followed by a whitespace).
+  - Escaping: Text values (`SUMMARY`, `DESCRIPTION`, `LOCATION`) must escape backslashes (`\\`), semicolons (`\;`), commas (`\,`), and newlines (`\n`).
+  - Embed standard `VTIMEZONE` block for `Asia/Bangkok` (Standard Time +0700, no DST) in calendar streams.
+
+### 5.2 Next.js App Router Architecture for Calendar Integration
+- **Route Handlers**:
+  - `app/api/calendar/export/route.ts`: On-demand `.ics` file generation and download with query params (`month`, `startDate`, `endDate`, `includeOff`, `categories`).
+  - `app/api/calendar/feed/route.ts`: Continuous WebCal subscription endpoint supporting `https://` and `webcal://` URL schemes for iOS Calendar.
+- **Generator Utility**:
+  - `lib/calendar/icsGenerator.ts`: Pure TypeScript RFC 5545 generator with zero unvetted external dependencies, preventing bundle bloat and ensuring full control over Apple Calendar compatibility.
+
+### 5.3 Security & Feed Token Management
+- **Single-User Security**:
+  - WebCal feeds must require a persistent, cryptographically secure feed token (e.g., `/api/calendar/feed?token=<secure_token>`).
+  - Unauthorized requests must return HTTP 401 (`UNAUTHORIZED`).
+  - Provide UI option to regenerate feed token if the subscription link is compromised.
+
+### 5.4 iOS / Safari UX Integration
+- **Direct Download & Native Import**:
+  - Tapping export on iOS Safari prompts the native "Add to Calendar" sheet.
+- **One-tap WebCal Subscription**:
+  - Support `webcal://` link scheme to directly open the iOS "Subscribe to Calendar" sheet.
+- **Export UI Component**:
+  - `components/ModalExportCalendar.tsx`: Modal providing direct download, WebCal subscription copy, and filter controls (เวร รพ., งานเคหะ, ธุระส่วนตัว, เวรออฟ).

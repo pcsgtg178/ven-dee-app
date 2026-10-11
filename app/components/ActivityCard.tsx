@@ -438,7 +438,7 @@ export default function ActivityCard({
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1 rounded-md bg-surface-subtle px-2 py-0.5 text-[11px] font-semibold text-text-main dark:bg-zinc-800 dark:text-zinc-200">
               <Clock className="h-3 w-3 text-primary" />
-              {service.time} น.
+              {(service.time || "09:00").slice(0, 5)} น.
             </span>
           </div>
 
@@ -447,13 +447,13 @@ export default function ActivityCard({
           </div>
 
           {/* Medications list */}
-          {service.medications && service.medications.length > 0 && (
+          {service.medications && service.medications.filter(Boolean).length > 0 && (
             <div className="rounded-xl bg-primary-light/35 p-2 text-xs text-primary-dark dark:bg-emerald-950/40 dark:text-emerald-200 border border-primary/20">
               <span className="font-bold flex items-center gap-1 text-[11px] text-primary-dark dark:text-emerald-300 mb-0.5">
                 <Syringe className="h-3 w-3 text-primary" /> ยาที่ใช้:
               </span>
-              <div className="text-[11px] font-medium text-text-main dark:text-zinc-200">
-                {service.medications.join(", ")}
+              <div className="text-[11px] font-semibold text-emerald-900 dark:text-emerald-200">
+                {service.medications.filter(Boolean).join(", ")}
               </div>
             </div>
           )}

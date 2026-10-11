@@ -50,10 +50,60 @@
   - Verify shift category badges (Black, Red, Green, Gray, Purple, Rose/Personal Events) and Event Calendar integration (`@fullcalendar/react`).
   - Validate dark mode support and micro-interactions.
 
+### Phase 5: iPhone / Apple Calendar Export & Synchronization
+- [ ] **5.1 RFC 5545 iCalendar Generation Engine (`lib/calendar/icsGenerator.ts`)**
+  - Implement pure TypeScript RFC 5545 generator supporting shifts, services, clinic records, and personal events.
+  - Enforce CRLF (`\r\n`), line folding (75 octets limit), special char escaping, and `Asia/Bangkok` VTIMEZONE.
+  - Implement deterministic UIDs (`vendee-{type}-{id}@vendee.app`) and VALARM notification triggers.
+- [ ] **5.2 Next.js Calendar Route Handlers (`app/api/calendar/`)**
+  - `app/api/calendar/export/route.ts`: On-demand `.ics` file generation and download with date range & filter support.
+  - `app/api/calendar/feed/route.ts`: Live WebCal subscription endpoint with token authentication (`webcal://` and `https://`).
+- [ ] **5.3 iOS Calendar UX & Export Modal (`ModalExportCalendar.tsx`)**
+  - Create export modal with choices: (1) One-tap direct `.ics` download for current month, (2) One-tap subscribe via `webcal://` scheme or copy feed link.
+  - Filter toggles: รวมเวรออฟ (Off days), รวมงานเคหะบริบาล, รวมธุระส่วนตัว.
+  - Step-by-step guidance card for adding Subscribed Calendar in iPhone Settings.
+- [ ] **5.4 WebCal Feed Token Management & Security**
+  - Store and generate cryptographically secure feed token per user.
+  - Add option to regenerate token if the subscription link is compromised.
+
+### Phase 6: Refer Shift Selling & Financial Compensation System
+- [ ] **6.1 Server Actions & Data Layer for Refer Shift Selling**
+  - Implement `sellShiftAction` and `undoSellShiftAction` in `app/actions/shiftActions.ts` with domain validation (only active & unlocked shifts, atomic update to `status: "sold_out"`, `SaleMetadata` persistence).
+  - Update `lib/storage.ts` with `sellShift` and `undoSellShift` client methods and local state synchronization.
+- [ ] **6.2 Refer Shift Selling UI (`ModalSellShift.tsx`)**
+  - Create `ModalSellShift.tsx` modal supporting buyer name, sale price (Satang standard), payment status, and notes.
+  - Enforce empty default form state and post-submission reset per `PROJECT_RULES.md`.
+  - Add 'ขายเวร Refer' action button on Refer shift items in `ScheduleTodoListView.tsx` and `ActivityCard.tsx`.
+- [ ] **6.3 Financial Ledger Aggregation for Shift Sales**
+  - Integrate paid shift sales (`paymentStatus === "paid"`) into monthly earnings calculation and summary widgets.
+
+### Phase 7: iPhone 15 Calendar Polish, Customer Revenue Dashboard & Navigation Refactoring
+- [x] **7.1 Calendar Swapped Partner Display & Cell Overflow Optimization (iPhone 15)**
+  - Map `swappedWith` from `shift.swapMeta` into `ShiftDetail` and pass through to calendar event renderer.
+  - Implement vertical stacking and responsive font scaling for days with 2+ swapped shifts (e.g. Morning from P'Se and Afternoon from Dream) to eliminate horizontal cell overflow on ~50px mobile columns.
+- [x] **7.2 Customer Service Event Calendar Visibility & Theming**
+  - Fix FullCalendar service event rendering with explicit vibrant Sky Blue badge (`bg-sky-600`), syringe icon (`💉`), customer name, and time.
+  - Reset `.fc-daygrid-event` container styling to `transparent` background with zero padding to prevent clipping.
+  - Populate starter customer services in `initialServices` to guarantee immediate test visibility.
+- [x] **7.3 Customer Revenue & Product Financial Dashboard (`/dashboard`)**
+  - Implement full-featured Dashboard page with Monthly, Weekly, and Daily period toggles and Thai date navigation.
+  - Calculate key financial KPIs: Total Revenue, Total Medication & Service Cost, Net Profit, and Profit Margin %.
+  - Add Product / Medication breakdown listing usage counts, unit costs, total costs, and popularity percentage bars.
+  - Display detailed case-by-case financial transactions for the active period.
+- [x] **7.4 Bottom Navigation 5-Tab Bar & Dedicated Medications Page**
+  - Update `BottomNav.tsx` to 5-tab balanced layout: หน้าหลัก (`/`), แดชบอร์ด (`/dashboard`), บันทึกงาน (Center FAB), ตัวยา (`/medications`), ลูกค้า (`/customers`).
+  - Upgrade `app/medications/page.tsx` into a dedicated high-aesthetic Medication & Medical Supplies management page with search, add, edit, and delete.
+- [x] **7.5 Customer Cascade Deletion & Service History Purge**
+  - Implement `deleteCustomer` in `lib/storage.ts` with cascade deletion of all associated customer service records and appointments (`customerId`).
+  - Add `deleteServicesByCustomerIdAction` in `app/actions/serviceActions.ts` for database cleanup.
+  - Create confirmation modal `ModalDeleteCustomer.tsx` displaying breakdown of upcoming and completed records to be deleted.
+  - Add delete buttons on Customer Card (`/customers`), Customer Detail Page (`/customers/[id]`), Edit Modal (`ModalEditCustomer`), and Edit Page (`/customers/[id]/edit`).
+
 ---
 
 ## 📌 Task Status Summary
-- **Total Tasks**: 8
-- **Completed**: 6
+- **Total Tasks**: 20
+- **Completed**: 11
 - **In Progress**: 0
-- **Pending**: 2
+- **Pending**: 9
+

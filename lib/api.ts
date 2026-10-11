@@ -50,8 +50,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
     return json?.data !== undefined ? json.data : json;
   } catch (err: any) {
-    // Network or server offline error
-    console.warn(`[VenDee API] Request to ${url} failed:`, err.message || err);
+    // Network or server offline error - only warn if a remote API endpoint was explicitly configured
+    if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+      console.warn(`[VenDee API] Request to ${url} failed:`, err.message || err);
+    }
     throw err;
   }
 }

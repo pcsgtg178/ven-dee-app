@@ -56,9 +56,11 @@ export default function ModalShiftSwap({
       setIsTopUp(false);
       setOriginalOwner("");
       setShowConfirmModal(false);
-      // Default new date: next day or same date
-      const nextDay = moment(shift.date).add(1, "day").format("YYYY-MM-DD");
-      setNewDate(nextDay);
+      // Default new date: default to the shift's date (no +1 day)
+      const defaultDate = moment(shift.date).isValid()
+        ? moment(shift.date).format("YYYY-MM-DD")
+        : shift.date;
+      setNewDate(defaultDate);
       setNewShiftType(shift.shiftType === "night" ? "morning" : "night");
       setNewCategory("black");
       setSwapReason("");

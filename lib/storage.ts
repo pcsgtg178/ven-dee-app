@@ -14,7 +14,9 @@ import {
 import {
   getServicesAction,
   createServiceAction,
+  updateServiceAction,
   deleteServiceAction,
+  deleteServicesByCustomerIdAction,
 } from "../app/actions/serviceActions";
 import {
   getPersonalEventsAction,
@@ -131,10 +133,131 @@ export function canEditService(service: CustomerServiceRecord): boolean {
 }
 
 export const initialShifts: ShiftRecord[] = [
-
+  {
+    id: "shift-sample-1",
+    type: "shift",
+    date: "2026-09-18",
+    shiftType: "morning",
+    category: "black",
+    status: "active",
+    createdAt: "2026-09-01T08:00:00Z",
+  },
+  {
+    id: "shift-sample-2",
+    type: "shift",
+    date: "2026-09-19",
+    shiftType: "night",
+    category: "black",
+    status: "active",
+    createdAt: "2026-09-01T08:00:00Z",
+  },
+  {
+    id: "shift-sample-swap-1",
+    type: "shift",
+    date: "2026-09-21",
+    shiftType: "morning",
+    category: "black",
+    status: "active",
+    swapMeta: {
+      swappedWith: "พี่เซ",
+      isLocked: false,
+      swapDate: "2026-09-15",
+      swapReason: "แลกเวรเช้าแทนพี่เซ",
+    },
+    createdAt: "2026-09-15T08:00:00Z",
+  },
+  {
+    id: "shift-sample-swap-2",
+    type: "shift",
+    date: "2026-09-21",
+    shiftType: "afternoon",
+    category: "red",
+    status: "active",
+    swapMeta: {
+      swappedWith: "ดรีม",
+      isLocked: false,
+      swapDate: "2026-09-16",
+      swapReason: "รับเวรบ่ายต่อจากดรีม",
+    },
+    createdAt: "2026-09-16T12:00:00Z",
+  },
+  {
+    id: "shift-sample-5",
+    type: "shift",
+    date: "2026-09-23",
+    shiftType: "r1",
+    category: "green",
+    status: "active",
+    createdAt: "2026-09-01T08:00:00Z",
+  },
 ];
 
-export const initialServices: CustomerServiceRecord[] = [];
+export const initialServices: CustomerServiceRecord[] = [
+  {
+    id: "srv-001",
+    type: "service",
+    customerId: "cust-001",
+    customerName: "พี่สมหญิง",
+    date: "2026-09-18",
+    time: "17:30",
+    services: ["injection"],
+    medications: ["Vitamin B12", "NSS 100ml"],
+    price: 800,
+    serviceFeeSatang: 80000,
+    medicationCostSatang: 35000,
+    status: "completed",
+    note: "ฉีดวิตามินและให้น้ำเกลือ อาการสดชื่นดี",
+    createdAt: "2026-09-18T08:00:00Z",
+  },
+  {
+    id: "srv-002",
+    type: "service",
+    customerId: "cust-004",
+    customerName: "พี่ก้อย",
+    date: "2026-09-19",
+    time: "10:30",
+    services: ["injection"],
+    medications: ["Collagen IV Drip"],
+    price: 1500,
+    serviceFeeSatang: 150000,
+    medicationCostSatang: 80000,
+    status: "upcoming",
+    note: "ดริปคอลลาเจนสูตรเข้มข้น นัดที่บ้าน",
+    createdAt: "2026-09-18T10:00:00Z",
+  },
+  {
+    id: "srv-003",
+    type: "service",
+    customerId: "cust-003",
+    customerName: "พี่กานดา",
+    date: "2026-09-22",
+    time: "14:00",
+    services: ["injection"],
+    medications: ["Fat Burner", "Vitamin B12"],
+    price: 1800,
+    serviceFeeSatang: 180000,
+    medicationCostSatang: 70000,
+    status: "upcoming",
+    note: "ฉีด Fat Burner ร่วมกับวิตามิน บี12",
+    createdAt: "2026-09-18T11:00:00Z",
+  },
+  {
+    id: "srv-004",
+    type: "service",
+    customerId: "cust-002",
+    customerName: "คุณสมหญิง สวยเสมอ",
+    date: "2026-09-25",
+    time: "11:00",
+    services: ["injection"],
+    medications: ["Vitamin B12"],
+    price: 600,
+    serviceFeeSatang: 60000,
+    medicationCostSatang: 20000,
+    status: "upcoming",
+    note: "นัดฉีดวิตามินต่อเนื่องสัปดาห์ละครั้ง",
+    createdAt: "2026-09-18T12:00:00Z",
+  },
+];
 
 
 /**
@@ -197,7 +320,14 @@ export async function syncAllDataFromApi(): Promise<{
 
     if (servicesRes.status === "fulfilled" && servicesRes.value.success && Array.isArray(servicesRes.value.data)) {
       if (servicesRes.value.data.length > 0) {
-        services = servicesRes.value.data;
+        const remoteServices = servicesRes.value.data.map((s) => ({
+          ...s,
+          time: (s.time || "09:00").slice(0, 5),
+          medications: Array.isArray(s.medications) ? s.medications.filter(Boolean) : [],
+        }));
+        const remoteIds = new Set(remoteServices.map((s) => s.id));
+        const localOnly = services.filter((s) => !remoteIds.has(s.id) && s.id.startsWith("srv-"));
+        services = [...remoteServices, ...localOnly];
         localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
       }
       isOnline = true;
@@ -324,6 +454,37 @@ export function getCustomerById(id: string): Customer | undefined {
   return customers.find((c) => c.id === id);
 }
 
+export async function deleteCustomer(id: string): Promise<void> {
+  const currentCustomers = getCustomers();
+  const target = currentCustomers.find((c) => c.id === id);
+  if (!target) return;
+
+  // 1. Remove customer
+  const updatedCustomers = currentCustomers.filter((c) => c.id !== id);
+  localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(updatedCustomers));
+
+  // 2. Remove all services and history linked to this customer
+  const currentServices = getServices();
+  const servicesToDelete = currentServices.filter((s) => s.customerId === id);
+  const remainingServices = currentServices.filter((s) => s.customerId !== id);
+  localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(remainingServices));
+
+  // 3. Supabase sync
+  try {
+    await deleteServicesByCustomerIdAction(id);
+    for (const srv of servicesToDelete) {
+      if (!srv.id.startsWith("srv-")) {
+        await deleteServiceAction(srv.id);
+      }
+    }
+  } catch (err) {
+    console.warn("deleteCustomer remote services warning:", err);
+  }
+
+  // 4. Trigger UI sync
+  triggerSync();
+}
+
 // Shifts
 export function getShifts(): ShiftRecord[] {
   if (typeof window === "undefined") return initialShifts;
@@ -333,7 +494,12 @@ export function getShifts(): ShiftRecord[] {
       localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(initialShifts));
       return initialShifts;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(initialShifts));
+      return initialShifts;
+    }
+    return parsed;
   } catch {
     return initialShifts;
   }
@@ -826,7 +992,12 @@ export function getServices(): CustomerServiceRecord[] {
       localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(initialServices));
       return initialServices;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(initialServices));
+      return initialServices;
+    }
+    return parsed;
   } catch {
     return initialServices;
   }
@@ -848,38 +1019,67 @@ export async function saveService(
   }
 
   const current = getServices();
+  const isUpdate = Boolean(service.id && current.some((s) => s.id === service.id));
   const id = service.id || `srv-${Date.now()}`;
   const existingIdx = current.findIndex((s) => s.id === id);
   const existingService = existingIdx >= 0 ? current[existingIdx] : undefined;
+  const normalizedTime = (service.time || "09:00").slice(0, 5);
+  const cleanMeds = (service.medications || []).map((m) => m.trim()).filter(Boolean);
 
-  let createdService: CustomerServiceRecord | null = null;
-  if (!id.startsWith("srv-") || existingIdx < 0) {
+  let remoteService: CustomerServiceRecord | null = null;
+
+  if (isUpdate) {
+    // If updating a record that exists in Supabase (UUID), use updateServiceAction
+    if (!id.startsWith("srv-")) {
+      try {
+        const res = await updateServiceAction(id, {
+          customerId: service.customerId,
+          customerName: service.customerName,
+          date: service.date,
+          time: normalizedTime,
+          services: service.services || ["injection"],
+          otherServiceText: service.otherServiceText,
+          medications: cleanMeds,
+          note: service.note,
+          price: service.price,
+        });
+        if (res.success && res.data) {
+          remoteService = res.data;
+        }
+      } catch (e) {
+        console.warn("updateServiceAction warning:", e);
+      }
+    }
+  } else {
+    // Creating a brand new service record
     try {
       const res = await createServiceAction({
         customerId: service.customerId,
         customerName: service.customerName,
         date: service.date,
-        time: service.time,
+        time: normalizedTime,
         services: service.services || ["injection"],
         otherServiceText: service.otherServiceText,
-        medications: service.medications,
+        medications: cleanMeds,
         note: service.note,
         price: service.price,
       });
       if (res.success && res.data) {
-        createdService = res.data;
+        remoteService = res.data;
       }
     } catch (e) {
       console.warn("createServiceAction warning:", e);
     }
   }
 
-  const finalId = createdService?.id || id;
-  const newService: CustomerServiceRecord = createdService || {
+  const finalId = remoteService?.id || id;
+  const newService: CustomerServiceRecord = remoteService || {
     ...existingService,
     ...service,
     id: finalId,
     type: "service",
+    time: normalizedTime,
+    medications: cleanMeds,
     createdAt: existingService?.createdAt || service.createdAt || new Date().toISOString(),
   };
 

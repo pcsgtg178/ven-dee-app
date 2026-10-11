@@ -14,6 +14,7 @@ export interface ShiftDetail {
   isRed: boolean;
   isRefer: boolean;
   isSwapped: boolean;
+  swappedWith?: string;
   shiftType: string;
   category: string;
 }
@@ -99,7 +100,7 @@ export default function ScheduleCalendarView({
     };
   }, [isFullscreen]);
 
-  // Custom Event Renderer for FullCalendar (Grouped shifts displayed as 1 / 2 / 3 with large font)
+  // Custom Event Renderer for FullCalendar (Grouped shifts displayed as 1 / 2 / 3 with partner names and fit on mobile)
   const renderEventContent = (eventInfo: any) => {
     const { title, extendedProps } = eventInfo.event;
     const shiftDetails = extendedProps?.shiftDetails as ShiftDetail[] | undefined;
@@ -111,10 +112,81 @@ export default function ScheduleCalendarView({
     );
 
     if (shiftDetails && shiftDetails.length > 0) {
+      const hasAnySwapped = shiftDetails.some((d) => d.isSwapped);
+      const isMultiple = shiftDetails.length > 1;
+
+      // When there are multiple shifts AND at least one is swapped (e.g. Morning from P'Se and Afternoon from Dream):
+      // Stack shifts vertically in compact rows with small icons so it fits comfortably on iPhone 15 screen
+      if (isMultiple && hasAnySwapped) {
+        return (
+          <div className="flex flex-col gap-0.5 w-full items-center justify-center py-0.5 overflow-hidden leading-tight">
+            {shiftDetails.map((detail, idx) => {
+              let colorClass = "text-black dark:text-black-100 font-extrabold";
+              if (detail.isRefer) {
+                colorClass = "text-emerald-600 dark:text-emerald-400 font-extrabold";
+              } else if (detail.isRed) {
+                colorClass = "text-rose-600 dark:text-rose-400 font-extrabold";
+              }
+
+              return (
+                <div
+                  key={idx}
+                  className="flex items-center justify-center gap-0.5 w-full max-w-full overflow-hidden text-center leading-none"
+                >
+                  <span className="inline-flex items-center gap-0.5 shrink-0">
+                    <span className={`text-[11px] sm:text-xs font-extrabold tracking-tight ${colorClass}`}>
+                      {detail.code}
+                    </span>
+                  </span>
+                  {detail.swappedWith ? (
+                    <span
+                      className="text-[6.5px] sm:text-[7px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200/70 dark:border-amber-800/70 rounded px-0.5 truncate max-w-[32px] sm:max-w-[42px] leading-tight"
+                      title={detail.swappedWith}
+                    >
+                      {detail.swappedWith}
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
+
+      // If single shift with swapped partner name
+      if (!isMultiple && shiftDetails[0].isSwapped) {
+        const detail = shiftDetails[0];
+        let colorClass = "text-black dark:text-black-100 font-extrabold";
+        if (detail.isRefer) {
+          colorClass = "text-emerald-600 dark:text-emerald-400 font-extrabold";
+        } else if (detail.isRed) {
+          colorClass = "text-rose-600 dark:text-rose-400 font-extrabold";
+        }
+
+        return (
+          <div className="flex items-center justify-center gap-0.5 w-full max-w-full overflow-hidden text-center py-0.5 leading-none">
+            <span className="inline-flex items-center gap-0.5 shrink-0">
+              <span className={`text-sm sm:text-base font-extrabold tracking-tight ${colorClass}`}>
+                {detail.code}
+              </span>
+            </span>
+            {detail.swappedWith ? (
+              <span
+                className="text-[6px] sm:text-[7px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200/70 dark:border-amber-800/70 rounded px-1 truncate max-w-[48px] sm:max-w-[56px] leading-tight"
+                title={detail.swappedWith}
+              >
+                {detail.swappedWith}
+              </span>
+            ) : null}
+          </div>
+        );
+      }
+
+      // If single non-swapped shift or multiple non-swapped shifts (e.g. 1 / 2)
       return (
         <div className="flex items-center justify-center gap-0.5 sm:gap-1 w-full overflow-hidden text-center py-0.5 px-0.5 leading-none">
           {shiftDetails.map((detail, idx) => {
-            let colorClass = "text-black font-extrabold";
+            let colorClass = "text-black dark:text-black-100 font-extrabold";
             if (detail.isRefer) {
               colorClass = "text-emerald-600 dark:text-emerald-400 font-extrabold";
             } else if (detail.isRed) {
@@ -124,13 +196,12 @@ export default function ScheduleCalendarView({
             return (
               <React.Fragment key={idx}>
                 {idx > 0 && (
-                  <span className="text-slate-400 dark:text-slate-500 font-bold mx-0.5 text-sm sm:text-base select-none">
+                  <span className="text-slate-400 dark:text-slate-500 font-bold mx-0.5 text-xs sm:text-sm select-none">
                     /
                   </span>
                 )}
                 <span className="inline-flex items-center gap-0.5">
-                  {detail.isSwapped && <span className="text-[10px] sm:text-xs">🔄</span>}
-                  <span className={`text-base sm:text-xl font-extrabold tracking-tight ${colorClass}`}>
+                  <span className={`${isMultiple ? "text-xs sm:text-sm" : "text-base sm:text-lg"} font-extrabold tracking-tight ${colorClass}`}>
                     {detail.code}
                   </span>
                 </span>
@@ -143,16 +214,17 @@ export default function ScheduleCalendarView({
 
     if (isPersonalEvent) {
       return (
-        <div className="truncate text-[10px] sm:text-[11px] font-semibold leading-tight px-1 py-0.5 text-white bg-rose-500 rounded-md shadow-2xs">
-          {title}
+        <div className="truncate text-[9px] sm:text-[10px] font-semibold leading-tight px-1 py-0.5 text-white bg-rose-500 dark:bg-rose-600 rounded-md shadow-2xs flex items-center gap-0.5 w-full">
+          <span className="truncate">{title}</span>
         </div>
       );
     }
 
     if (isService) {
       return (
-        <div className="truncate text-[10px] sm:text-[11px] font-medium leading-tight px-0.5 py-0.5 text-white">
-          {title}
+        <div className="truncate text-[9px] sm:text-[10px] font-bold leading-tight px-1 py-0.5 text-white bg-sky-600 dark:bg-sky-500 rounded-md shadow-2xs flex items-center gap-0.5 w-full">
+          <span className="shrink-0 text-[9px]">💉</span>
+          <span className="truncate">{title}</span>
         </div>
       );
     }

@@ -225,8 +225,7 @@ export default function ScheduleCalendarView({
 
     if (isService) {
       return (
-        <div className="truncate text-[9px] sm:text-[10px] font-bold leading-tight px-1 py-0.5 text-white bg-sky-600 dark:bg-sky-500 rounded-md shadow-2xs flex items-center gap-0.5 w-full">
-          <span className="shrink-0 text-[9px]">💉</span>
+        <div className="truncate text-[7px] sm:text-[8px] font-bold leading-tight px-0.5 py-0.5 text-white bg-sky-600 dark:bg-sky-500 rounded-md shadow-2xs flex items-center gap-0.5 w-full">
           <span className="truncate">{title}</span>
         </div>
       );

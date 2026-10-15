@@ -48,6 +48,7 @@ export default function ModalShiftSwap({
   const [swapReason, setSwapReason] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Initialize form when opened
   useEffect(() => {
@@ -170,8 +171,9 @@ export default function ModalShiftSwap({
   };
 
   const handleExecuteSwap = async () => {
-    if (!shift) return;
+    if (!shift || isSubmitting) return;
 
+    setIsSubmitting(true);
     const categoryToSave: ShiftCategory =
       newShiftType === "r1" || newShiftType === "r2" ? "green" : newCategory;
 
@@ -192,6 +194,8 @@ export default function ModalShiftSwap({
     } catch (err: any) {
       setShowConfirmModal(false);
       setErrorMsg(err.message || "เกิดข้อผิดพลาดในการแลกเวร");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -648,20 +652,22 @@ export default function ModalShiftSwap({
           <button
             type="submit"
             form="shift-swap-form"
-            disabled={isInvalidSameShiftSameDate}
+            disabled={isSubmitting || isInvalidSameShiftSameDate}
             className={`rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-md active:scale-95 transition-all ${
-              isInvalidSameShiftSameDate
+              isSubmitting || isInvalidSameShiftSameDate
                 ? "bg-slate-300 dark:bg-zinc-700 cursor-not-allowed text-slate-500 dark:text-zinc-400 shadow-none active:scale-100"
                 : quotaWarning
                   ? "bg-gradient-to-r from-amber-600 to-shift-red hover:from-amber-700 hover:to-red-600 shadow-amber-500/20"
                   : "bg-gradient-to-r from-sky-500 to-emerald-600 hover:brightness-105 shadow-emerald-600/20"
             }`}
           >
-            {isInvalidSameShiftSameDate
-              ? "ไม่สามารถแลกเวรเดียวกันได้"
-              : quotaWarning
-                ? "ดำเนินการแลกเวร (มีคำเตือน)"
-                : "ดำเนินการแลกเวร"}
+            {isSubmitting
+              ? "กำลังบันทึก..."
+              : isInvalidSameShiftSameDate
+                ? "ไม่สามารถแลกเวรเดียวกันได้"
+                : quotaWarning
+                  ? "ดำเนินการแลกเวร (มีคำเตือน)"
+                  : "ดำเนินการแลกเวร"}
           </button>
         </div>
       </div>
@@ -671,6 +677,7 @@ export default function ModalShiftSwap({
         isOpen={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
         onConfirm={handleExecuteSwap}
+        isLoading={isSubmitting}
         title="ยืนยันการแลกเวร (Shift Swap)"
         subtitle="กรุณาตรวจสอบข้อมูลก่อนยืนยันเพื่อป้องกันความผิดพลาด"
         variant={quotaWarning ? "warning" : "info"}

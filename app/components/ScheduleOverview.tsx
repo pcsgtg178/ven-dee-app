@@ -204,8 +204,15 @@ export default function ScheduleOverview() {
 
   // Filtered activities for list view
   const filteredActivities = useMemo(() => {
-    if (filterType === "all") return activities;
-    return activities.filter((item) => item.type === filterType);
+    const activeActivities = activities.filter((item) => {
+      if (item.type === "shift") {
+        return item.status !== "swapped_out" && item.status !== "cancelled" && item.status !== "sold_out";
+      }
+      return true;
+    });
+
+    if (filterType === "all") return activeActivities;
+    return activeActivities.filter((item) => item.type === filterType);
   }, [activities, filterType]);
 
   // Split into:
@@ -267,7 +274,7 @@ export default function ScheduleOverview() {
       .filter((item) => item.date === selectedDateStr)
       .filter((item) => {
         if (item.type === "shift") {
-          return item.status !== "swapped_out" && item.status !== "cancelled";
+          return item.status !== "swapped_out" && item.status !== "cancelled" && item.status !== "sold_out";
         }
         return true;
       })
@@ -309,9 +316,9 @@ export default function ScheduleOverview() {
   // Calendar events transformation (hide swapped-out shifts from calendar & group shifts per day)
   const calendarEvents = useMemo(() => {
     const activeItems = activities.filter((item) => {
-      // ซ่อนเวรเก่าที่ถูกแลกออกแล้ว (swapped_out) และเวรที่ถูกยกเลิก (cancelled) ออกจากปฏิทิน
+      // ซ่อนเวรเก่าที่ถูกแลกออกแล้ว (swapped_out), เวรที่ขาย (sold_out) และเวรที่ถูกยกเลิก (cancelled) ออกจากปฏิทิน
       if (item.type === "shift") {
-        return item.status !== "swapped_out" && item.status !== "cancelled";
+        return item.status !== "swapped_out" && item.status !== "cancelled" && item.status !== "sold_out";
       }
       return true;
     });
@@ -958,15 +965,6 @@ export default function ScheduleOverview() {
 
           {/* Right Controls: [ Export iPhone ] [ Theme Toggle ] & Segmented Control: [ รายการ | ปฏิทิน ] */}
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setOpenExportCalendarModal(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-zinc-800 dark:hover:text-sky-300 transition-colors"
-              title="ส่งออกปฏิทิน iPhone / iOS"
-              aria-label="ส่งออกปฏิทิน iPhone / iOS"
-            >
-              <CalendarPlus className="h-4 w-4" />
-            </button>
             <ThemeToggle size="sm" />
             <div className="flex items-center rounded-full bg-surface-subtle p-1 dark:bg-zinc-800 shadow-inner">
               <button

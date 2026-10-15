@@ -1,6 +1,6 @@
 -- Migration: Medications Master Table (ตารางจัดเก็บข้อมูลยาและเวชภัณฑ์)
 -- Date: 2026-10-11
--- Fields: ชื่อ (name), ขนาด (size/dosage), หน่วย (unit), ราคา (price/price_satang), รายละเอียด (description)
+-- Fields: ชื่อ (name), ขนาด (size/dosage), หน่วย (unit), ราคา (price), รายละเอียด (description)
 
 CREATE TABLE IF NOT EXISTS public.medications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

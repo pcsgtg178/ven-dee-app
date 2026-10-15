@@ -18,7 +18,12 @@ import ModalAddTodo from "../components/ModalAddTodo";
 import ModalEditCustomer from "../components/ModalEditCustomer";
 import ModalDeleteCustomer from "../components/ModalDeleteCustomer";
 import { Customer } from "../../types/vendee";
-import { getCustomers, saveCustomer, subscribeToStorage } from "../../lib/storage";
+import {
+  getCustomers,
+  saveCustomer,
+  subscribeToStorage,
+  syncCustomersFromApi,
+} from "../../lib/storage";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -47,6 +52,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     loadLocalData();
+    syncCustomersFromApi().then(() => loadLocalData()).catch(() => {});
     const unsubscribe = subscribeToStorage(loadLocalData);
     return () => unsubscribe();
   }, [loadLocalData]);
@@ -277,10 +283,15 @@ export default function CustomersPage() {
       {/* Modal Add Todo (Customer Service with preselected ID) */}
       <ModalAddTodo
         openModal={openAddServiceModal}
-        toggleModal={() => setOpenAddServiceModal(false)}
+        toggleModal={() => {
+          setOpenAddServiceModal(false);
+          setSelectedCustomerIdForService(undefined);
+        }}
         initialTab="service"
         initialCustomerId={selectedCustomerIdForService}
         onSuccess={() => {
+          setOpenAddServiceModal(false);
+          setSelectedCustomerIdForService(undefined);
           reloadData();
         }}
       />

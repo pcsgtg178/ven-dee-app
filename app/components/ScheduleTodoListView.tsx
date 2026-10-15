@@ -383,7 +383,7 @@ export default function ScheduleTodoListView({
                 : "bg-surface-subtle text-text-muted hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300"
             }`}
           >
-            ทั้งหมด ({activities.length})
+            ทั้งหมด ({activities.filter((a) => a.type !== "shift" || (a as ShiftRecord).status === "active").length})
           </button>
           <button
             type="button"
@@ -396,7 +396,7 @@ export default function ScheduleTodoListView({
           >
             <Moon className="h-3 w-3" />
             <span>
-              เวร ({activities.filter((a) => a.type === "shift").length})
+              เวร ({activities.filter((a) => a.type === "shift" && (a as ShiftRecord).status === "active").length})
             </span>
           </button>
           <button

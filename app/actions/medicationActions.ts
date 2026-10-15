@@ -10,7 +10,6 @@ function mapRowToMedication(row: any): Medications {
     size: row.size || undefined,
     unit: row.unit || "ยูนิต",
     price: row.price !== null && row.price !== undefined ? String(row.price) : undefined,
-    priceSatang: row.price_satang ? Number(row.price_satang) : undefined,
     description: row.description || undefined,
     note: row.description || undefined,
     createdAt: row.created_at,
@@ -30,6 +29,7 @@ export async function getMedicationsAction(): Promise<ActionResult<Medications[]
       .order("name", { ascending: true });
 
     if (error) {
+      console.error("[medicationActions] Fetch medications DB error:", error);
       return {
         success: false,
         error: { code: "DATABASE_ERROR", message: error.message },
@@ -39,6 +39,7 @@ export async function getMedicationsAction(): Promise<ActionResult<Medications[]
     const list = (data || []).map(mapRowToMedication);
     return { success: true, data: list };
   } catch (err: any) {
+    console.error("[medicationActions] Fetch medications server error:", err);
     return {
       success: false,
       error: { code: "SERVER_ERROR", message: err.message || "Failed to fetch medications" },
@@ -60,14 +61,12 @@ export async function createMedicationAction(data: {
     const supabase = await createClient();
 
     const priceNum = data.price !== undefined && data.price !== "" ? Number(data.price) : 0;
-    const priceSatang = Math.round(priceNum * 100);
 
-    const insertPayload = {
+    const insertPayload: Record<string, any> = {
       name: data.name.trim(),
       size: data.size?.trim() || null,
       unit: data.unit?.trim() || "ยูนิต",
       price: priceNum,
-      price_satang: priceSatang,
       description: data.description?.trim() || null,
     };
 
@@ -78,6 +77,7 @@ export async function createMedicationAction(data: {
       .single();
 
     if (error) {
+      console.error("[medicationActions] Insert medication DB error:", error);
       return {
         success: false,
         error: { code: "DATABASE_ERROR", message: error.message },
@@ -90,6 +90,7 @@ export async function createMedicationAction(data: {
       message: `เพิ่มข้อมูลยา "${data.name}" เรียบร้อยแล้ว`,
     };
   } catch (err: any) {
+    console.error("[medicationActions] Create medication server error:", err);
     return {
       success: false,
       error: { code: "SERVER_ERROR", message: err.message || "Failed to create medication" },
@@ -125,7 +126,6 @@ export async function updateMedicationAction(
     if (data.price !== undefined && data.price !== "") {
       const priceNum = Number(data.price);
       updatePayload.price = priceNum;
-      updatePayload.price_satang = Math.round(priceNum * 100);
     }
 
     const { data: updated, error } = await supabase
@@ -136,6 +136,7 @@ export async function updateMedicationAction(
       .single();
 
     if (error) {
+      console.error("[medicationActions] Update medication DB error:", error);
       return {
         success: false,
         error: { code: "DATABASE_ERROR", message: error.message },

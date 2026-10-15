@@ -29,6 +29,12 @@ import {
   updateMedicationAction,
   deleteMedicationAction,
 } from "../app/actions/medicationActions";
+import {
+  getCustomersAction,
+  createCustomerAction,
+  updateCustomerAction,
+  deleteCustomerAction,
+} from "../app/actions/customerActions";
 
 import {
   Customer,
@@ -293,14 +299,16 @@ export async function syncAllDataFromApi(): Promise<{
   }
 
   try {
-    const [shiftsRes, servicesRes, personalEventsRes, medicationsRes] = await Promise.allSettled([
+    const [shiftsRes, customersRes, servicesRes, personalEventsRes, medicationsRes] = await Promise.allSettled([
       getShiftsAction(),
+      getCustomersAction(),
       getServicesAction(),
       getPersonalEventsAction(),
       getMedicationsAction(),
     ]);
 
     let shifts = getShifts();
+    let customers = getCustomers();
     let services = getServices();
     let personalEvents = getPersonalEvents();
     let medications = getMedications();
@@ -328,6 +336,28 @@ export async function syncAllDataFromApi(): Promise<{
           shifts = refreshed.data;
           localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
         }
+      }
+      isOnline = true;
+    }
+
+    if (customersRes.status === "fulfilled" && customersRes.value.success && Array.isArray(customersRes.value.data)) {
+      if (customersRes.value.data.length > 0) {
+        const remoteCusts = customersRes.value.data;
+        const remoteIds = new Set(remoteCusts.map((c) => c.id));
+        const localOnly = customers.filter((c) => !remoteIds.has(c.id));
+        // Automatically persist local-only customers to database
+        for (const localCust of localOnly) {
+          try {
+            await createCustomerAction({
+              id: localCust.id,
+              name: localCust.name,
+              avatarColor: localCust.avatarColor,
+              createdAt: localCust.createdAt,
+            });
+          } catch (_) {}
+        }
+        customers = [...remoteCusts, ...localOnly];
+        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
       }
       isOnline = true;
     }
@@ -360,7 +390,23 @@ export async function syncAllDataFromApi(): Promise<{
         const localOnly = medications.filter(
           (m) => !remoteIds.has(m.id) && m.id.startsWith("med-")
         );
-        medications = [...remoteMeds, ...localOnly];
+        if (localOnly.length > 0) {
+          for (const localMed of localOnly) {
+            try {
+              const res = await createMedicationAction({
+                name: localMed.name,
+                size: localMed.size,
+                unit: localMed.unit,
+                price: localMed.price,
+                description: localMed.description || localMed.note,
+              });
+              if (res.success && res.data) {
+                remoteMeds.push(res.data);
+              }
+            } catch (_) {}
+          }
+        }
+        medications = [...remoteMeds];
         localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
       } else if (medications.length > 0) {
         // Automatically migrate / seed initial local medications to Supabase
@@ -451,9 +497,32 @@ export async function saveCustomer(customer: Omit<Customer, "id"> & { id?: strin
     avatarColor: customer.avatarColor || "bg-teal-500",
   };
 
-  const existingIdx = current.findIndex((c) => c.id === id);
+  const isUpdate = Boolean(customer.id && current.some((c) => c.id === customer.id));
 
-  // 1. Local Customer Storage (Customers are managed locally and referenced by services)
+  // 1. Supabase Sync via Server Actions
+  try {
+    if (isUpdate) {
+      const updateRes = await updateCustomerAction(id, {
+        name: newCustomer.name,
+        avatarColor: newCustomer.avatarColor,
+      });
+      if (updateRes.success && updateRes.data) {
+        newCustomer = updateRes.data;
+      }
+    } else {
+      const createRes = await createCustomerAction({
+        id: newCustomer.id,
+        name: newCustomer.name,
+        avatarColor: newCustomer.avatarColor,
+        createdAt: newCustomer.createdAt,
+      });
+      if (createRes.success && createRes.data) {
+        newCustomer = createRes.data;
+      }
+    }
+  } catch (err) {
+    console.warn("saveCustomer remote warning:", err);
+  }
 
   // 2. Save locally
   const latestList = getCustomers();
@@ -518,6 +587,7 @@ export async function deleteCustomer(id: string): Promise<void> {
 
   // 3. Supabase sync
   try {
+    await deleteCustomerAction(id);
     await deleteServicesByCustomerIdAction(id);
     for (const srv of servicesToDelete) {
       if (!srv.id.startsWith("srv-")) {
@@ -525,11 +595,58 @@ export async function deleteCustomer(id: string): Promise<void> {
       }
     }
   } catch (err) {
-    console.warn("deleteCustomer remote services warning:", err);
+    console.warn("deleteCustomer remote warning:", err);
   }
 
   // 4. Trigger UI sync
   triggerSync();
+}
+
+/**
+ * Synchronize customers with Supabase database via Next.js Server Actions
+ */
+export async function syncCustomersFromApi(): Promise<{
+  customers: Customer[];
+  isOnline: boolean;
+}> {
+  if (typeof window === "undefined") {
+    return {
+      customers: initialCustomers,
+      isOnline: false,
+    };
+  }
+
+  let customers = getCustomers();
+  try {
+    const res = await getCustomersAction();
+    if (res.success && Array.isArray(res.data)) {
+      if (res.data.length > 0) {
+        const remoteCusts = res.data;
+        const remoteIds = new Set(remoteCusts.map((c) => c.id));
+        const localOnly = customers.filter((c) => !remoteIds.has(c.id));
+        if (localOnly.length > 0) {
+          for (const localCust of localOnly) {
+            try {
+              await createCustomerAction({
+                id: localCust.id,
+                name: localCust.name,
+                avatarColor: localCust.avatarColor,
+                createdAt: localCust.createdAt,
+              });
+            } catch (_) {}
+          }
+        }
+        customers = [...remoteCusts, ...localOnly];
+        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+        triggerSync();
+      }
+      return { customers, isOnline: true };
+    }
+    return { customers, isOnline: false };
+  } catch (err) {
+    console.warn("syncCustomersFromApi warning:", err);
+    return { customers, isOnline: false };
+  }
 }
 
 // Shifts
@@ -763,6 +880,9 @@ export async function swapShift(params: {
   if (!oldShift) {
     throw new Error("ไม่พบเวรที่ต้องการแลก");
   }
+  if (oldShift.status === "swapped_out" || oldShift.status === "sold_out") {
+    throw new Error("เวรนี้ถูกแลกหรือส่งต่อออกไปแล้ว");
+  }
 
   const targetCategory =
     params.newShiftType === "r1" || params.newShiftType === "r2"
@@ -867,6 +987,12 @@ export async function swapShift(params: {
 
   // Update old shift status to swapped_out
   oldShift.status = "swapped_out";
+  oldShift.swapMeta = {
+    ...oldShift.swapMeta,
+    swappedWith: params.swappedWith,
+    swapDate: swapDateStr,
+    swapReason: params.swapReason,
+  };
 
   const newShift: ShiftRecord = dbResult?.newShift || {
     id: `shift-${Date.now()}`,
@@ -1084,8 +1210,11 @@ export async function saveService(
           customerName: service.customerName,
           date: service.date,
           time: normalizedTime,
-          services: service.services || ["injection"],
-          otherServiceText: service.otherServiceText,
+          services: service.services || existingService?.services || ["injection"],
+          otherServiceText:
+            service.otherServiceText !== undefined
+              ? service.otherServiceText
+              : existingService?.otherServiceText,
           medications: cleanMeds,
           note: service.note,
           price: service.price,
@@ -1095,6 +1224,29 @@ export async function saveService(
         }
       } catch (e) {
         console.warn("updateServiceAction warning:", e);
+      }
+    } else {
+      // Local record updating online, push to Supabase as new record
+      try {
+        const res = await createServiceAction({
+          customerId: service.customerId,
+          customerName: service.customerName,
+          date: service.date,
+          time: normalizedTime,
+          services: service.services || existingService?.services || ["injection"],
+          otherServiceText:
+            service.otherServiceText !== undefined
+              ? service.otherServiceText
+              : existingService?.otherServiceText,
+          medications: cleanMeds,
+          note: service.note,
+          price: service.price,
+        });
+        if (res.success && res.data) {
+          remoteService = res.data;
+        }
+      } catch (e) {
+        console.warn("createServiceAction for local service warning:", e);
       }
     }
   } else {
@@ -1179,7 +1331,6 @@ export const initialMedications: Medications[] = [
     size: "100",
     unit: "ยูนิต",
     price: "2500",
-    priceSatang: 250000,
     description: "นาบูตะ *นำเข้า",
     note: "นาบูตะ *นำเข้า",
     createdAt: "2026-10-11T08:00:00Z",
@@ -1190,7 +1341,6 @@ export const initialMedications: Medications[] = [
     size: "50",
     unit: "ยูนิต",
     price: "1500",
-    priceSatang: 150000,
     description: "นาบูตะ *นำเข้า",
     note: "นาบูตะ *นำเข้า",
     createdAt: "2026-10-11T08:00:00Z",
@@ -1201,7 +1351,6 @@ export const initialMedications: Medications[] = [
     size: "1",
     unit: "เข็ม",
     price: "200",
-    priceSatang: 20000,
     description: "วิตามินบำรุงประสาทและร่างกาย",
     note: "วิตามินบำรุงประสาทและร่างกาย",
     createdAt: "2026-09-01T08:00:00Z",
@@ -1212,7 +1361,6 @@ export const initialMedications: Medications[] = [
     size: "100",
     unit: "ขวด",
     price: "150",
-    priceSatang: 15000,
     description: "น้ำเกลือ 0.9% Normal Saline Solution",
     note: "น้ำเกลือ 0.9% Normal Saline Solution",
     createdAt: "2026-09-01T08:00:00Z",
@@ -1223,7 +1371,6 @@ export const initialMedications: Medications[] = [
     size: "1",
     unit: "เข็ม",
     price: "500",
-    priceSatang: 50000,
     description: "สูตรเร่งเผาผลาญไขมันเฉพาะจุด",
     note: "สูตรเร่งเผาผลาญไขมันเฉพาะจุด",
     createdAt: "2026-09-01T08:00:00Z",
@@ -1234,7 +1381,6 @@ export const initialMedications: Medications[] = [
     size: "1",
     unit: "ชุด",
     price: "800",
-    priceSatang: 80000,
     description: "ดริปวิตามินผิวเข้มข้น",
     note: "ดริปวิตามินผิวเข้มข้น",
     createdAt: "2026-09-01T08:00:00Z",
@@ -1245,7 +1391,6 @@ export const initialMedications: Medications[] = [
     size: "10",
     unit: "แผง",
     price: "50",
-    priceSatang: 5000,
     description: "ยาลดไข้ บรรเทาปวด 500mg",
     note: "ยาลดไข้ บรรเทาปวด 500mg",
     createdAt: "2026-09-01T08:00:00Z",
@@ -1295,7 +1440,25 @@ export async function syncMedicationsFromApi(): Promise<{
         const localOnly = medications.filter(
           (m) => !remoteIds.has(m.id) && m.id.startsWith("med-")
         );
-        medications = [...remoteMeds, ...localOnly];
+        if (localOnly.length > 0) {
+          for (const localMed of localOnly) {
+            try {
+              const createRes = await createMedicationAction({
+                name: localMed.name,
+                size: localMed.size,
+                unit: localMed.unit,
+                price: localMed.price,
+                description: localMed.description || localMed.note,
+              });
+              if (createRes.success && createRes.data) {
+                remoteMeds.push(createRes.data);
+              }
+            } catch (err) {
+              console.warn("Failed to migrate local medication to DB:", err);
+            }
+          }
+        }
+        medications = [...remoteMeds];
         localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
         triggerSync();
         return { medications, isOnline: true };
@@ -1335,8 +1498,6 @@ export async function saveMedication(
   const current = getMedications();
   const id = med.id || `med-${Date.now()}`;
   const priceVal = med.price !== undefined ? String(med.price) : undefined;
-  const priceNum = priceVal ? Number(priceVal) : 0;
-  const priceSatang = med.priceSatang || Math.round(priceNum * 100);
 
   let remoteMed: Medications | null = null;
   const isDbId = med.id && !med.id.startsWith("med-");
@@ -1350,7 +1511,12 @@ export async function saveMedication(
         price: priceVal,
         description: med.description || med.note,
       });
-      if (res.success && res.data) remoteMed = res.data;
+      if (res.success && res.data) {
+        remoteMed = res.data;
+      } else if (!res.success) {
+        console.error("Supabase updateMedicationAction error:", res.error);
+        throw new Error(res.error?.message || "ไม่สามารถอัปเดตข้อมูลยาในฐานข้อมูลได้");
+      }
     } else {
       const res = await createMedicationAction({
         name: med.name,
@@ -1359,10 +1525,19 @@ export async function saveMedication(
         price: priceVal,
         description: med.description || med.note,
       });
-      if (res.success && res.data) remoteMed = res.data;
+      if (res.success && res.data) {
+        remoteMed = res.data;
+      } else if (!res.success) {
+        console.error("Supabase createMedicationAction error:", res.error);
+        throw new Error(res.error?.message || "ไม่สามารถบันทึกข้อมูลยาลงฐานข้อมูลได้");
+      }
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn("Supabase saveMedication warning:", err);
+    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+    if (!isOffline && !err.message?.includes("fetch")) {
+      throw err;
+    }
   }
 
   const finalId = remoteMed?.id || id;
@@ -1370,7 +1545,6 @@ export async function saveMedication(
     ...med,
     id: finalId,
     price: priceVal,
-    priceSatang,
     description: med.description || med.note,
     note: med.description || med.note,
     createdAt: med.createdAt || new Date().toISOString(),
@@ -1581,7 +1755,9 @@ export async function deletePersonalEvent(id: string): Promise<void> {
 // All Activities combined sorted latest first
 export function getAllActivities(): ActivityItem[] {
   const shifts = getShifts();
-  const visibleShifts = shifts.filter((s) => s.status !== "cancelled");
+  const visibleShifts = shifts.filter(
+    (s) => s.status !== "cancelled" && s.status !== "swapped_out" && s.status !== "sold_out"
+  );
   const services = getServices();
   const clinicLogs = getClinicLogs();
   const personalEvents = getPersonalEvents();

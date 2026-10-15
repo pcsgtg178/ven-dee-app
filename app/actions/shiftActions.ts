@@ -14,9 +14,9 @@ function mapRowToShiftRecord(row: any): ShiftRecord {
     status: row.status as ShiftStatus,
     department: row.department || undefined,
     note: row.note || undefined,
-    swapMeta: row.swapped_with
+    swapMeta: (row.swapped_with || row.parent_shift_id || row.swap_date)
       ? {
-          swappedWith: row.swapped_with,
+          swappedWith: row.swapped_with || "",
           originalOwner: row.original_owner || undefined,
           parentShiftId: row.parent_shift_id || undefined,
           isLocked: Boolean(row.is_locked),
@@ -230,6 +230,13 @@ export async function swapShiftAction(data: {
       };
     }
 
+    if (oldShiftRow.status === "swapped_out" || oldShiftRow.status === "sold_out") {
+      return {
+        success: false,
+        error: { code: "SHIFT_ALREADY_SWAPPED", message: "เวรนี้ถูกแลกหรือส่งต่อออกไปแล้ว ไม่สามารถแลกซ้ำได้" },
+      };
+    }
+
     if (oldShiftRow.is_locked) {
       return {
         success: false,
@@ -237,10 +244,16 @@ export async function swapShiftAction(data: {
       };
     }
 
-    // 1. Mark old shift as swapped_out
+    // 1. Mark old shift as swapped_out and record audit trail info
+    const swapDateStr = new Date().toISOString().split("T")[0];
     const { data: updatedOld, error: updateErr } = await supabase
       .from("shifts")
-      .update({ status: "swapped_out" })
+      .update({
+        status: "swapped_out",
+        swapped_with: data.swappedWith,
+        swap_date: swapDateStr,
+        swap_reason: data.swapReason || null,
+      })
       .eq("id", data.shiftId)
       .select()
       .single();
@@ -253,7 +266,6 @@ export async function swapShiftAction(data: {
     }
 
     // 2. Insert new received shift
-    const swapDateStr = new Date().toISOString().split("T")[0];
     const { data: newShiftRow, error: insertErr } = await supabase
       .from("shifts")
       .insert({

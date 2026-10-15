@@ -31,12 +31,14 @@ import {
 } from "../../types/vendee";
 import {
   getCustomers,
+  getCustomerById,
   saveCustomer,
   saveService,
   saveShift,
   saveClinicLog,
   getMedications,
   syncMedicationsFromApi,
+  syncCustomersFromApi,
 } from "../../lib/storage";
 import ModalMedicationManager from "./ModalMedicationManager";
 
@@ -103,8 +105,16 @@ export default function ModalAddTodo({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadMasterData = () => {
-    setCustomers(getCustomers());
+    const localCusts = getCustomers();
+    setCustomers(localCusts);
     setMasterMedications(getMedications());
+    syncCustomersFromApi()
+      .then((res) => {
+        if (res.isOnline && res.customers) {
+          setCustomers(res.customers);
+        }
+      })
+      .catch(() => {});
     syncMedicationsFromApi()
       .then((res) => {
         if (res.isOnline && res.medications) {
@@ -150,6 +160,13 @@ export default function ModalAddTodo({
       if (initialCustomerId) {
         setSelectedCustomerId(initialCustomerId);
         setActiveTab("service");
+        const found = allCust.find((c) => c.id === initialCustomerId);
+        if (!found) {
+          const directCust = getCustomerById(initialCustomerId);
+          if (directCust) {
+            setCustomers([directCust, ...allCust]);
+          }
+        }
       } else if (allCust.length > 0) {
         setSelectedCustomerId(allCust[0].id);
       }
@@ -204,7 +221,33 @@ export default function ModalAddTodo({
     e.preventDefault();
     if (isSubmitting) return;
 
-    if (!selectedCustomerId) {
+    let targetCustomerId = selectedCustomerId;
+    let targetCustomerName = "";
+
+    // If Quick Add box is open and a name is filled in, automatically save and use the new customer
+    if (showQuickAddCustomer) {
+      const trimmedQuickName = quickCustName.trim();
+      if (!trimmedQuickName) {
+        setErrorMsg("กรุณากรอกชื่อลูกค้าใหม่ หรือกดยกเลิกเพื่อเลือกลูกค้าที่มีอยู่");
+        return;
+      }
+      try {
+        const createdCust = await saveCustomer({
+          name: trimmedQuickName,
+        });
+        targetCustomerId = createdCust.id;
+        targetCustomerName = createdCust.name;
+        setSelectedCustomerId(createdCust.id);
+        setCustomers((prev) => [createdCust, ...prev.filter((c) => c.id !== createdCust.id)]);
+        setShowQuickAddCustomer(false);
+        setQuickCustName("");
+      } catch (err: any) {
+        setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูลลูกค้าใหม่");
+        return;
+      }
+    }
+
+    if (!targetCustomerId) {
       setErrorMsg("กรุณาเลือกลูกค้า");
       return;
     }
@@ -213,7 +256,10 @@ export default function ModalAddTodo({
       return;
     }
 
-    const currentCustomer = customers.find((c) => c.id === selectedCustomerId);
+    let currentCustomer = customers.find((c) => c.id === targetCustomerId) || getCustomerById(targetCustomerId);
+    if (!currentCustomer && targetCustomerName) {
+      currentCustomer = { id: targetCustomerId, name: targetCustomerName };
+    }
     if (!currentCustomer) {
       setErrorMsg("ไม่พบข้อมูลลูกค้าที่เลือก");
       return;
@@ -741,13 +787,22 @@ export default function ModalAddTodo({
                       placeholder="ระบุชื่อลูกค้าใหม่..."
                       value={quickCustName}
                       onChange={(e) => setQuickCustName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleQuickAddCustomerSubmit(e);
+                        }
+                      }}
                       className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-800 outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                       autoFocus
                     />
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => setShowQuickAddCustomer(false)}
+                        onClick={() => {
+                          setShowQuickAddCustomer(false);
+                          setQuickCustName("");
+                        }}
                         className="rounded-lg px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-200 dark:text-zinc-400 dark:hover:bg-zinc-700"
                       >
                         ยกเลิก
@@ -773,6 +828,11 @@ export default function ModalAddTodo({
                         {c.name}
                       </option>
                     ))}
+                    {selectedCustomerId && !customers.some((c) => c.id === selectedCustomerId) && (
+                      <option value={selectedCustomerId}>
+                        {getCustomerById(selectedCustomerId)?.name || "ลูกค้าที่เลือก"}
+                      </option>
+                    )}
                   </select>
                 )}
               </div>

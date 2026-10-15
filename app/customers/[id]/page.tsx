@@ -39,6 +39,7 @@ import {
   saveService,
   deleteService,
   subscribeToStorage,
+  syncCustomersFromApi,
 } from "../../../lib/storage";
 
 export default function CustomerDetailPage() {
@@ -62,10 +63,18 @@ export default function CustomerDetailPage() {
     setOpenEditServiceModal(true);
   };
 
-  // Load customer detail from local storage
-  const loadLocalData = useCallback(() => {
+  // Load customer detail from local storage or sync if missing
+  const loadLocalData = useCallback(async () => {
     if (!customerId) return;
-    const localCust = getCustomerById(customerId);
+    let localCust = getCustomerById(customerId);
+    if (!localCust) {
+      try {
+        const res = await syncCustomersFromApi();
+        if (res.customers) {
+          localCust = res.customers.find((c) => c.id === customerId);
+        }
+      } catch (_) {}
+    }
     if (localCust) {
       setCustomer(localCust);
       const allServices = getServices();

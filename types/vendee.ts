@@ -58,7 +58,6 @@ export interface Medications {
   size?: string; // ขนาด เช่น 100, 50, 100ml
   unit?: string; // หน่วย เช่น ยูนิต, เข็ม, ขวด, แผง, ชุด
   price?: string | number; // ราคา (บาท) เช่น 2500, 1500
-  priceSatang?: number; // ราคาในหน่วยสตางค์ (1 THB = 100 Satang)
   description?: string; // รายละเอียด เช่น นาบูตะ *นำเข้า
   note?: string; // หมายเหตุเพิ่มเติม / รายละเอียด
   createdAt?: string;

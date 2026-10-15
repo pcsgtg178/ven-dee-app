@@ -136,6 +136,8 @@ export default function ModalEditService({
         customerName: service.customerName,
         date: serviceDate,
         time: serviceTime,
+        services: service.services,
+        otherServiceText: service.otherServiceText,
         medications: validMeds.length > 0 ? validMeds : undefined,
         note: serviceNote.trim() || undefined,
         price: servicePrice ? Number(servicePrice) : undefined,

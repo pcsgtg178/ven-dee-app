@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Users,
   X,
+  RotateCw,
 } from "lucide-react";
 import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
@@ -41,21 +42,36 @@ export default function CustomersPage() {
   const [newCustName, setNewCustName] = useState("");
   const [newCustError, setNewCustError] = useState("");
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
   // Load customers from local storage
   const loadLocalData = useCallback(() => {
     setCustomers(getCustomers());
   }, []);
 
+  const syncData = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      await syncCustomersFromApi();
+      loadLocalData();
+    } catch (err) {
+      console.warn("Customers sync error:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [loadLocalData]);
+
   const reloadData = useCallback(() => {
     loadLocalData();
-  }, [loadLocalData]);
+    syncData();
+  }, [loadLocalData, syncData]);
 
   useEffect(() => {
     loadLocalData();
-    syncCustomersFromApi().then(() => loadLocalData()).catch(() => {});
+    syncData();
     const unsubscribe = subscribeToStorage(loadLocalData);
     return () => unsubscribe();
-  }, [loadLocalData]);
+  }, [loadLocalData, syncData]);
 
   // Search filter across Name
   const filteredCustomers = useMemo(() => {
@@ -101,15 +117,28 @@ export default function CustomersPage() {
       <AppBar
         title="รายชื่อลูกค้า"
         showBack={false}
+        isSyncing={isSyncing}
         rightAction={
-          <button
-            type="button"
-            onClick={() => setOpenNewCustomerModal(true)}
-            className="flex items-center gap-1 rounded-full bg-gradient-to-r from-sky-500 to-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-            <span>เพิ่มลูกค้า</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={syncData}
+              disabled={isSyncing}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-slate-100 hover:text-text-main dark:hover:bg-zinc-800 transition-colors disabled:opacity-60 cursor-pointer"
+              title="รีเฟรชข้อมูลลูกค้าจากฐานข้อมูล"
+              aria-label="ซิงค์ข้อมูลลูกค้า"
+            >
+              <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-sky-600 dark:text-sky-400" : ""}`} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpenNewCustomerModal(true)}
+              className="flex items-center gap-1 rounded-full bg-gradient-to-r from-sky-500 to-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>เพิ่มลูกค้า</span>
+            </button>
+          </div>
         }
       />
 

@@ -37,8 +37,9 @@ import {
   restoreShift,
   getMonthlyBlackShiftStats,
   syncAllDataFromApi,
+  subscribeToSyncState,
 } from "../../lib/storage";
-import { RefreshCw, Wifi } from "lucide-react";
+import { RefreshCw, Wifi, RotateCw, AlertCircle } from "lucide-react";
 import ModalAddTodo from "./ModalAddTodo";
 import ModalAddPersonalEvent from "./ModalAddPersonalEvent";
 import ModalShiftSwap from "./ModalShiftSwap";
@@ -172,6 +173,12 @@ export default function ScheduleOverview() {
     loadLocalData();
     syncApiData();
     const unsubscribe = subscribeToStorage(loadLocalData);
+    const unsubSync = subscribeToSyncState((state) => {
+      setIsSyncing(state.isSyncing);
+      if (typeof state.isOnline === "boolean") {
+        setApiConnected(state.isOnline);
+      }
+    });
 
     const handleOpenAddEvent = (e: Event) => {
       const customEvent = e as CustomEvent<{
@@ -193,6 +200,7 @@ export default function ScheduleOverview() {
 
     return () => {
       unsubscribe();
+      unsubSync();
       window.removeEventListener("vendee_open_add_modal", handleOpenAddEvent);
     };
   }, [loadLocalData, syncApiData]);
@@ -959,12 +967,39 @@ export default function ScheduleOverview() {
                 <p className="text-[10px] text-text-muted dark:text-zinc-400 leading-none">
                   บันทึกเวรและบริการลูกค้า
                 </p>
+                {/* Live Sync Badge */}
+                {isSyncing ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-semibold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/60 dark:border-sky-800/60 animate-pulse">
+                    <RotateCw className="h-2.5 w-2.5 animate-spin text-sky-600 dark:text-sky-400" />
+                    <span>กำลังซิงค์...</span>
+                  </span>
+                ) : apiConnected === true ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60" title="เชื่อมต่อฐานข้อมูลแล้ว">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span>ซิงค์แล้ว</span>
+                  </span>
+                ) : apiConnected === false ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60" title="โหมดออฟไลน์ (แคชในเครื่อง)">
+                    <AlertCircle className="h-2.5 w-2.5 text-amber-500" />
+                    <span>แคชในเครื่อง</span>
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
 
-          {/* Right Controls: [ Export iPhone ] [ Theme Toggle ] & Segmented Control: [ รายการ | ปฏิทิน ] */}
+          {/* Right Controls: [ Sync Button ] [ Theme Toggle ] & Segmented Control: [ รายการ | ปฏิทิน ] */}
           <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => reloadData()}
+              disabled={isSyncing}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-surface-subtle bg-white text-text-muted hover:text-text-main hover:bg-slate-50 active:scale-95 transition-all dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:text-white cursor-pointer disabled:opacity-60 shadow-2xs"
+              title="รีเฟรชและซิงค์ข้อมูลล่าสุดจากฐานข้อมูล"
+              aria-label="ซิงค์ข้อมูล"
+            >
+              <RotateCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin text-sky-600 dark:text-sky-400" : ""}`} />
+            </button>
             <ThemeToggle size="sm" />
             <div className="flex items-center rounded-full bg-surface-subtle p-1 dark:bg-zinc-800 shadow-inner">
               <button
@@ -996,6 +1031,13 @@ export default function ScheduleOverview() {
             </div>
           </div>
         </div>
+
+        {/* Animated header bottom loading bar */}
+        {isSyncing && (
+          <div className="absolute bottom-0 left-0 right-0 h-0.5 overflow-hidden bg-sky-100/40 dark:bg-sky-950/40">
+            <div className="h-full w-full bg-gradient-to-r from-transparent via-sky-500 to-emerald-400 animate-sync-beam" />
+          </div>
+        )}
       </header>
 
       {/* Main Body */}

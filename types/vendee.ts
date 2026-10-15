@@ -17,7 +17,7 @@ export interface SwapMetadata {
   swappedWith: string; // คนที่ตกลงแลกด้วย (Direct Partner) [Required]
   originalOwner?: string; // เจ้าของเวรเดิมตามตาราง (Original Owner ถ้ามี)
   parentShiftId?: string; // ID ของเวรเดิมก่อนแลก
-  isLocked: boolean; // ล็อกหรือไม่ (เวรผ่านไปแล้ว = true)
+  isLocked?: boolean; // ล็อกหรือไม่ (เวรผ่านไปแล้ว = true)
   swapDate?: string;
   swapReason?: string;
   swapHistory?: SwapTrailNode[]; // ประวัติการแลกต่อยอดสำหรับ Timeline

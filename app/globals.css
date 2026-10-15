@@ -254,3 +254,19 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   margin-left: auto;
 }
 
+/* =========================================================================
+   Sync Loading Beam & Pulse Animations
+   ========================================================================= */
+@keyframes syncBeam {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-sync-beam {
+  animation: syncBeam 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+

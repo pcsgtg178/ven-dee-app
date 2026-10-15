@@ -67,6 +67,64 @@ const STORAGE_KEYS = {
 };
 
 const SYNC_EVENT = "vendee_storage_updated";
+export const SYNC_STATE_EVENT = "vendee_sync_state_changed";
+
+let activeSyncCount = 0;
+let lastKnownOnlineState: boolean | null = null;
+
+export function notifySyncStart() {
+  activeSyncCount++;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(SYNC_STATE_EVENT, {
+        detail: {
+          isSyncing: true,
+          count: activeSyncCount,
+          isOnline: lastKnownOnlineState,
+        },
+      })
+    );
+  }
+}
+
+export function notifySyncEnd(isOnline?: boolean) {
+  activeSyncCount = Math.max(0, activeSyncCount - 1);
+  if (typeof isOnline === "boolean") {
+    lastKnownOnlineState = isOnline;
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(SYNC_STATE_EVENT, {
+        detail: {
+          isSyncing: activeSyncCount > 0,
+          count: activeSyncCount,
+          isOnline: lastKnownOnlineState,
+        },
+      })
+    );
+  }
+}
+
+export function subscribeToSyncState(
+  callback: (state: { isSyncing: boolean; isOnline: boolean | null; count: number }) => void
+) {
+  if (typeof window === "undefined") return () => {};
+  const handler = (e: Event) => {
+    const custom = e as CustomEvent<{
+      isSyncing: boolean;
+      isOnline: boolean | null;
+      count: number;
+    }>;
+    if (custom.detail) {
+      callback(custom.detail);
+    }
+  };
+  window.addEventListener(SYNC_STATE_EVENT, handler);
+  return () => {
+    window.removeEventListener(SYNC_STATE_EVENT, handler);
+  };
+}
+
 
 export const initialCustomers: Customer[] = [
   // 1. ลูกค้าที่มีการใช้บริการแล้ว และเวรยังไม่หมดอายุ (สถานะ active)
@@ -298,6 +356,8 @@ export async function syncAllDataFromApi(): Promise<{
     };
   }
 
+  let isOnline = false;
+  notifySyncStart();
   try {
     const [shiftsRes, customersRes, servicesRes, personalEventsRes, medicationsRes] = await Promise.allSettled([
       getShiftsAction(),
@@ -312,7 +372,7 @@ export async function syncAllDataFromApi(): Promise<{
     let services = getServices();
     let personalEvents = getPersonalEvents();
     let medications = getMedications();
-    let isOnline = false;
+
 
     if (shiftsRes.status === "fulfilled" && shiftsRes.value.success && Array.isArray(shiftsRes.value.data)) {
       if (shiftsRes.value.data.length > 0) {
@@ -449,6 +509,8 @@ export async function syncAllDataFromApi(): Promise<{
       medications: getMedications(),
       isOnline: false,
     };
+  } finally {
+    notifySyncEnd(isOnline);
   }
 }
 
@@ -616,6 +678,8 @@ export async function syncCustomersFromApi(): Promise<{
     };
   }
 
+  notifySyncStart();
+  let isOnline = false;
   let customers = getCustomers();
   try {
     const res = await getCustomersAction();
@@ -640,12 +704,15 @@ export async function syncCustomersFromApi(): Promise<{
         localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
         triggerSync();
       }
+      isOnline = true;
       return { customers, isOnline: true };
     }
     return { customers, isOnline: false };
   } catch (err) {
     console.warn("syncCustomersFromApi warning:", err);
     return { customers, isOnline: false };
+  } finally {
+    notifySyncEnd(isOnline);
   }
 }
 
@@ -992,6 +1059,7 @@ export async function swapShift(params: {
     swappedWith: params.swappedWith,
     swapDate: swapDateStr,
     swapReason: params.swapReason,
+    isLocked: oldShift.swapMeta?.isLocked ?? isShiftInPast(oldShift.date),
   };
 
   const newShift: ShiftRecord = dbResult?.newShift || {
@@ -1430,10 +1498,13 @@ export async function syncMedicationsFromApi(): Promise<{
     };
   }
 
+  notifySyncStart();
+  let isOnline = false;
   let medications = getMedications();
   try {
     const res = await getMedicationsAction();
     if (res.success && Array.isArray(res.data)) {
+      isOnline = true;
       if (res.data.length > 0) {
         const remoteMeds = res.data;
         const remoteIds = new Set(remoteMeds.map((m) => m.id));
@@ -1489,6 +1560,8 @@ export async function syncMedicationsFromApi(): Promise<{
   } catch (err) {
     console.warn("[VenDee Storage] Failed to sync medications from Supabase:", err);
     return { medications, isOnline: false };
+  } finally {
+    notifySyncEnd(isOnline);
   }
 }
 

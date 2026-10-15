@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   CalendarDays,
   Percent,
+  RotateCw,
 } from "lucide-react";
 import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
@@ -47,17 +48,31 @@ export default function DashboardPage() {
     return moment("2026-09-19");
   });
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const loadData = useCallback(() => {
     setServices(getServices());
     setMasterMedications(getMedications());
   }, []);
 
+  const syncData = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      await syncAllDataFromApi();
+      loadData();
+    } catch (err) {
+      console.warn("Dashboard sync warning:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [loadData]);
+
   useEffect(() => {
     loadData();
-    syncAllDataFromApi().catch((err) => console.warn("Dashboard sync warning:", err));
+    syncData();
     const unsub = subscribeToStorage(loadData);
     return () => unsub();
-  }, [loadData]);
+  }, [loadData, syncData]);
 
   // Navigate period (prev / next)
   const handlePrevPeriod = () => {
@@ -226,7 +241,22 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
       {/* App Bar */}
-      <AppBar title="แดชบอร์ดสรุปรายได้" />
+      <AppBar
+        title="แดชบอร์ดสรุปรายได้"
+        isSyncing={isSyncing}
+        rightAction={
+          <button
+            type="button"
+            onClick={syncData}
+            disabled={isSyncing}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-slate-100 hover:text-text-main dark:hover:bg-zinc-800 transition-colors disabled:opacity-60 cursor-pointer"
+            title="รีเฟรชและซิงค์ข้อมูลล่าสุด"
+            aria-label="รีเฟรชข้อมูล"
+          >
+            <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-sky-600 dark:text-sky-400" : ""}`} />
+          </button>
+        }
+      />
 
       <main className="mx-auto max-w-lg px-4 pt-3 space-y-4">
         {/* Period Selector Tabs (รายเดือน / รายสัปดาห์ / รายวัน) */}

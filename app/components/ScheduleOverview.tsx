@@ -464,7 +464,7 @@ export default function ScheduleOverview() {
         const service = item as CustomerServiceRecord;
         const cleanTime = (service.time || "12:00").slice(0, 5);
         const formattedTime = formatServiceTime(cleanTime);
-        const serviceTitle = `${service.customerName} ${formattedTime ? `${formattedTime}น. ` : ""}`;
+        const serviceTitle = `${formattedTime ? `${formattedTime}น. ` : ""} ${service.customerName}`;
         eventsResult.push({
           id: item.id,
           title: serviceTitle,

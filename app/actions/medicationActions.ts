@@ -1,12 +1,16 @@
 "use server";
 
 import { createClient } from "../../lib/supabase/server";
-import { Medications, ActionResult } from "../../types/vendee";
+import { Medications, MedicationCategory, ActionResult, resolveMedicationCategory } from "../../types/vendee";
+
+const isMissingCategoryColumn = (err: { message?: string } | null) =>
+  Boolean(err?.message && /category/i.test(err.message));
 
 function mapRowToMedication(row: any): Medications {
   return {
     id: row.id,
     name: row.name,
+    category: resolveMedicationCategory(row.name, row.category),
     size: row.size || undefined,
     unit: row.unit || "ยูนิต",
     price: row.price !== null && row.price !== undefined ? String(row.price) : undefined,
@@ -52,6 +56,7 @@ export async function getMedicationsAction(): Promise<ActionResult<Medications[]
  */
 export async function createMedicationAction(data: {
   name: string;
+  category?: MedicationCategory;
   size?: string;
   unit?: string;
   price?: string | number;
@@ -64,17 +69,29 @@ export async function createMedicationAction(data: {
 
     const insertPayload: Record<string, any> = {
       name: data.name.trim(),
+      category: resolveMedicationCategory(data.name, data.category),
       size: data.size?.trim() || null,
       unit: data.unit?.trim() || "ยูนิต",
       price: priceNum,
       description: data.description?.trim() || null,
     };
 
-    const { data: created, error } = await supabase
+    let { data: created, error } = await supabase
       .from("medications")
       .insert(insertPayload)
       .select()
       .single();
+
+    // Fallback: migration 20261018 not applied yet → retry without category
+    if (error && isMissingCategoryColumn(error)) {
+      const legacyPayload = { ...insertPayload };
+      delete legacyPayload.category;
+      ({ data: created, error } = await supabase
+        .from("medications")
+        .insert(legacyPayload)
+        .select()
+        .single());
+    }
 
     if (error) {
       console.error("[medicationActions] Insert medication DB error:", error);
@@ -105,6 +122,7 @@ export async function updateMedicationAction(
   id: string,
   data: {
     name?: string;
+    category?: MedicationCategory;
     size?: string;
     unit?: string;
     price?: string | number;
@@ -119,6 +137,7 @@ export async function updateMedicationAction(
     };
 
     if (data.name !== undefined) updatePayload.name = data.name.trim();
+    if (data.category !== undefined) updatePayload.category = resolveMedicationCategory(data.name, data.category);
     if (data.size !== undefined) updatePayload.size = data.size.trim() || null;
     if (data.unit !== undefined) updatePayload.unit = data.unit.trim() || "ยูนิต";
     if (data.description !== undefined) updatePayload.description = data.description.trim() || null;
@@ -128,12 +147,23 @@ export async function updateMedicationAction(
       updatePayload.price = priceNum;
     }
 
-    const { data: updated, error } = await supabase
+    let { data: updated, error } = await supabase
       .from("medications")
       .update(updatePayload)
       .eq("id", id)
       .select()
       .single();
+
+    if (error && isMissingCategoryColumn(error)) {
+      const legacyPayload = { ...updatePayload };
+      delete legacyPayload.category;
+      ({ data: updated, error } = await supabase
+        .from("medications")
+        .update(legacyPayload)
+        .eq("id", id)
+        .select()
+        .single());
+    }
 
     if (error) {
       console.error("[medicationActions] Update medication DB error:", error);

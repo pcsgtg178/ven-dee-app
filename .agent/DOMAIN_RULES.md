@@ -13,15 +13,21 @@
 - **CT Afternoon (`cta` / Code: "CTA")**: CT Scan Afternoon Slot — Color: Purple (`#8b5cf6`)
 
 ### Shift Categories & Quotas
-- **Black Shift (`black` - เวรดำ)**: Standard Monthly Requirement shifts (Default Quota: 14 shifts / month).
+- **Black Shift (`black` - เวรดำ)**: Standard Monthly Requirement shifts (โควต้าเวรดำตามเกณฑ์บังคับรายเดือน).
   - Used to fulfill hospital mandatory monthly quota.
-  - Swapping out black shifts that reduce monthly total below quota triggers `QUOTA_DEFICIT_WARNING`.
+  - **สูตรคำนวณโควต้าเวรดำประจำเดือน (Monthly Black Shift Quota Rules)**:
+    1. **คำนวณชั่วโมงเวร**: ชม.เวรดำ = จำนวนวันทำการ (จันทร์-ศุกร์) ในเดือนนั้น $\times$ 8 ชั่วโมง
+       *(ตัวอย่าง: เดือนที่มี จ-ศ 22 วัน $\times$ 8 = 176 ชม.)*
+    2. **แปลงชั่วโมงเวรเป็น "จำนวนเวร"**: จำนวนเวร = ชม.เวรดำ / ระบบเวร 8 ชั่วโมง
+       *(ตัวอย่าง: ชม.เวรดำ = 176 จะได้ $176 / 8 = 22$ เวร)*
+  - Swapping out black shifts that reduce monthly total below this calculated quota triggers `QUOTA_DEFICIT_WARNING`.
+  - **Monthly Black Count Invariant (กฎการนับเวรดำรายเดือน)**: นับเฉพาะเวรที่ `category === "black"` และ `status === "active"` ภายในเดือนปฏิทินที่เลือก ($[\text{monthStart}, \text{nextMonthStart})$) เท่านั้น. ห้ามนับเวรที่ `swapped_out`, `sold_out`, `cancelled`, เวรสีอื่น (red/green/gray/purple) หรือเวรที่ซ้ำ (duplicate id). เวรที่ได้รับมาจากการแลก (black, active) ให้นับรวม. ผลรวมที่แสดงในปฏิทินและ Summary ต้องมาจากฟังก์ชันคำนวณเดียวกัน (single source of truth: `lib/quota.ts`) และต้องมี unit test ครอบคลุม.
 - **Red Shift (`red` - เวรแดง)**: Overtime (OT) / Extra shifts.
   - Applies when total validated shifts exceed required quota or for extra OT duties.
   - Swappable without affecting mandatory black quota balance.
 - **Green Shift (`green` - เวร R)**: Emergency Refer Standby shifts (`r1`, `r2`).
   - Standby 24 ชม. สำหรับเคสส่งต่อผู้ป่วยฉุกเฉิน
-  - ไม่อยู่ในเกณฑ์บังคับของโควตาเวรดำ (`DEFAULT_BLACK_SHIFT_QUOTA = 14`)
+  - ไม่อยู่ในเกณฑ์บังคับของโควตาเวรดำ
   - **Shift Selling Permitted (อนุญาตให้ขายเวรได้)**: สามารถทำรายการ **"ขายเวร" (Shift Sell / Offload)** ส่งต่อเวร Refer ให้พยาบาลคนอื่นไปปฏิบัติหน้าที่แทนได้โดยตรง พร้อมบันทึกราคาขายในหน่วยสตางค์ โดยไม่กระทบยอดโควตาเวรดำ
 - **Gray Shift (`gray` - เวรออฟ)**: Off / Leave days.
 - **Purple Shift (`purple` - เวร CT)**: Special CT Scan duties / Vacation.
@@ -145,7 +151,14 @@
      - `durationHours`: จำนวนชั่วโมงที่ให้บริการจริง (Optional: เช่น 2.0, 4.0 ชม.)
      - `travelExpense`: ค่าเดินทาง/ค่าน้ำมัน (Optional: หน่วยสตางค์, default: 0)
      - `otherExpenses`: ค่าใช้จ่ายเบ็ดเตล็ดอื่นๆ (Optional: หน่วยสตางค์, default: 0)
-     - `notes`: บันทึกเพิ่มเติมเกี่ยวกับเคส/อาการผู้ป่วย (Optional)
+      - `notes`: บันทึกเพิ่มเติมเกี่ยวกับเคส/อาการผู้ป่วย (Optional)
+3. **Medication Usage per Service Event (รายการยาที่ใช้ในแต่ละบริการ)**:
+   - ผู้ใช้ต้องสามารถระบุ **ปริมาณยาที่ใช้ (`quantity`)** ต่อยาแต่ละรายการในงานบริการ (Service Event) เพื่อคำนวณต้นทุน
+   - แต่ละรายการเก็บ: `medicationId`, `quantity` (number > 0, รองรับทศนิยม เช่น 0.5 cc / 20 ยูนิต), `unit` (snapshot จากตัวยา), `unitCostSatang` (snapshot ราคาต่อหน่วย ณ เวลาบันทึก เพื่อไม่ให้ประวัติเปลี่ยนเมื่อแก้ราคายา)
+   - **Line Cost** = round(quantity × unitCostSatang) (Integer Satang)
+   - **`medicationCost` = ผลรวม Line Cost** ของยาทุกรายการ (คำนวณอัตโนมัติ; ห้ามกรอกทับถ้ามีรายการยา)
+   - unit cost = price_satang / size (ราคาต่อ 1 หน่วยของขนาดบรรจุ)
+   - ฟอร์มสร้างบริการต้องเริ่มว่างและ reset หลังบันทึก (ตาม §2.6)
 
 ### 3.2 Financial Calculation Formulas
 1. **Total Expenses (ต้นทุนรวม)**:
@@ -165,6 +178,24 @@
    - รายรับจากการขายเวร Refer ที่ได้รับเงินแล้ว (`paymentStatus === "paid"`) จะถูกบันทึกเป็นรายได้เสริม (Extra Income / Shift Sale Revenue)
 2. **Financial Aggregation Formula**:
    $$\text{Total Net Income} = \sum \text{Net Profit (Gig/Services)} + \sum \text{salePriceSatang (Paid Shift Sales)}$$
+
+### 3.4 Medication Categories (หมวดหมู่ตัวยา)
+1. ตัวยา (`medications`) ต้องมีฟิลด์ **`category`** เป็นหนึ่งใน:
+   | Code | ชื่อแสดงผล |
+   |---|---|
+   | `botox` | Botox |
+   | `meso` | Meso |
+   | `vitamin` | Vitamin |
+   | `meso_fat` | MesoFat |
+   | `filler` | Filler |
+   | `other` | อื่นๆ (Other) — default |
+2. ข้อมูลเดิมที่ยังไม่มี category ให้ migrate เป็น `other` (Botox seed → `botox`).
+3. หน้า `/medications`, `ModalMedicationManager` และตัวเลือกยาในฟอร์มบริการต้องรองรับ filter/badge ตามหมวด และ Dashboard breakdown ควรจัดกลุ่มตามหมวดได้.
+
+### 3.5 Event List Ordering (กฎการเรียงลำดับรายการกิจกรรม)
+1. รายการกิจกรรมทุกชนิด (shift, service, personal event, todo) ในมุมมองวัน/รายการ ต้องเรียงตาม **เวลาเริ่ม (`startTime`) จากน้อยไปมาก** ภายในวันเดียวกัน
+2. ห้ามเรียงตามเวลาที่สร้างล่าสุด (`createdAt`) — ใช้ `createdAt` เป็น tie-breaker เท่านั้น เมื่อเวลาเริ่มเท่ากัน
+3. รายการไม่มีเวลา (all-day) แสดงก่อน; ใช้ comparator กลางตัวเดียว (`lib/sortEvents.ts`) ทุกหน้าจอ
 
 ---
 

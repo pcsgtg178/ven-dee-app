@@ -11,7 +11,6 @@ import {
   Sun,
   Sunset,
   Ambulance,
-  Check,
 } from "lucide-react";
 import {
   ShiftRecord,

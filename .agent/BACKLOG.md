@@ -67,14 +67,14 @@
   - Add option to regenerate token if the subscription link is compromised.
 
 ### Phase 6: Refer Shift Selling & Financial Compensation System
-- [ ] **6.1 Server Actions & Data Layer for Refer Shift Selling**
+- [x] **6.1 Server Actions & Data Layer for Refer Shift Selling**
   - Implement `sellShiftAction` and `undoSellShiftAction` in `app/actions/shiftActions.ts` with domain validation (only active & unlocked shifts, atomic update to `status: "sold_out"`, `SaleMetadata` persistence).
   - Update `lib/storage.ts` with `sellShift` and `undoSellShift` client methods and local state synchronization.
-- [ ] **6.2 Refer Shift Selling UI (`ModalSellShift.tsx`)**
+- [x] **6.2 Refer Shift Selling UI (`ModalSellShift.tsx`)**
   - Create `ModalSellShift.tsx` modal supporting buyer name, sale price (Satang standard), payment status, and notes.
   - Enforce empty default form state and post-submission reset per `PROJECT_RULES.md`.
   - Add 'ขายเวร Refer' action button on Refer shift items in `ScheduleTodoListView.tsx` and `ActivityCard.tsx`.
-- [ ] **6.3 Financial Ledger Aggregation for Shift Sales**
+- [x] **6.3 Financial Ledger Aggregation for Shift Sales**
   - Integrate paid shift sales (`paymentStatus === "paid"`) into monthly earnings calculation and summary widgets.
 
 ### Phase 7: iPhone 15 Calendar Polish, Customer Revenue Dashboard & Navigation Refactoring
@@ -104,11 +104,31 @@
   - Implement Next.js Server Actions in `app/actions/medicationActions.ts` and client synchronization in `lib/storage.ts`.
   - Complete UI integration with form inputs, badges, and preset units in `app/medications/page.tsx` and `app/components/ModalMedicationManager.tsx`.
 
+### Phase 8: Medication Usage, Settings Menu & Data Correctness Fixes
+- [ ] **8.1 Medication Quantity in Service Events (Requirement)**
+  - Add per-medication `quantity` input (+ snapshot `unit`) to service create/edit forms (`ActivityCard`/service modals).
+  - Auto-calculate `medicationCostSatang = Σ round(quantity × price)` with live preview; update `serviceActions.ts`, `lib/storage.ts`, `lib/conflictEngine.ts` and Supabase migration (e.g. `service_medications` or JSONB column).
+  - Dashboard cost/breakdown must use new usage data. See `DOMAIN_RULES.md` §3.1.
+- [ ] **8.2 Settings Menu (Requirement)**
+  - Create `app/settings/page.tsx` and navigation entry.
+  - Move Sync Data button + sync status into Settings; move theme toggle into Settings (Light/Dark/System, persisted).
+  - Remove them from existing header/home. See `PROJECT_RULES.md` §3.
+- [ ] **8.3 Medication Category Type (Requirement)**
+  - Add `category` (`botox`, `meso`, `vitamin`, `meso_fat`, `filler`, `other`) to `types/vendee.ts`, migration (default `other`, Botox seed → `botox`), `medicationActions.ts`, `storage.ts`.
+  - Category selector/filter/badge in `/medications` and `ModalMedicationManager`. See `DOMAIN_RULES.md` §3.4.
+- [ ] **8.4 Fix: Monthly Black Shift Count Incorrect (Issue)**
+  - Reproduce and fix calculation: count only `category === "black"` && `status === "active"` within the selected month; exclude swapped_out/sold_out/cancelled/duplicates; include received swaps.
+  - Extract single shared pure function; add unit tests (month boundaries, swaps, duplicates). See `DOMAIN_RULES.md` §1.
+- [ ] **8.5 Fix: Event Items Sorted by Created Time Instead of Event Time (Issue)**
+  - Create `lib/sortEvents.ts`; sort by `startTime` ascending (all-day first, `createdAt` only as tie-breaker); apply in `ScheduleTodoListView.tsx`, `ActivityCard` lists and day views. See `DOMAIN_RULES.md` §3.5.
+- [ ] **8.6 Clarify Incomplete Issue Item**
+  - Reported issue line "please" was incomplete — confirm details with user.
+
 ---
 
 ## 📌 Task Status Summary
-- **Total Tasks**: 21
-- **Completed**: 16
+- **Total Tasks**: 27
+- **Completed**: 19
 - **In Progress**: 0
-- **Pending**: 5
+- **Pending**: 8
 

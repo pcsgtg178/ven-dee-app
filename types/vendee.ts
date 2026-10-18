@@ -52,9 +52,30 @@ export interface Customer {
   createdAt?: string;
 }
 
+export type MedicationCategory = "botox" | "meso" | "vitamin" | "meso_fat" | "filler" | "other";
+
+export const MEDICATION_CATEGORIES: MedicationCategory[] = ["botox", "meso", "vitamin", "meso_fat", "filler", "other"];
+
+// หมวดหมู่ตัวยา (DOMAIN_RULES.md §3.4)
+export const MEDICATION_CATEGORY_CONFIG: Record<MedicationCategory, { label: string; badge: string }> = {
+  botox: { label: "Botox", badge: "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300" },
+  meso: { label: "Meso", badge: "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300" },
+  vitamin: { label: "Vitamin", badge: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" },
+  meso_fat: { label: "MesoFat", badge: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300" },
+  filler: { label: "Filler", badge: "bg-pink-100 text-pink-800 dark:bg-pink-950/60 dark:text-pink-300" },
+  other: { label: "อื่นๆ", badge: "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-zinc-300" },
+};
+
+/** Infer category for legacy rows without one (Botox → botox, else other). */
+export function resolveMedicationCategory(name?: string, category?: string | null): MedicationCategory {
+  if (category && (MEDICATION_CATEGORIES as string[]).includes(category)) return category as MedicationCategory;
+  return /botox/i.test(name || "") ? "botox" : "other";
+}
+
 export interface Medications {
   id: string;
   name: string; // ชื่อยา เช่น Botox, Vitamin B12
+  category?: MedicationCategory; // หมวดหมู่ตัวยา (default: other)
   size?: string; // ขนาด เช่น 100, 50, 100ml
   unit?: string; // หน่วย เช่น ยูนิต, เข็ม, ขวด, แผง, ชุด
   price?: string | number; // ราคา (บาท) เช่น 2500, 1500
@@ -70,6 +91,17 @@ export interface MedicationsRecord {
   price?: string; // ราคาขาย
   unitAmt?: string;   // จำนวน unit ที่ใช้
   createdAt?: string;
+}
+
+/** One medication usage line in a service event (DOMAIN_RULES.md §3.1 item 3). */
+export interface MedicationUsageLine {
+  medicationId: string;
+  name: string; // snapshot
+  category?: MedicationCategory; // snapshot
+  quantity: number; // > 0, decimals allowed
+  unit: string; // snapshot
+  unitCostSatang: number; // snapshot: price_satang / size (may be fractional)
+  lineCostSatang?: number; // round(quantity × unitCostSatang)
 }
 
 export type ServiceType = "injection" | "dressing" | "consult" | "vital_signs" | "other";
@@ -92,6 +124,7 @@ export interface CustomerServiceRecord {
   services?: ServiceType[];
   otherServiceText?: string;
   medications?: string[]; // รายการยา (เพิ่ม/ลบได้หลายตัว โผล่เมื่อเลือกฉีดยา)
+  medicationUsages?: MedicationUsageLine[]; // ปริมาณยาที่ใช้ต่อรายการ (คำนวณ medicationCostSatang อัตโนมัติ)
   note?: string;
   price?: number;
   // External Gig & Service Financial Ledger (Satang Standard: 1 THB = 100 Satang)
@@ -147,7 +180,9 @@ export type ActionResult<T = any> =
   | { success: true; data: T; message?: string }
   | { success: false; error: { code: string; message: string; details?: any[] } };
 
-export const DEFAULT_BLACK_SHIFT_QUOTA = 14; // กฎเวรดำ x วันต่อเดือน
+// โควต้าเวรดำประจำเดือน: คำนวณจาก (จำนวนวันทำการ จ-ศ x 8 ชม.) / 8 ชม.
+// ค่าเริ่มต้นมาตรฐานทั่วไปคือ 22 เวร/เดือน (กรณีเดือนมี จ-ศ 22 วัน เช่น 22 x 8 = 176 ชม. -> 176/8 = 22)
+export const DEFAULT_BLACK_SHIFT_QUOTA = 22;
 
 export const SHIFT_CODE_MAP: Record<ShiftType, string> = {
   night: "1", // 1 = เวรดึก

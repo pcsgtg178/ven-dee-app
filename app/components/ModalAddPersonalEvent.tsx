@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  FileText,
   CalendarHeart,
 } from "lucide-react";
 import { PersonalEventRecord } from "../../types/vendee";
@@ -133,7 +132,7 @@ export default function ModalAddPersonalEvent({
       setTitle("");
       setNotes("");
       onClose();
-    } catch (err: any) {
+    } catch {
       // Local storage fallback on error
       const createdEvent = await savePersonalEvent({
         title: title.trim(),

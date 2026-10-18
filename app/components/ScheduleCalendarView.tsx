@@ -69,7 +69,7 @@ export default function ScheduleCalendarView({
         if (api && typeof api.updateSize === "function") {
           api.updateSize();
         }
-      } catch (_) {}
+      } catch {}
     };
 
     triggerResize();

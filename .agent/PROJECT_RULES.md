@@ -40,6 +40,12 @@ ven-dee-app/
 - **Form State Reset Policy (Creation Forms)**:
   - When creating/adding a new Todo or record (e.g., `ModalAddTodo`, `ModalSellShift`), all input fields (notes, price, extra fields, medications, buyer name, sale price) MUST default to empty/blank values.
   - Form state MUST NOT retain inputs from previously submitted forms. All fields must be explicitly cleared/reset when opening the form and immediately after successful form submission.
+- **Settings Menu Standard (เมนูตั้งค่า)**:
+  - App-level utilities MUST live in a dedicated Settings page/menu (`app/settings/page.tsx`, entry via icon/tab in navigation), not scattered on main screens.
+  - Settings MUST contain: (1) ปุ่ม Sync Data + สถานะการซิงก์ (last synced time / syncing / error), (2) ปุ่มเปลี่ยนธีม (Light / Dark / System, persisted).
+  - Remove the sync button, sync status and theme toggle from header/home screens once moved.
+- **Medication Entry Standard**: Service forms must provide per-medication quantity input with live cost preview (Satang → THB display); see `DOMAIN_RULES.md` §3.1/§3.4. Medication forms must include a `category` selector (Botox, Meso, Vitamin, MesoFat, Filler, Other).
+- **Shared Logic Standard**: Calculations (monthly black shift count, medication cost) and sorting (`lib/sortEvents.ts`) MUST be implemented as pure shared functions in `lib/` and reused by all views; no per-component re-implementation.
 
 ## 4. API, Data Layer & Supabase Integration Standards
 - **Direct Database Operations**: All data persistence (saving, updating, deleting shifts, swaps, service records) must be executed inside Next.js Server Actions or Route Handlers using the server-side Supabase client (`lib/supabase/server.ts`). External HTTP calls to an Express.js server are strictly removed.
@@ -57,7 +63,7 @@ ven-dee-app/
   - **Refer Shift Selling Standards**:
     - Selling Refer shifts (`r1`, `r2`) operates as a one-way transfer (`status: "sold_out"`).
     - Must record `saleMeta` containing `buyerName`, `salePriceSatang` (Satang Standard: Integer, 1 THB = 100 Satang), `soldDate`, `paymentStatus` (`unpaid` / `paid`), and optional `note`.
-    - Does NOT impact mandatory monthly black shift quota (`DEFAULT_BLACK_SHIFT_QUOTA = 14`).
+    - Does NOT impact mandatory monthly black shift quota (คำนวณจากจำนวนวันทำการ จ-ศ x 8 ชม. / 8).
     - Once sold, seller is freed from 24-hr Standby constraint on that date.
   - Deletion of shifts involved in swap chains (`status: "swapped_out"`, `parentShiftId` references), sold shifts (`status: "sold_out"`), or locked shifts (`isLocked: true`) must be rejected to prevent data corruption and loss of financial audit trails.
   - Rollback (Undo Swap) operations must execute atomically on both sides: restoring the original parent shift (`parentShiftId`) to `active` while cancelling/reverting the shift received during that swap (`status: "cancelled"`).

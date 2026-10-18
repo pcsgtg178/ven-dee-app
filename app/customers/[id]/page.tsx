@@ -11,13 +11,9 @@ import {
   CalendarPlus,
   Clock,
   Syringe,
-  Sparkles,
-  Package,
   MoreHorizontal,
   CheckCircle2,
   Calendar,
-  Tag,
-  MapPin,
   Trash2,
   AlertCircle,
   FileText,
@@ -73,7 +69,7 @@ export default function CustomerDetailPage() {
         if (res.customers) {
           localCust = res.customers.find((c) => c.id === customerId);
         }
-      } catch (_) {}
+      } catch {}
     }
     if (localCust) {
       setCustomer(localCust);
@@ -137,7 +133,7 @@ export default function CustomerDetailPage() {
   if (!customer) {
     return (
       <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
-        <AppBar title="ข้อมูลลูกค้า" showBack backHref="/customers" />
+        <AppBar title="ข้อมูลลูกค้า" />
         <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center p-6 text-center">
           <AlertCircle className="h-12 w-12 text-slate-400 mb-3" />
           <h2 className="text-base font-bold">ไม่พบข้อมูลลูกค้า</h2>
@@ -157,11 +153,8 @@ export default function CustomerDetailPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
-      {/* Header with back button */}
       <AppBar
         title={customer.name}
-        showBack
-        backHref="/customers"
         rightAction={
           <button
             type="button"

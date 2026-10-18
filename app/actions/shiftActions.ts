@@ -25,6 +25,15 @@ function mapRowToShiftRecord(row: any): ShiftRecord {
           swapHistory: (row.swap_history as SwapTrailNode[]) || [],
         }
       : undefined,
+    saleMeta: (row.sale_meta || row.buyer_name || row.sale_price_satang || row.sold_date)
+      ? {
+          buyerName: row.sale_meta?.buyerName || row.buyer_name || "",
+          salePriceSatang: Number(row.sale_meta?.salePriceSatang ?? row.sale_price_satang ?? 0),
+          soldDate: row.sale_meta?.soldDate || row.sold_date || "",
+          paymentStatus: (row.sale_meta?.paymentStatus || row.payment_status || "unpaid") as "unpaid" | "paid",
+          note: row.sale_meta?.note || row.sale_note || undefined,
+        }
+      : undefined,
     createdAt: row.created_at,
   };
 }
@@ -427,6 +436,16 @@ export async function deleteShiftAction(id: string): Promise<ActionResult<{ dele
       };
     }
 
+    if (shift.status === "sold_out") {
+      return {
+        success: false,
+        error: {
+          code: "DELETION_RESTRICTED",
+          message: "ไม่สามารถลบเวรที่ขายออกไปแล้วได้ (โปรดใช้ฟีเจอร์ยกเลิกการขายเวร เพื่อคืนสถานะเวร)",
+        },
+      };
+    }
+
     // Check if this shift has active child shifts referencing it as parent
     const { data: childShifts } = await supabase
       .from("shifts")
@@ -478,6 +497,185 @@ export async function deleteShiftAction(id: string): Promise<ActionResult<{ dele
     return {
       success: false,
       error: { code: "SERVER_ERROR", message: err.message || "Failed to delete shift" },
+    };
+  }
+}
+
+/**
+ * Sell a Refer shift (One-way transfer, status: "sold_out", Satang standard)
+ * Adheres to DOMAIN_RULES.md Section 2.4 & PROJECT_RULES.md Section 4
+ */
+export async function sellShiftAction(data: {
+  shiftId: string;
+  buyerName: string;
+  salePriceSatang: number;
+  soldDate: string;
+  paymentStatus: "unpaid" | "paid";
+  note?: string;
+}): Promise<ActionResult<ShiftRecord>> {
+  try {
+    const supabase = await createClient();
+
+    // 1. Fetch target shift
+    const { data: shiftRow, error: fetchErr } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("id", data.shiftId)
+      .single();
+
+    if (fetchErr || !shiftRow) {
+      return {
+        success: false,
+        error: { code: "SHIFT_NOT_FOUND", message: "ไม่พบเวรที่ต้องการขาย" },
+      };
+    }
+
+    if (shiftRow.status === "sold_out") {
+      return {
+        success: false,
+        error: { code: "SHIFT_ALREADY_SOLD", message: "เวรนี้ถูกทำรายการขายไปแล้ว" },
+      };
+    }
+
+    if (shiftRow.status !== "active") {
+      return {
+        success: false,
+        error: { code: "INVALID_SALE_OPERATION", message: "เวรนี้ไม่ได้อยู่ในสถานะพร้อมขาย" },
+      };
+    }
+
+    if (shiftRow.is_locked) {
+      return {
+        success: false,
+        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถขายเวรในอดีตที่ถูกล็อกแล้วได้" },
+      };
+    }
+
+    // Domain Invariant: Only Refer shifts (r1, r2 or green category) are permitted for selling
+    const isRefer =
+      shiftRow.shift_type === "r1" ||
+      shiftRow.shift_type === "r2" ||
+      shiftRow.category === "green";
+
+    if (!isRefer) {
+      return {
+        success: false,
+        error: {
+          code: "INVALID_SALE_OPERATION",
+          message: "อนุญาตให้ขายได้เฉพาะเวร Refer (R1, R2) เท่านั้น",
+        },
+      };
+    }
+
+    const saleMetaObj = {
+      buyerName: data.buyerName.trim(),
+      salePriceSatang: data.salePriceSatang,
+      soldDate: data.soldDate,
+      paymentStatus: data.paymentStatus,
+      note: data.note?.trim() || undefined,
+    };
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("shifts")
+      .update({
+        status: "sold_out",
+        buyer_name: data.buyerName.trim(),
+        sale_price_satang: data.salePriceSatang,
+        sold_date: data.soldDate,
+        payment_status: data.paymentStatus,
+        sale_note: data.note?.trim() || null,
+        sale_meta: saleMetaObj,
+      })
+      .eq("id", data.shiftId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      return {
+        success: false,
+        error: { code: "DATABASE_ERROR", message: updateErr.message },
+      };
+    }
+
+    return {
+      success: true,
+      data: mapRowToShiftRecord(updated),
+      message: "บันทึกการขายเวร Refer เรียบร้อยแล้ว",
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: { code: "SERVER_ERROR", message: err.message || "Failed to sell shift" },
+    };
+  }
+}
+
+/**
+ * Undo / Rollback Refer shift sale
+ * Restores status to active and purges sale metadata
+ */
+export async function undoSellShiftAction(shiftId: string): Promise<ActionResult<ShiftRecord>> {
+  try {
+    const supabase = await createClient();
+
+    const { data: shiftRow, error: fetchErr } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("id", shiftId)
+      .single();
+
+    if (fetchErr || !shiftRow) {
+      return {
+        success: false,
+        error: { code: "SHIFT_NOT_FOUND", message: "ไม่พบเวรที่ต้องการยกเลิกการขาย" },
+      };
+    }
+
+    if (shiftRow.status !== "sold_out") {
+      return {
+        success: false,
+        error: { code: "INVALID_SALE_OPERATION", message: "เวรนี้ไม่ได้อยู่ในสถานะขายแล้ว" },
+      };
+    }
+
+    if (shiftRow.is_locked) {
+      return {
+        success: false,
+        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกการขายเวรในอดีตที่ถูกล็อกแล้วได้" },
+      };
+    }
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("shifts")
+      .update({
+        status: "active",
+        buyer_name: null,
+        sale_price_satang: 0,
+        sold_date: null,
+        payment_status: null,
+        sale_note: null,
+        sale_meta: null,
+      })
+      .eq("id", shiftId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      return {
+        success: false,
+        error: { code: "DATABASE_ERROR", message: updateErr.message },
+      };
+    }
+
+    return {
+      success: true,
+      data: mapRowToShiftRecord(updated),
+      message: "ยกเลิกการขายเวรและคืนสถานะเวรปกติเรียบร้อยแล้ว",
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: { code: "SERVER_ERROR", message: err.message || "Failed to undo shift sale" },
     };
   }
 }

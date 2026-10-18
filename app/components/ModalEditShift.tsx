@@ -14,14 +14,11 @@ import {
   ShieldCheck,
   Flame,
   FileText,
-  MapPin,
 } from "lucide-react";
 import {
   ShiftCategory,
   ShiftRecord,
   ShiftType,
-  SHIFT_CONFIG,
-  SHIFT_CATEGORY_CONFIG,
 } from "../../types/vendee";
 import { saveShift } from "../../lib/storage";
 

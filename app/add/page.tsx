@@ -12,7 +12,7 @@ export default function AddPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <AppBar title="บันทึกงานใหม่" showBack backHref="/" />
+      <AppBar title="บันทึกงานใหม่" />
       <ModalAddTodo
         openModal={openModal}
         toggleModal={() => {

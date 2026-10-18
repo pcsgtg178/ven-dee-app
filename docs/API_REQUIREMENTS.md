@@ -466,16 +466,19 @@ Content-Type: application/json
 {
   "success": true,
   "data": {
-    "month": "2026-09",
-    "blackCount": 12,
+    "month": "2026-10",
+    "blackCount": 18,
     "redCount": 2,
-    "quota": 14,
-    "remaining": 2,
+    "weekdaysCount": 22,
+    "quotaHours": 176,
+    "quota": 22,
+    "remaining": 4,
     "isMet": false,
-    "percentage": 86
+    "percentage": 82
   }
 }
 ```
+*หมายเหตุ: `quotaHours` คำนวณจากวันทำการ จ-ศ x 8 ชม. (เช่น 22 x 8 = 176 ชม.) และ `quota` (จำนวนเวร) คำนวณจาก ชม.เวรดำ / 8 ชม. (176 / 8 = 22 เวร)*
 
 ---
 

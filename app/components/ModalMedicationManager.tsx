@@ -1,8 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Plus, Pencil, Trash2, Pill, Search, Check, DollarSign, Package, RotateCw } from "lucide-react";
-import { Medications } from "../../types/vendee";
+import { X, Plus, Pencil, Trash2, Pill, Search, Check, DollarSign, RotateCw } from "lucide-react";
+import {
+  Medications,
+  MedicationCategory,
+  MEDICATION_CATEGORIES,
+  MEDICATION_CATEGORY_CONFIG,
+  resolveMedicationCategory,
+} from "../../types/vendee";
 import {
   getMedications,
   syncMedicationsFromApi,
@@ -30,6 +36,8 @@ export default function ModalMedicationManager({
   // Form State for Add / Edit
   const [editingMedId, setEditingMedId] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<MedicationCategory>("other");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | MedicationCategory>("all");
   const [size, setSize] = useState("");
   const [price, setPrice] = useState("");
   const [unit, setUnit] = useState("ยูนิต");
@@ -73,6 +81,7 @@ export default function ModalMedicationManager({
   const resetForm = () => {
     setEditingMedId(null);
     setName("");
+    setCategory("other");
     setSize("");
     setPrice("");
     setUnit("ยูนิต");
@@ -88,6 +97,7 @@ export default function ModalMedicationManager({
   const handleOpenEdit = (med: Medications) => {
     setEditingMedId(med.id);
     setName(med.name);
+    setCategory(resolveMedicationCategory(med.name, med.category));
     setSize(med.size || "");
     setPrice(med.price !== undefined ? String(med.price) : "");
     setUnit(med.unit || "ยูนิต");
@@ -110,6 +120,7 @@ export default function ModalMedicationManager({
       await saveMedication({
         id: editingMedId || undefined,
         name: name.trim(),
+        category,
         size: size.trim() || undefined,
         price: price.trim() || undefined,
         unit: unit.trim() || undefined,
@@ -138,9 +149,13 @@ export default function ModalMedicationManager({
     }
   };
 
-  const filteredMeds = medications.filter((m) =>
-    m.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredMeds = medications
+    .filter(
+      (m) =>
+        m.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        (categoryFilter === "all" || resolveMedicationCategory(m.name, m.category) === categoryFilter)
+    )
+    .sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
@@ -290,6 +305,28 @@ export default function ModalMedicationManager({
 
               <div>
                 <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                  หมวดหมู่
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {MEDICATION_CATEGORIES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCategory(c)}
+                      className={`rounded-lg px-2 py-0.5 text-[11px] font-medium transition-all ${
+                        category === c
+                          ? "bg-primary text-white"
+                          : "bg-surface-subtle/60 text-text-muted hover:bg-surface-subtle dark:bg-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      {MEDICATION_CATEGORY_CONFIG[c].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
                   รายละเอียด / ข้อกำหนด
                 </label>
                 <textarea
@@ -336,6 +373,19 @@ export default function ModalMedicationManager({
                 />
                 <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-text-muted" />
               </div>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value as "all" | MedicationCategory)}
+                className="shrink-0 rounded-xl border border-surface-subtle bg-card-bg px-2 py-2 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                title="กรองตามหมวดหมู่"
+              >
+                <option value="all">ทุกหมวด</option>
+                {MEDICATION_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {MEDICATION_CATEGORY_CONFIG[c].label}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 onClick={handleOpenAdd}
@@ -373,6 +423,9 @@ export default function ModalMedicationManager({
                             {med.size} {med.unit || ""}
                           </span>
                         )}
+                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${MEDICATION_CATEGORY_CONFIG[resolveMedicationCategory(med.name, med.category)].badge}`}>
+                          {MEDICATION_CATEGORY_CONFIG[resolveMedicationCategory(med.name, med.category)].label}
+                        </span>
                       </div>
                       <div className="text-[11px] text-text-muted dark:text-zinc-400">
                         {med.price ? `฿${Number(med.price).toLocaleString()}` : "ไม่ระบุราคา"} {med.unit && !med.size ? `/ ${med.unit}` : ""}

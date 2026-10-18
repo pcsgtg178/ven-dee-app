@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   ShieldCheck,
   CheckCircle2,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import moment from "moment";
 import "moment/locale/th";
+import { calculateMonthlyBlackShiftQuota } from "../../lib/quota";
 
 interface MonthlyQuotaWidgetProps {
   currentMonthStr?: string;
@@ -20,6 +21,8 @@ interface MonthlyQuotaWidgetProps {
   quota: number;
   remaining: number;
   isMet: boolean;
+  quotaHours?: number;
+  weekdaysCount?: number;
   onQuotaChange?: (newQuota: number) => void;
 }
 
@@ -30,12 +33,21 @@ export default function MonthlyQuotaWidget({
   quota,
   remaining,
   isMet,
+  quotaHours,
+  weekdaysCount,
   onQuotaChange,
 }: MonthlyQuotaWidgetProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(String(quota));
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const quotaCalc = useMemo(
+    () => calculateMonthlyBlackShiftQuota(currentMonthStr),
+    [currentMonthStr]
+  );
+  const effectiveWeekdays = weekdaysCount ?? quotaCalc.weekdaysCount;
+  const effectiveHours = quotaHours ?? quotaCalc.blackShiftHours;
 
   const percentage = Math.min(100, Math.round((blackCount / quota) * 100));
 
@@ -68,7 +80,10 @@ export default function MonthlyQuotaWidget({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-surface-subtle bg-card-bg shadow-xs dark:border-zinc-800 dark:bg-zinc-900 transition-all">
+    <div
+      suppressHydrationWarning
+      className="overflow-hidden rounded-2xl border border-surface-subtle bg-card-bg shadow-xs dark:border-zinc-800 dark:bg-zinc-900 transition-all"
+    >
       {/* COMPACT HEADER (always visible) */}
       <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
         {/* Left: Icon + Summary */}
@@ -93,6 +108,7 @@ export default function MonthlyQuotaWidget({
               <span className="h-2 w-2 rounded-full bg-shift-black dark:bg-slate-200 shrink-0" />
               เวรดำ:&nbsp;
               <strong
+                suppressHydrationWarning
                 className={
                   isMet
                     ? "text-primary dark:text-emerald-400"
@@ -101,15 +117,21 @@ export default function MonthlyQuotaWidget({
               >
                 {blackCount}/{quota}
               </strong>
-              &nbsp;วัน
+              &nbsp;เวร
             </span>
 
             {!isMet ? (
-              <span className="rounded-md bg-shift-red-badge px-1.5 py-0.5 text-[10px] font-bold text-shift-red-text dark:bg-rose-950/60 dark:text-rose-300 whitespace-nowrap">
-                ขาดอีก {remaining} วัน
+              <span
+                suppressHydrationWarning
+                className="rounded-md bg-shift-red-badge px-1.5 py-0.5 text-[10px] font-bold text-shift-red-text dark:bg-rose-950/60 dark:text-rose-300 whitespace-nowrap"
+              >
+                ขาดอีก {remaining} เวร
               </span>
             ) : (
-              <span className="rounded-md bg-primary-light px-1.5 py-0.5 text-[10px] font-bold text-primary-dark dark:bg-emerald-950/60 dark:text-emerald-300 whitespace-nowrap">
+              <span
+                suppressHydrationWarning
+                className="rounded-md bg-primary-light px-1.5 py-0.5 text-[10px] font-bold text-primary-dark dark:bg-emerald-950/60 dark:text-emerald-300 whitespace-nowrap"
+              >
                 ✓ ครบเกณฑ์
               </span>
             )}
@@ -117,10 +139,13 @@ export default function MonthlyQuotaWidget({
             <span className="flex items-center gap-1 text-text-muted dark:text-zinc-400 whitespace-nowrap">
               <Flame className="h-3 w-3 text-shift-red shrink-0" />
               เวรแดง:&nbsp;
-              <strong className="text-shift-red dark:text-rose-400">
+              <strong
+                suppressHydrationWarning
+                className="text-shift-red dark:text-rose-400"
+              >
                 {redCount}
               </strong>
-              &nbsp;วัน
+              &nbsp;เวร
             </span>
           </div>
         </div>
@@ -174,47 +199,68 @@ export default function MonthlyQuotaWidget({
               </h3>
             </div>
 
-            <div className="flex items-center gap-2 text-[11px] text-text-muted dark:text-zinc-400">
-              <span>เกณฑ์เวรดำขั้นต่ำ:</span>
-              {editing ? (
-                <span className="inline-flex items-center gap-1">
-                  <input
-                    ref={inputRef}
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSaveQuota();
-                      if (e.key === "Escape") handleCancelEdit();
-                    }}
-                    className="w-12 rounded-md border border-secondary bg-white px-1.5 py-0.5 text-center text-xs font-bold text-text-main dark:border-zinc-600 dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-secondary/50"
-                    style={{ fontSize: "16px" }}
-                  />
-                  <span>วัน/เดือน</span>
-                  <button
-                    type="button"
-                    onClick={handleSaveQuota}
-                    className="rounded-md bg-primary p-1 text-white hover:brightness-110 transition-all active:scale-95"
-                    title="บันทึก"
-                  >
-                    <Check className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCancelEdit}
-                    className="rounded-md bg-surface-subtle p-1 text-text-muted hover:bg-slate-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 transition-all active:scale-95"
-                    title="ยกเลิก"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ) : (
-                <span className="font-bold text-text-main dark:text-white">
-                  {quota} วัน/เดือน
-                </span>
-              )}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-[11px] text-text-muted dark:text-zinc-400">
+                <span>เกณฑ์เวรดำขั้นต่ำ:</span>
+                {editing ? (
+                  <span className="inline-flex items-center gap-1">
+                    <input
+                      ref={inputRef}
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveQuota();
+                        if (e.key === "Escape") handleCancelEdit();
+                      }}
+                      className="w-12 rounded-md border border-secondary bg-white px-1.5 py-0.5 text-center text-xs font-bold text-text-main dark:border-zinc-600 dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-secondary/50"
+                      style={{ fontSize: "16px" }}
+                    />
+                    <span>เวร/เดือน</span>
+                    <button
+                      type="button"
+                      onClick={handleSaveQuota}
+                      className="rounded-md bg-primary p-1 text-white hover:brightness-110 transition-all active:scale-95"
+                      title="บันทึก"
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="rounded-md bg-surface-subtle p-1 text-text-muted hover:bg-slate-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 transition-all active:scale-95"
+                      title="ยกเลิก"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ) : (
+                  <span className="font-bold text-text-main dark:text-white">
+                    {quota} เวร/เดือน
+                  </span>
+                )}
+              </div>
+
+              {/* 2-Step Quota Formula Explanation */}
+              <div className="rounded-xl border border-surface-subtle bg-surface-subtle/50 px-2.5 py-2 text-[10.5px] text-text-muted dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-400">
+                <div className="flex items-center gap-1 font-semibold text-text-main dark:text-zinc-200">
+                  <span>⏱️ กฎการคำนวณโควต้าเวรดำ:</span>
+                </div>
+                <div className="mt-1 space-y-0.5 pl-3 text-[10.5px]">
+                  <div>
+                    1. ชม.เวรดำ = วันทำการ จ-ศ ({effectiveWeekdays} วัน) × 8 ชม. ={" "}
+                    <strong>{effectiveHours} ชม.</strong>
+                  </div>
+                  <div>
+                    2. แปลงเป็นจำนวนเวร = {effectiveHours} ชม. ÷ 8 ชม. ={" "}
+                    <strong className="text-primary dark:text-emerald-400">
+                      {quotaCalc.quotaShifts} เวร
+                    </strong>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Progress Bar */}
@@ -231,14 +277,14 @@ export default function MonthlyQuotaWidget({
                   >
                     {blackCount}/{quota}
                   </span>{" "}
-                  วัน
+                  เวร
                   {isMet ? (
                     <span className="text-[11px] text-primary dark:text-emerald-400 font-medium">
                       (ครบเกณฑ์)
                     </span>
                   ) : (
                     <span className="text-[11px] text-shift-red dark:text-rose-400 font-medium">
-                      (ขาดอีก {remaining} วัน)
+                      (ขาดอีก {remaining} เวร)
                     </span>
                   )}
                 </span>
@@ -268,7 +314,7 @@ export default function MonthlyQuotaWidget({
                   <strong className="text-text-main dark:text-white">
                     {blackCount}
                   </strong>{" "}
-                  วัน
+                  เวร
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -278,7 +324,7 @@ export default function MonthlyQuotaWidget({
                   <strong className="text-shift-red dark:text-rose-400">
                     {redCount}
                   </strong>{" "}
-                  วัน
+                  เวร
                 </span>
               </div>
             </div>

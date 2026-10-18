@@ -8,6 +8,8 @@ import {
   updateShiftAction,
   swapShiftAction,
   undoSwapShiftAction,
+  sellShiftAction,
+  undoSellShiftAction,
   restoreShiftAction,
   deleteShiftAction,
 } from "../app/actions/shiftActions";
@@ -18,6 +20,7 @@ import {
   deleteServiceAction,
   deleteServicesByCustomerIdAction,
 } from "../app/actions/serviceActions";
+import { calculateMedicationCostSatang, calculateMedicationLineCostSatang } from "./conflictEngine";
 import {
   getPersonalEventsAction,
   createPersonalEventAction,
@@ -42,11 +45,13 @@ import {
   ShiftRecord,
   ShiftCategory,
   ShiftType,
-  DEFAULT_BLACK_SHIFT_QUOTA,
   SwapTrailNode,
+  SaleMetadata,
   SHIFT_CONFIG,
   SHIFT_CATEGORY_CONFIG,
   Medications,
+  resolveMedicationCategory,
+  MedicationUsageLine,
   ClinicWorkRecord,
   ClinicPresetShift,
   PersonalEventRecord,
@@ -54,6 +59,8 @@ import {
   CalendarFeedConfig,
 } from "../types/vendee";
 import { generateSecureFeedToken, DEFAULT_FEED_TOKEN } from "./calendar/feedToken";
+import { countMonthlyShifts, calculateMonthlyBlackShiftQuota } from "./quota";
+import { sortEventsByStartTime } from "./sortEvents";
 import { regenerateFeedTokenAction } from "../app/actions/calendarActions";
 
 const STORAGE_KEYS = {
@@ -536,16 +543,20 @@ export function subscribeToStorage(callback: () => void) {
 
 // Customers
 export function getCustomers(): Customer[] {
-  if (typeof window === "undefined") return initialCustomers;
+  if (typeof window === "undefined") {
+    return [...initialCustomers].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
+  }
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
     if (!raw) {
       localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(initialCustomers));
-      return initialCustomers;
+      return [...initialCustomers].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : initialCustomers;
+    return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
   } catch {
-    return initialCustomers;
+    return [...initialCustomers].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
   }
 }
 
@@ -700,7 +711,9 @@ export async function syncCustomersFromApi(): Promise<{
             } catch (_) {}
           }
         }
-        customers = [...remoteCusts, ...localOnly];
+        customers = [...remoteCusts, ...localOnly].sort((a, b) =>
+          (a.name || "").localeCompare(b.name || "", "th", { numeric: true })
+        );
         localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
         triggerSync();
       }
@@ -1151,23 +1164,216 @@ export async function undoSwapShift(shiftId: string): Promise<boolean> {
 }
 
 /**
+ * Sell a Refer shift (DOMAIN_RULES.md 2.4 Refer Shift Selling & Transfer Rules)
+ * - One-way transfer (status: "sold_out")
+ * - Does not impact black shift quota (quota: 14)
+ * - Frees seller from 24-hr Standby constraint
+ * - Records buyerName, salePriceSatang (Integer), soldDate, paymentStatus, and note
+ */
+export async function sellShift(params: {
+  shiftId: string;
+  buyerName: string;
+  salePriceSatang: number;
+  soldDate?: string;
+  paymentStatus?: "unpaid" | "paid";
+  note?: string;
+}): Promise<ShiftRecord> {
+  const current = getShifts();
+  const shiftIndex = current.findIndex((s) => s.id === params.shiftId);
+
+  if (shiftIndex === -1) {
+    throw new Error("ไม่พบเวรที่ต้องการขาย");
+  }
+
+  const targetShift = current[shiftIndex];
+
+  if (targetShift.status === "sold_out") {
+    throw new Error("เวรนี้ถูกทำรายการขายไปแล้ว");
+  }
+
+  if (targetShift.status !== "active") {
+    throw new Error("เวรนี้ไม่ได้อยู่ในสถานะพร้อมขาย");
+  }
+
+  if (targetShift.swapMeta?.isLocked || isShiftInPast(targetShift.date)) {
+    throw new Error("ไม่สามารถขายเวรในอดีตที่ถูกล็อกแล้วได้");
+  }
+
+  const isRefer =
+    targetShift.shiftType === "r1" ||
+    targetShift.shiftType === "r2" ||
+    targetShift.category === "green";
+
+  if (!isRefer) {
+    throw new Error("อนุญาตให้ขายได้เฉพาะเวร Refer (R1, R2) เท่านั้น");
+  }
+
+  const soldDate = params.soldDate || new Date().toISOString().split("T")[0];
+  const paymentStatus = params.paymentStatus || "unpaid";
+
+  const saleMeta: SaleMetadata = {
+    buyerName: params.buyerName.trim(),
+    salePriceSatang: params.salePriceSatang,
+    soldDate,
+    paymentStatus,
+    note: params.note?.trim() || undefined,
+  };
+
+  let updatedShift: ShiftRecord = {
+    ...targetShift,
+    status: "sold_out",
+    saleMeta,
+  };
+
+  // Supabase update if remote ID
+  if (!params.shiftId.startsWith("shift-")) {
+    try {
+      const res = await sellShiftAction({
+        shiftId: params.shiftId,
+        buyerName: params.buyerName.trim(),
+        salePriceSatang: params.salePriceSatang,
+        soldDate,
+        paymentStatus,
+        note: params.note?.trim(),
+      });
+      if (res.success && res.data) {
+        updatedShift = res.data;
+      }
+    } catch (err) {
+      console.warn("sellShiftAction warning:", err);
+    }
+  }
+
+  current[shiftIndex] = updatedShift;
+  localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(current));
+  triggerSync();
+
+  return updatedShift;
+}
+
+/**
+ * Undo / Rollback a Refer shift sale (DOMAIN_RULES.md 2.4.5 & 2.5.4)
+ * - Restores status to 'active'
+ * - Clears saleMeta
+ * - Permitted only if isLocked === false and shiftDate >= CURRENT_DATE
+ */
+export async function undoSellShift(shiftId: string): Promise<ShiftRecord> {
+  const current = getShifts();
+  const shiftIndex = current.findIndex((s) => s.id === shiftId);
+
+  if (shiftIndex === -1) {
+    throw new Error("ไม่พบเวรที่ต้องการยกเลิกการขาย");
+  }
+
+  const targetShift = current[shiftIndex];
+
+  if (targetShift.status !== "sold_out") {
+    throw new Error("เวรนี้ไม่ได้อยู่ในสถานะขายแล้ว");
+  }
+
+  if (targetShift.swapMeta?.isLocked || isShiftInPast(targetShift.date)) {
+    throw new Error("ไม่สามารถยกเลิกการขายเวรในอดีตที่ถูกล็อกแล้วได้");
+  }
+
+  let restoredShift: ShiftRecord = {
+    ...targetShift,
+    status: "active",
+    saleMeta: undefined,
+  };
+
+  // Supabase rollback if remote ID
+  if (!shiftId.startsWith("shift-")) {
+    try {
+      const res = await undoSellShiftAction(shiftId);
+      if (res.success && res.data) {
+        restoredShift = res.data;
+      }
+    } catch (err) {
+      console.warn("undoSellShiftAction warning:", err);
+    }
+  }
+
+  current[shiftIndex] = restoredShift;
+  localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(current));
+  triggerSync();
+
+  return restoredShift;
+}
+
+/**
+ * Retrieve all shifts that have been sold (status === "sold_out")
+ */
+export function getSoldShifts(): ShiftRecord[] {
+  const shifts = getShifts();
+  return shifts.filter((s) => s.status === "sold_out");
+}
+
+/**
+ * Monthly Shift Sales statistics
+ */
+export function getMonthlyShiftSalesStats(yearMonth: string = "2026-09"): {
+  totalSold: number;
+  paidCount: number;
+  unpaidCount: number;
+  paidTotalSatang: number;
+  unpaidTotalSatang: number;
+  paidTotalBaht: number;
+  unpaidTotalBaht: number;
+  soldShifts: ShiftRecord[];
+} {
+  const shifts = getShifts();
+  const soldShifts = shifts.filter(
+    (s) => s.status === "sold_out" && s.date.startsWith(yearMonth)
+  );
+
+  let paidCount = 0;
+  let unpaidCount = 0;
+  let paidTotalSatang = 0;
+  let unpaidTotalSatang = 0;
+
+  soldShifts.forEach((s) => {
+    const priceSatang = s.saleMeta?.salePriceSatang || 0;
+    if (s.saleMeta?.paymentStatus === "paid") {
+      paidCount++;
+      paidTotalSatang += priceSatang;
+    } else {
+      unpaidCount++;
+      unpaidTotalSatang += priceSatang;
+    }
+  });
+
+  return {
+    totalSold: soldShifts.length,
+    paidCount,
+    unpaidCount,
+    paidTotalSatang,
+    unpaidTotalSatang,
+    paidTotalBaht: paidTotalSatang / 100,
+    unpaidTotalBaht: unpaidTotalSatang / 100,
+    soldShifts,
+  };
+}
+
+/**
  * Helper to calculate active black shifts for a given yearMonth (e.g. "2026-09")
  */
-export function getMonthlyBlackShiftStats(yearMonth: string = "2026-09"): {
+export function getMonthlyBlackShiftStats(
+  yearMonth: string = "2026-09",
+  shiftsList?: ShiftRecord[],
+  customQuota?: number
+): {
   blackCount: number;
   redCount: number;
   quota: number;
   remaining: number;
   isMet: boolean;
+  quotaHours: number;
+  weekdaysCount: number;
 } {
-  const shifts = getShifts();
-  const monthShifts = shifts.filter(
-    (s) => s.status === "active" && s.date.startsWith(yearMonth)
-  );
-
-  const blackCount = monthShifts.filter((s) => s.category === "black").length;
-  const redCount = monthShifts.filter((s) => s.category === "red").length;
-  const quota = DEFAULT_BLACK_SHIFT_QUOTA;
+  const shifts = shiftsList ?? getShifts();
+  const { blackCount, redCount } = countMonthlyShifts(shifts, yearMonth);
+  const quotaCalc = calculateMonthlyBlackShiftQuota(yearMonth);
+  const quota = customQuota !== undefined && customQuota > 0 ? customQuota : quotaCalc.quotaShifts;
   const remaining = Math.max(0, quota - blackCount);
   const isMet = blackCount >= quota;
 
@@ -1177,6 +1383,8 @@ export function getMonthlyBlackShiftStats(yearMonth: string = "2026-09"): {
     quota,
     remaining,
     isMet,
+    quotaHours: quotaCalc.blackShiftHours,
+    weekdaysCount: quotaCalc.weekdaysCount,
   };
 }
 
@@ -1266,6 +1474,16 @@ export async function saveService(
   const existingService = existingIdx >= 0 ? current[existingIdx] : undefined;
   const normalizedTime = (service.time || "09:00").slice(0, 5);
   const cleanMeds = (service.medications || []).map((m) => m.trim()).filter(Boolean);
+  // Medication usage lines: auto-calc line cost; total cost = Σ line cost (DOMAIN_RULES §3.1.3)
+  const usages: MedicationUsageLine[] = (service.medicationUsages || [])
+    .filter((u) => u.quantity > 0)
+    .map((u) => ({ ...u, lineCostSatang: calculateMedicationLineCostSatang(u.quantity, u.unitCostSatang) }));
+  const usageCostSatang = usages.length > 0 ? calculateMedicationCostSatang(usages) : undefined;
+  // Legacy records (no usage lines) keep their manually-entered cost; records that had usages reset to 0 when cleared.
+  const legacyMedicationCostThb =
+    usages.length === 0 && !(existingService?.medicationUsages && existingService.medicationUsages.length > 0)
+      ? (existingService?.medicationCostSatang ?? service.medicationCostSatang ?? 0) / 100
+      : 0;
 
   let remoteService: CustomerServiceRecord | null = null;
 
@@ -1284,6 +1502,8 @@ export async function saveService(
               ? service.otherServiceText
               : existingService?.otherServiceText,
           medications: cleanMeds,
+          medicationUsages: usages,
+          medicationCost: legacyMedicationCostThb,
           note: service.note,
           price: service.price,
         });
@@ -1307,6 +1527,8 @@ export async function saveService(
               ? service.otherServiceText
               : existingService?.otherServiceText,
           medications: cleanMeds,
+          medicationUsages: usages,
+          medicationCost: legacyMedicationCostThb,
           note: service.note,
           price: service.price,
         });
@@ -1328,7 +1550,9 @@ export async function saveService(
         services: service.services || ["injection"],
         otherServiceText: service.otherServiceText,
         medications: cleanMeds,
-        note: service.note,
+        medicationUsages: usages,
+          medicationCost: legacyMedicationCostThb,
+          note: service.note,
         price: service.price,
       });
       if (res.success && res.data) {
@@ -1347,6 +1571,8 @@ export async function saveService(
     type: "service",
     time: normalizedTime,
     medications: cleanMeds,
+    medicationUsages: usages,
+    medicationCostSatang: usageCostSatang ?? Math.round(legacyMedicationCostThb * 100),
     createdAt: existingService?.createdAt || service.createdAt || new Date().toISOString(),
   };
 
@@ -1466,21 +1692,28 @@ export const initialMedications: Medications[] = [
 ];
 
 export function getMedications(): Medications[] {
-  if (typeof window === "undefined") return initialMedications;
+  if (typeof window === "undefined") {
+    return [...initialMedications].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
+  }
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.MEDICATIONS);
     if (!raw) {
       localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(initialMedications));
-      return initialMedications;
+      return [...initialMedications].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
     }
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) {
       localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(initialMedications));
-      return initialMedications;
+      return [...initialMedications].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
     }
-    return parsed;
+    return parsed
+      .map((m: Medications) => ({
+        ...m,
+        category: resolveMedicationCategory(m.name, m.category),
+      }))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
   } catch {
-    return initialMedications;
+    return [...initialMedications].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
   }
 }
 
@@ -1517,6 +1750,7 @@ export async function syncMedicationsFromApi(): Promise<{
               const createRes = await createMedicationAction({
                 name: localMed.name,
                 size: localMed.size,
+                category: localMed.category,
                 unit: localMed.unit,
                 price: localMed.price,
                 description: localMed.description || localMed.note,
@@ -1529,7 +1763,9 @@ export async function syncMedicationsFromApi(): Promise<{
             }
           }
         }
-        medications = [...remoteMeds];
+        medications = [...remoteMeds].sort((a, b) =>
+          (a.name || "").localeCompare(b.name || "", "th", { numeric: true })
+        );
         localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
         triggerSync();
         return { medications, isOnline: true };
@@ -1540,7 +1776,8 @@ export async function syncMedicationsFromApi(): Promise<{
             await createMedicationAction({
               name: localMed.name,
               size: localMed.size,
-              unit: localMed.unit,
+              category: localMed.category,
+                unit: localMed.unit,
               price: localMed.price,
               description: localMed.description || localMed.note,
             });
@@ -1580,6 +1817,7 @@ export async function saveMedication(
       const res = await updateMedicationAction(med.id!, {
         name: med.name,
         size: med.size,
+        category: med.category,
         unit: med.unit,
         price: priceVal,
         description: med.description || med.note,
@@ -1594,6 +1832,7 @@ export async function saveMedication(
       const res = await createMedicationAction({
         name: med.name,
         size: med.size,
+        category: med.category,
         unit: med.unit,
         price: priceVal,
         description: med.description || med.note,
@@ -1616,6 +1855,7 @@ export async function saveMedication(
   const finalId = remoteMed?.id || id;
   const newMed: Medications = remoteMed || {
     ...med,
+    category: resolveMedicationCategory(med.name, med.category),
     id: finalId,
     price: priceVal,
     description: med.description || med.note,
@@ -1837,23 +2077,7 @@ export function getAllActivities(): ActivityItem[] {
 
   const combined: ActivityItem[] = [...visibleShifts, ...services, ...clinicLogs, ...personalEvents];
 
-  return combined.sort((a, b) => {
-    const dateA = a.type === "personal_event" ? (a as PersonalEventRecord).eventDate : a.date;
-    const dateB = b.type === "personal_event" ? (b as PersonalEventRecord).eventDate : b.date;
-    const dateComp = dateB.localeCompare(dateA);
-    if (dateComp !== 0) return dateComp;
-
-    const getTimeStr = (item: ActivityItem) => {
-      if (item.type === "service") return (item as CustomerServiceRecord).time || "00:00";
-      if (item.type === "clinic") return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "00:00";
-      if (item.type === "personal_event") return (item as PersonalEventRecord).startTime || "00:00";
-      const shift = item as ShiftRecord;
-      const conf = SHIFT_CONFIG[shift.shiftType];
-      return conf?.period ? conf.period.split(" - ")[0] : "00:00";
-    };
-
-    return getTimeStr(b).localeCompare(getTimeStr(a));
-  });
+  return sortEventsByStartTime(combined);
 }
 
 // ─── Calendar Feed Management (WebCal / iPhone Sync) ──────────────────────────

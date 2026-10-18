@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Users,
   X,
-  RotateCw,
 } from "lucide-react";
 import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
@@ -75,12 +74,12 @@ export default function CustomersPage() {
 
   // Search filter across Name
   const filteredCustomers = useMemo(() => {
-    if (!searchQuery.trim()) return customers;
-    const q = searchQuery.toLowerCase().trim();
-    return customers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q)
-    );
+    const list = !searchQuery.trim()
+      ? customers
+      : customers.filter((c) =>
+          c.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+        );
+    return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
   }, [customers, searchQuery]);
 
   // Open Add Service modal with specific customer preselected
@@ -116,53 +115,40 @@ export default function CustomersPage() {
       {/* Header */}
       <AppBar
         title="รายชื่อลูกค้า"
-        showBack={false}
         isSyncing={isSyncing}
-        rightAction={
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={syncData}
-              disabled={isSyncing}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-slate-100 hover:text-text-main dark:hover:bg-zinc-800 transition-colors disabled:opacity-60 cursor-pointer"
-              title="รีเฟรชข้อมูลลูกค้าจากฐานข้อมูล"
-              aria-label="ซิงค์ข้อมูลลูกค้า"
-            >
-              <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-sky-600 dark:text-sky-400" : ""}`} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpenNewCustomerModal(true)}
-              className="flex items-center gap-1 rounded-full bg-gradient-to-r from-sky-500 to-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all"
-            >
-              <UserPlus className="h-3.5 w-3.5" />
-              <span>เพิ่มลูกค้า</span>
-            </button>
-          </div>
-        }
       />
 
       {/* Main Container */}
       <main className="mx-auto w-full max-w-lg flex-1 p-4 space-y-4">
-        {/* Search Bar */}
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="ค้นหาชื่อ, เบอร์โทร หรือ Note จำแนก..."
-            className="w-full rounded-2xl border border-surface-subtle bg-card-bg py-3 pl-11 pr-10 text-sm text-text-main shadow-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
-          />
-          <Search className="pointer-events-none absolute left-3.5 top-3.5 h-4 w-4 text-text-muted" />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3.5 top-3.5 text-text-muted hover:text-text-main dark:hover:text-zinc-200"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
+        {/* Search Bar & Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOpenNewCustomerModal(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500 to-emerald-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span>เพิ่มลูกค้า</span>
+          </button>
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ค้นหาชื่อ, เบอร์โทร หรือ Note จำแนก..."
+              className="w-full rounded-2xl border border-surface-subtle bg-card-bg py-2.5 pl-10 pr-9 text-sm text-text-main shadow-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
+            />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main dark:hover:text-zinc-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Customer Count Badge */}

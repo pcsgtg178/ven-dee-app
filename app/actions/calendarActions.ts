@@ -25,7 +25,7 @@ export async function getFeedTokenAction(): Promise<ActionResult<{ token: string
 
     // If feed_token column doesn't exist yet or no row found, return DEFAULT_FEED_TOKEN
     return { success: true, data: { token: DEFAULT_FEED_TOKEN } };
-  } catch (err: any) {
+  } catch {
     return { success: true, data: { token: DEFAULT_FEED_TOKEN } };
   }
 }
@@ -53,7 +53,7 @@ export async function regenerateFeedTokenAction(): Promise<ActionResult<{ token:
       data: { token: newToken },
       message: "สร้างรหัสลับ (Feed Token) สำหรับปฏิทินใหม่สำเร็จ",
     };
-  } catch (err: any) {
+  } catch {
     const newToken = generateSecureFeedToken();
     return {
       success: true,

@@ -7,7 +7,8 @@
     "build": "next build",
     "postbuild": "xcopy /E /I /Y public .next\\standalone\\public && xcopy /E /I /Y .next\\static .next\\standalone\\.next\\static",
     "start": "node .next/standalone/server.js",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-strip-types --test lib/__tests__/quota.test.ts"
   },
   "dependencies": {
     "@fullcalendar/react": "^7.1.0",

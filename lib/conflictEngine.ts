@@ -181,3 +181,39 @@ export function satangToThb(satang: number): number {
 export function thbToSatang(thb: number): number {
   return Math.round(thb * 100);
 }
+
+/**
+ * Medication usage costing (DOMAIN_RULES.md §3.1 item 3)
+ * unit cost = price_satang / size  (Satang per 1 unit of the pack size)
+ * line cost = round(quantity × unitCostSatang)
+ * medicationCost = Σ line cost
+ */
+export function calculateUnitCostSatang(price?: string | number, size?: string | number): number {
+  const priceThb = Number(price);
+  if (!Number.isFinite(priceThb) || priceThb <= 0) return 0;
+  const sizeNum = parseFloat(String(size ?? ""));
+  const divisor = Number.isFinite(sizeNum) && sizeNum > 0 ? sizeNum : 1;
+  return (priceThb * 100) / divisor;
+}
+
+export function calculateMedicationLineCostSatang(quantity: number, unitCostSatang: number): number {
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitCostSatang)) return 0;
+  return Math.round(quantity * unitCostSatang);
+}
+
+export function calculateMedicationCostSatang(
+  usages: Array<{ quantity: number; unitCostSatang: number }>
+): number {
+  return usages.reduce((sum, u) => sum + calculateMedicationLineCostSatang(u.quantity, u.unitCostSatang), 0);
+}
+
+/**
+ * Aggregates gig net profit and paid shift sales per DOMAIN_RULES.md Section 3.3
+ */
+export function calculateTotalNetIncomeSatang(
+  serviceNetProfitSatang: number,
+  paidShiftSalesSatang: number
+): number {
+  return serviceNetProfitSatang + paidShiftSalesSatang;
+}
+

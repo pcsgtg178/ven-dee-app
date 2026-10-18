@@ -1,11 +1,21 @@
-﻿"use client";
+"use client";
 
 import { useEffect } from "react";
 
 export default function PwaRegister() {
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      // Register after page load for performance
+      if (process.env.NODE_ENV !== "production") {
+        // In local development, unregister existing service workers to avoid stale HMR chunk issues
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const registration of registrations) {
+            registration.unregister();
+          }
+        });
+        return;
+      }
+
+      // Register after page load for performance in production
       window.addEventListener("load", () => {
         navigator.serviceWorker
           .register("/sw.js")

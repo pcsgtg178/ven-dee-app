@@ -4,33 +4,29 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import moment from "moment";
 import "moment/locale/th";
 import {
-  BarChart3,
   Calendar,
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  DollarSign,
   Package,
-  Layers,
-  ArrowUpRight,
   Pill,
   Users,
   Clock,
-  Sparkles,
-  CheckCircle2,
-  CalendarDays,
   Percent,
   RotateCw,
+  Ambulance,
 } from "lucide-react";
 import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
 import {
   CustomerServiceRecord,
   Medications,
+  ShiftRecord,
 } from "../../types/vendee";
 import {
   getServices,
   getMedications,
+  getShifts,
   syncAllDataFromApi,
   subscribeToStorage,
 } from "../../lib/storage";
@@ -40,6 +36,7 @@ type PeriodType = "month" | "week" | "day";
 export default function DashboardPage() {
   const [services, setServices] = useState<CustomerServiceRecord[]>([]);
   const [masterMedications, setMasterMedications] = useState<Medications[]>([]);
+  const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   
   // Period filter state
   const [periodType, setPeriodType] = useState<PeriodType>("month");
@@ -53,6 +50,7 @@ export default function DashboardPage() {
   const loadData = useCallback(() => {
     setServices(getServices());
     setMasterMedications(getMedications());
+    setShifts(getShifts());
   }, []);
 
   const syncData = useCallback(async () => {
@@ -157,15 +155,24 @@ export default function DashboardPage() {
     });
   }, [services, startDateStr, endDateStr]);
 
+  // Sold Refer Shifts in current period
+  const periodSoldShifts = useMemo(() => {
+    return shifts.filter((s) => {
+      if (s.status !== "sold_out") return false;
+      const effectiveDate = s.saleMeta?.soldDate || s.date;
+      return effectiveDate >= startDateStr && effectiveDate <= endDateStr;
+    });
+  }, [shifts, startDateStr, endDateStr]);
+
   // Financial calculations
   const financialSummary = useMemo(() => {
-    let totalRevenue = 0;
+    let serviceRevenue = 0;
     let totalCost = 0;
 
     periodServices.forEach((s) => {
       // 1. Revenue
       const rev = s.price ?? (s.serviceFeeSatang ? s.serviceFeeSatang / 100 : 0);
-      totalRevenue += rev;
+      serviceRevenue += rev;
 
       // 2. Cost calculation: either explicit medicationCostSatang, or sum of medication costs
       let caseCost = 0;
@@ -184,17 +191,41 @@ export default function DashboardPage() {
       totalCost += caseCost;
     });
 
+    // 3. Shift sales revenue (Satang standard: paid sales counted as actual income)
+    let paidShiftSaleRevenue = 0;
+    let unpaidShiftSaleRevenue = 0;
+    let paidShiftCount = 0;
+    let unpaidShiftCount = 0;
+
+    periodSoldShifts.forEach((s) => {
+      const priceBaht = (s.saleMeta?.salePriceSatang || 0) / 100;
+      if (s.saleMeta?.paymentStatus === "paid") {
+        paidShiftSaleRevenue += priceBaht;
+        paidShiftCount += 1;
+      } else {
+        unpaidShiftSaleRevenue += priceBaht;
+        unpaidShiftCount += 1;
+      }
+    });
+
+    const totalRevenue = serviceRevenue + paidShiftSaleRevenue;
     const netProfit = totalRevenue - totalCost;
     const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
     return {
+      serviceRevenue,
+      paidShiftSaleRevenue,
+      unpaidShiftSaleRevenue,
+      paidShiftCount,
+      unpaidShiftCount,
+      totalSoldShifts: periodSoldShifts.length,
       totalRevenue,
       totalCost,
       netProfit,
       profitMargin,
       totalCases: periodServices.length,
     };
-  }, [periodServices, medCostMap]);
+  }, [periodServices, periodSoldShifts, medCostMap]);
 
   // Product / Medication breakdown
   const productBreakdown = useMemo(() => {
@@ -351,19 +382,31 @@ export default function DashboardPage() {
               <span>{financialSummary.netProfit.toLocaleString()}</span>
             </div>
             <p className="text-xs text-emerald-100/80 mt-1">
-              คำนวณจากรายได้หักต้นทุนยาและค่าใช้จ่าย ({financialSummary.totalCases} เคสบริการ)
+              คำนวณจากรายได้บริการ {financialSummary.totalCases} เคส {financialSummary.paidShiftCount > 0 ? `+ ขายเวร Refer ${financialSummary.paidShiftCount} เวร ` : ""}หักต้นทุนยาและค่าใช้จ่าย
             </p>
           </div>
 
           {/* Revenue vs Cost Sub-Grid */}
           <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/15 pt-4">
             <div className="space-y-0.5">
-              <span className="text-[11px] font-medium text-emerald-100/70">
-                💰 รายได้รวม
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-emerald-100/70">
+                  💰 รายได้รวม
+                </span>
+                {financialSummary.paidShiftSaleRevenue > 0 && (
+                  <span className="text-[9px] text-emerald-200 bg-white/10 rounded-sm px-1">
+                    รวมขายเวร
+                  </span>
+                )}
+              </div>
               <div className="text-lg font-extrabold text-white">
                 ฿{financialSummary.totalRevenue.toLocaleString()}
               </div>
+              {financialSummary.paidShiftSaleRevenue > 0 && (
+                <div className="text-[10px] text-emerald-100/80">
+                  บริการ ฿{financialSummary.serviceRevenue.toLocaleString()} · เวร ฿{financialSummary.paidShiftSaleRevenue.toLocaleString()}
+                </div>
+              )}
             </div>
 
             <div className="space-y-0.5">
@@ -373,8 +416,103 @@ export default function DashboardPage() {
               <div className="text-lg font-extrabold text-amber-200">
                 ฿{financialSummary.totalCost.toLocaleString()}
               </div>
+              <div className="text-[10px] text-emerald-100/70">
+                ค่ายาและเวชภัณฑ์
+              </div>
             </div>
           </div>
+        </div>
+
+        {/* Refer Shift Sales Summary Widget */}
+        <div className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                <Ambulance className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-text-main dark:text-white">
+                  รายรับจากการขายเวร Refer
+                </h3>
+                <p className="text-[11px] text-text-muted dark:text-zinc-400">
+                  ส่งต่อเวรฉุกเฉินและค่าตอบแทนตาม Satang Standard
+                </p>
+              </div>
+            </div>
+
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+              {periodSoldShifts.length} เวร
+            </span>
+          </div>
+
+          {periodSoldShifts.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center dark:border-zinc-800">
+              <Ambulance className="mx-auto h-8 w-8 text-slate-300 dark:text-zinc-600 mb-1.5" />
+              <p className="text-xs font-bold text-slate-600 dark:text-zinc-300">
+                ไม่มีการขายเวร Refer ในช่วงเวลานี้
+              </p>
+              <p className="text-[11px] text-text-muted dark:text-zinc-400 mt-0.5">
+                เมื่อทำรายการขายเวร Refer ข้อมูลรายรับจะปรากฏที่นี่
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                  <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                    ✓ ได้รับเงินแล้ว ({financialSummary.paidShiftCount} เวร)
+                  </span>
+                  <div className="text-base font-black text-emerald-800 dark:text-emerald-200 mt-0.5">
+                    ฿{financialSummary.paidShiftSaleRevenue.toLocaleString()}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+                  <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                    ⏳ รอรับเงิน ({financialSummary.unpaidShiftCount} เวร)
+                  </span>
+                  <div className="text-base font-black text-amber-800 dark:text-amber-200 mt-0.5">
+                    ฿{financialSummary.unpaidShiftSaleRevenue.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {periodSoldShifts.map((s) => {
+                  const priceBaht = (s.saleMeta?.salePriceSatang || 0) / 100;
+                  const isPaid = s.saleMeta?.paymentStatus === "paid";
+                  return (
+                    <div
+                      key={s.id}
+                      className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 dark:border-zinc-800/80 dark:bg-zinc-800/40 flex items-center justify-between text-xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 font-bold text-text-main dark:text-white">
+                          <span className="text-emerald-600">🚑</span>
+                          <span>ขายให้ {s.saleMeta?.buyerName || "พยาบาล"}</span>
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${
+                              isPaid
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300"
+                                : "bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300"
+                            }`}
+                          >
+                            {isPaid ? "ชำระแล้ว" : "ยังไม่ชำระ"}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-text-muted dark:text-zinc-400 pl-5">
+                          {s.date} {s.saleMeta?.note ? `· ${s.saleMeta.note}` : ""}
+                        </div>
+                      </div>
+                      <div className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">
+                        +฿{priceBaht.toLocaleString()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Product / Medication Breakdown Section */}

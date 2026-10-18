@@ -1,10 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Pill, RotateCw } from "lucide-react";
-import ThemeToggle from "./ThemeToggle";
+import { RotateCw } from "lucide-react";
 import { subscribeToSyncState } from "../../lib/storage";
 
 interface AppBarProps {
@@ -13,12 +10,6 @@ interface AppBarProps {
 
   hideTitle?: boolean;
 
-  /** Whether to show the back button. Defaults to true on subpages and false on HomePage ("/") */
-  showBack?: boolean;
-  /** Custom destination for the back button. Defaults to HomePage ("/") */
-  backHref?: string;
-  /** Custom click handler for back button */
-  onBack?: () => void;
   /** Optional element or buttons on the right side */
   rightAction?: React.ReactNode;
   /** Additional CSS classes for header container */
@@ -30,15 +21,10 @@ interface AppBarProps {
 export default function AppBar({
   title,
   hideTitle = false,
-  showBack,
-  backHref = "/",
-  onBack,
   rightAction,
   className = "",
   isSyncing: propIsSyncing,
 }: AppBarProps) {
-  const pathname = usePathname();
-  const router = useRouter();
   const [globalIsSyncing, setGlobalIsSyncing] = useState(false);
 
   useEffect(() => {
@@ -50,41 +36,13 @@ export default function AppBar({
 
   const isSyncing = propIsSyncing !== undefined ? propIsSyncing : globalIsSyncing;
 
-  // If showBack is not explicitly provided, show back button when not on HomePage ("/")
-  const isHome = pathname === "/";
-  const shouldShowBack = showBack !== undefined ? showBack : !isHome;
-
-  const handleBackClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (onBack) {
-      e.preventDefault();
-      onBack();
-    } else if (backHref && backHref !== "/") {
-      // Follow standard navigation to custom backHref
-    } else if (typeof window !== "undefined" && window.history.length > 1) {
-      e.preventDefault();
-      router.back();
-    }
-  };
-
   return (
     <header
       className={`sticky top-0 left-0 right-0 z-40 border-b border-surface-subtle bg-white/90 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90 pt-safe ${className}`}
     >
       <div className="flex h-14 items-center justify-between px-3">
-        {/* Left: Back Button */}
-        <div className="flex min-w-11 shrink-0 items-center justify-start">
-          {shouldShowBack && (
-            <Link
-              href={backHref}
-              onClick={handleBackClick}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-main active:scale-95 touch-manipulation dark:text-zinc-300 dark:hover:bg-zinc-800"
-              aria-label="ย้อนกลับ"
-              title="ย้อนกลับ"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          )}
-        </div>
+        {/* Left: Spacer to keep center title balanced if rightAction exists */}
+        <div className="flex min-w-11 shrink-0 items-center justify-start" />
 
         {/* Center: Title */}
         {title && !hideTitle ? (
@@ -103,16 +61,8 @@ export default function AppBar({
           <div className="flex-1 pointer-events-none" />
         )}
 
-        {/* Right: Actions + Pill icon link + ThemeToggle */}
+        {/* Right: Actions */}
         <div className="relative z-50 flex min-w-11 shrink-0 items-center justify-end gap-1">
-          <Link
-            href="/medications"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-zinc-800 dark:hover:text-emerald-300 transition-colors"
-            title="จัดการรายการยา"
-          >
-            <Pill className="h-4 w-4" />
-          </Link>
-          <ThemeToggle size="sm" />
           {rightAction ?? null}
         </div>
       </div>

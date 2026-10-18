@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'vendee-app-v2';
+const CACHE_NAME = 'vendee-app-v2';
 
 const STATIC_ASSETS = [
   '/',
@@ -27,10 +27,13 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // 1. Never cache API routes or dynamic transactions (Network-Only)
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/media/')) {
+  // 1. Never cache in localhost development or API routes
+  if (
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/media/')
+  ) {
     event.respondWith(fetch(event.request));
     return;
   }

@@ -48,6 +48,7 @@ export default function RootLayout({
     <html lang="th" className="h-full" suppressHydrationWarning>
       <head>
         <script
+          id="theme-initializer"
           dangerouslySetInnerHTML={{
             __html: `
               try {

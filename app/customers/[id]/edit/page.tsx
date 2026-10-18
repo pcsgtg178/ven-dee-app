@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { User, Tag, MapPin, Check, AlertCircle, Trash2 } from "lucide-react";
+import { User, Check, AlertCircle, Trash2 } from "lucide-react";
 import AppBar from "../../../components/AppBar";
 import BottomNav from "../../../components/BottomNav";
 import ModalDeleteCustomer from "../../../components/ModalDeleteCustomer";
@@ -32,7 +32,7 @@ export default function EditCustomerPage() {
   if (!customer) {
     return (
       <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
-        <AppBar title="แก้ไขข้อมูลลูกค้า" showBack backHref="/customers" />
+        <AppBar title="แก้ไขข้อมูลลูกค้า" />
         <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center p-6 text-center">
           <AlertCircle className="h-12 w-12 text-slate-400 mb-3" />
           <h2 className="text-base font-bold">ไม่พบข้อมูลลูกค้า</h2>
@@ -68,11 +68,7 @@ export default function EditCustomerPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
-      <AppBar
-        title="แก้ไขข้อมูลลูกค้า"
-        showBack
-        backHref={`/customers/${customer.id}`}
-      />
+      <AppBar title="แก้ไขข้อมูลลูกค้า" />
 
       <main className="mx-auto w-full max-w-lg flex-1 p-4 space-y-4">
         {/* Customer Header Preview */}

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  Calendar,
   Download,
   Rss,
   Copy,
@@ -16,7 +15,6 @@ import {
   CalendarDays,
   Sparkles,
   AlertCircle,
-  HelpCircle,
 } from "lucide-react";
 import moment from "moment";
 import "moment/locale/th";
@@ -26,7 +24,6 @@ import {
   getClinicLogs,
   getPersonalEvents,
   getCalendarFeedConfig,
-  saveCalendarFeedConfig,
   regenerateCalendarFeedToken,
 } from "../../lib/storage";
 import { generateIcsCalendar } from "../../lib/calendar/icsGenerator";
@@ -80,12 +77,6 @@ export default function ModalExportCalendar({
   const webcalUrl = useMemo(() => {
     const host = origin.replace(/^https?:\/\//, "");
     return `webcal://${host}/api/calendar/feed?token=${encodeURIComponent(feedConfig.feedToken)}${
-      includeOffDays ? "&includeOff=true" : ""
-    }`;
-  }, [origin, feedConfig.feedToken, includeOffDays]);
-
-  const httpsFeedUrl = useMemo(() => {
-    return `${origin}/api/calendar/feed?token=${encodeURIComponent(feedConfig.feedToken)}${
       includeOffDays ? "&includeOff=true" : ""
     }`;
   }, [origin, feedConfig.feedToken, includeOffDays]);

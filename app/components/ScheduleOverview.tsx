@@ -32,18 +32,18 @@ import {
   deleteService,
   deleteClinicLog,
   deletePersonalEvent,
-  saveService,
   undoSwapShift,
+  undoSellShift,
   restoreShift,
   getMonthlyBlackShiftStats,
   syncAllDataFromApi,
   subscribeToSyncState,
 } from "../../lib/storage";
-import { RefreshCw, Wifi, RotateCw, AlertCircle } from "lucide-react";
 import ModalAddTodo from "./ModalAddTodo";
 import ModalAddPersonalEvent from "./ModalAddPersonalEvent";
 import ModalShiftSwap from "./ModalShiftSwap";
 import ModalSwapTrail from "./ModalSwapTrail";
+import ModalSellShift from "./ModalSellShift";
 import ModalEditShift from "./ModalEditShift";
 import ModalEditService from "./ModalEditService";
 import ModalEditClinicLog from "./ModalEditClinicLog";
@@ -52,7 +52,7 @@ import BottomNav from "./BottomNav";
 import ThemeToggle from "./ThemeToggle";
 import ModalConfirmAction, { ConfirmVariant } from "./ModalConfirmAction";
 import ModalExportCalendar from "./ModalExportCalendar";
-import { CalendarPlus } from "lucide-react";
+import { compareEventsByStartTime } from "../../lib/sortEvents";
 
 type ConfirmModalState =
   | {
@@ -98,6 +98,12 @@ export default function ScheduleOverview() {
     null,
   );
 
+  // Shift Sell Modal states
+  const [openSellModal, setOpenSellModal] = useState(false);
+  const [targetSellShift, setTargetSellShift] = useState<ShiftRecord | null>(
+    null,
+  );
+
   // Date detail bottom sheet state
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [openDateDetailSheet, setOpenDateDetailSheet] = useState(false);
@@ -139,10 +145,12 @@ export default function ScheduleOverview() {
 
   // Live API Sync states
   const [isSyncing, setIsSyncing] = useState(false);
-  const [apiConnected, setApiConnected] = useState<boolean | null>(null);
 
-  // Reference month for Quota Widget (e.g. 2026-09)
-  const currentMonthKey = "2026-09";
+  const [isMounted, setIsMounted] = useState(false);
+  const [customQuota, setCustomQuota] = useState<number | undefined>(undefined);
+
+  // Reference month for Quota Widget (current calendar month, e.g. 2026-10)
+  const currentMonthKey = moment().format("YYYY-MM");
 
   // Load activities from local storage only (fast, no network side-effects)
   const loadLocalData = useCallback(() => {
@@ -153,12 +161,10 @@ export default function ScheduleOverview() {
   const syncApiData = useCallback(async () => {
     try {
       setIsSyncing(true);
-      const res = await syncAllDataFromApi();
-      setApiConnected(res.isOnline);
+      await syncAllDataFromApi();
       setActivities(getAllActivities());
     } catch (err) {
       console.warn("API sync warning:", err);
-      setApiConnected(false);
     } finally {
       setIsSyncing(false);
     }
@@ -170,14 +176,12 @@ export default function ScheduleOverview() {
   }, [loadLocalData, syncApiData]);
 
   useEffect(() => {
+    setIsMounted(true);
     loadLocalData();
     syncApiData();
     const unsubscribe = subscribeToStorage(loadLocalData);
     const unsubSync = subscribeToSyncState((state) => {
       setIsSyncing(state.isSyncing);
-      if (typeof state.isOnline === "boolean") {
-        setApiConnected(state.isOnline);
-      }
     });
 
     const handleOpenAddEvent = (e: Event) => {
@@ -205,10 +209,13 @@ export default function ScheduleOverview() {
     };
   }, [loadLocalData, syncApiData]);
 
-  // Quota statistics for current month
+  // Quota statistics for current month (single shared pure function per DOMAIN_RULES.md §1)
   const quotaStats = useMemo(() => {
-    return getMonthlyBlackShiftStats(currentMonthKey);
-  }, [activities, currentMonthKey]);
+    const currentShifts = isMounted
+      ? activities.filter((a): a is ShiftRecord => a.type === "shift")
+      : [];
+    return getMonthlyBlackShiftStats(currentMonthKey, currentShifts, customQuota);
+  }, [isMounted, activities, currentMonthKey, customQuota]);
 
   // Filtered activities for list view
   const filteredActivities = useMemo(() => {
@@ -229,47 +236,18 @@ export default function ScheduleOverview() {
   const { upcomingActivities, pastActivities } = useMemo(() => {
     const todayStr = moment().format("YYYY-MM-DD");
 
-    const getTimeVal = (item: ActivityItem) => {
-      if (item.type === "shift") {
-        switch (item.shiftType) {
-          case "night":
-            return "00:00";
-          case "r1":
-          case "r2":
-            return "00:01";
-          case "morning":
-            return "08:00";
-          case "afternoon":
-            return "16:00";
-          default:
-            return "00:00";
-        }
-      }
-      if (item.type === "clinic") {
-        return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "12:30";
-      }
-      if (item.type === "personal_event") {
-        return (item as PersonalEventRecord).startTime || "00:00";
-      }
-      return (item as CustomerServiceRecord).time || "12:00";
-    };
-
     // วันนี้หรือวันถัดไปที่ใกล้มาก่อน (Nearest date first - Ascending)
     const upcoming = filteredActivities
       .filter((item) => item.date >= todayStr)
-      .sort((a, b) => {
-        const dateCmp = a.date.localeCompare(b.date);
-        if (dateCmp !== 0) return dateCmp;
-        return getTimeVal(a).localeCompare(getTimeVal(b));
-      });
+      .sort(compareEventsByStartTime);
 
-    // วันที่เลยไปแล้ว (Past: เรียงจากล่าสุดไว้บนสุด - Descending)
+    // วันที่เลยไปแล้ว (Past: วันล่าสุดไว้บนสุด แต่ภายในวันเดียวกันเรียงตามเวลาเริ่มจากน้อยไปมาก)
     const past = filteredActivities
       .filter((item) => item.date < todayStr)
       .sort((a, b) => {
         const dateCmp = b.date.localeCompare(a.date);
         if (dateCmp !== 0) return dateCmp;
-        return getTimeVal(b).localeCompare(getTimeVal(a));
+        return compareEventsByStartTime(a, b);
       });
 
     return { upcomingActivities: upcoming, pastActivities: past };
@@ -286,39 +264,7 @@ export default function ScheduleOverview() {
         }
         return true;
       })
-      .sort((a, b) => {
-        const getTimeVal = (item: ActivityItem) => {
-          if (item.type === "shift") {
-            switch (item.shiftType) {
-              case "night":
-                return "00:00";
-              case "r1":
-              case "r2":
-                return "00:01";
-              case "off":
-                return "00:02";
-              case "ctm":
-                return "07:30";
-              case "morning":
-                return "08:00";
-              case "cta":
-                return "12:00";
-              case "afternoon":
-                return "16:00";
-              default:
-                return "00:00";
-            }
-          }
-          if (item.type === "clinic") {
-            return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "12:30";
-          }
-          if (item.type === "personal_event") {
-            return (item as PersonalEventRecord).startTime || "00:00";
-          }
-          return (item as CustomerServiceRecord).time || "12:00";
-        };
-        return getTimeVal(a).localeCompare(getTimeVal(b));
-      });
+      .sort(compareEventsByStartTime);
   }, [activities, selectedDateStr]);
 
   // Calendar events transformation (hide swapped-out shifts from calendar & group shifts per day)
@@ -505,6 +451,25 @@ export default function ScheduleOverview() {
   const handleInitiateSwap = (shift: ShiftRecord) => {
     setTargetSwapShift(shift);
     setOpenSwapModal(true);
+  };
+
+  // Refer Shift Sell handler
+  const handleInitiateSell = (shift: ShiftRecord) => {
+    setTargetSellShift(shift);
+    setOpenSellModal(true);
+  };
+
+  // Undo Shift Sell handler
+  const handleUndoSell = async (shift: ShiftRecord) => {
+    try {
+      await undoSellShift(shift.id);
+      setToastMessage("ยกเลิกการขายเวรและคืนสถานะเวรปกติเรียบร้อยแล้ว");
+      setTimeout(() => setToastMessage(null), 3500);
+      reloadData();
+    } catch (err: any) {
+      setToastMessage(err.message || "เกิดข้อผิดพลาดในการยกเลิกการขายเวร");
+      setTimeout(() => setToastMessage(null), 3500);
+    }
   };
 
   // Swap trail modal handler
@@ -967,39 +932,12 @@ export default function ScheduleOverview() {
                 <p className="text-[10px] text-text-muted dark:text-zinc-400 leading-none">
                   บันทึกเวรและบริการลูกค้า
                 </p>
-                {/* Live Sync Badge */}
-                {isSyncing ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-semibold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/60 dark:border-sky-800/60 animate-pulse">
-                    <RotateCw className="h-2.5 w-2.5 animate-spin text-sky-600 dark:text-sky-400" />
-                    <span>กำลังซิงค์...</span>
-                  </span>
-                ) : apiConnected === true ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60" title="เชื่อมต่อฐานข้อมูลแล้ว">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    <span>ซิงค์แล้ว</span>
-                  </span>
-                ) : apiConnected === false ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60" title="โหมดออฟไลน์ (แคชในเครื่อง)">
-                    <AlertCircle className="h-2.5 w-2.5 text-amber-500" />
-                    <span>แคชในเครื่อง</span>
-                  </span>
-                ) : null}
               </div>
             </div>
           </div>
 
-          {/* Right Controls: [ Sync Button ] [ Theme Toggle ] & Segmented Control: [ รายการ | ปฏิทิน ] */}
+          {/* Right Controls: [ Theme Toggle ] & Segmented Control: [ รายการ | ปฏิทิน ] */}
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => reloadData()}
-              disabled={isSyncing}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-surface-subtle bg-white text-text-muted hover:text-text-main hover:bg-slate-50 active:scale-95 transition-all dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:text-white cursor-pointer disabled:opacity-60 shadow-2xs"
-              title="รีเฟรชและซิงค์ข้อมูลล่าสุดจากฐานข้อมูล"
-              aria-label="ซิงค์ข้อมูล"
-            >
-              <RotateCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin text-sky-600 dark:text-sky-400" : ""}`} />
-            </button>
             <ThemeToggle size="sm" />
             <div className="flex items-center rounded-full bg-surface-subtle p-1 dark:bg-zinc-800 shadow-inner">
               <button
@@ -1081,9 +1019,12 @@ export default function ScheduleOverview() {
             onViewTrail={handleViewTrail}
             onRequestUndoSwap={handleRequestUndoSwap}
             onRequestRestore={handleRequestRestore}
+            onSellShift={handleInitiateSell}
+            onUndoSellShift={handleUndoSell}
             onEditShift={handleEditShift}
             onEditService={handleEditService}
             onEditClinicLog={handleEditClinicLog}
+            onQuotaChange={setCustomQuota}
           />
         ) : (
           <ScheduleCalendarView
@@ -1121,6 +1062,8 @@ export default function ScheduleOverview() {
                 onViewTrail={(shift) => handleViewTrail(shift)}
                 onUndoSwap={(shift) => handleRequestUndoSwap(shift)}
                 onRestoreShift={(shift) => handleRequestRestore(shift)}
+                onSellShift={handleInitiateSell}
+                onUndoSellShift={handleUndoSell}
                 onEditShift={handleEditShift}
                 onEditService={handleEditService}
                 onEditClinicLog={handleEditClinicLog}
@@ -1178,6 +1121,21 @@ export default function ScheduleOverview() {
           setTargetTrailShift(null);
         }}
         shift={targetTrailShift}
+      />
+
+      {/* Modal Sell Refer Shift (การขายเวร Refer) */}
+      <ModalSellShift
+        isOpen={openSellModal}
+        onClose={() => {
+          setOpenSellModal(false);
+          setTargetSellShift(null);
+        }}
+        shift={targetSellShift}
+        onSuccess={() => {
+          setToastMessage("บันทึกการขายเวร Refer เรียบร้อยแล้ว 🚑");
+          setTimeout(() => setToastMessage(null), 3500);
+          reloadData();
+        }}
       />
 
       {/* Modal Edit Shift */}

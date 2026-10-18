@@ -13,6 +13,7 @@ import {
   Building2,
   ArrowLeftRight,
   Trash2,
+  Ambulance,
 } from "lucide-react";
 import moment from "moment";
 import "moment/locale/th";
@@ -33,6 +34,7 @@ import {
   canEditClinicLog,
 } from "../../lib/storage";
 import MonthlyQuotaWidget from "./MonthlyQuotaWidget";
+import { compareEventsByStartTime } from "../../lib/sortEvents";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -42,6 +44,8 @@ export interface QuotaStats {
   quota: number;
   remaining: number;
   isMet: boolean;
+  quotaHours?: number;
+  weekdaysCount?: number;
 }
 
 type SubViewMode = "card" | "timeline";
@@ -71,6 +75,9 @@ export interface ScheduleTodoListViewProps {
   onViewTrail: (shift: ShiftRecord) => void;
   onRequestUndoSwap: (shift: ShiftRecord) => void;
   onRequestRestore: (shift: ShiftRecord) => void;
+  /** Shift Selling callbacks */
+  onSellShift?: (shift: ShiftRecord) => void;
+  onUndoSellShift?: (shift: ShiftRecord) => void;
   /** Optional: callback when user edits quota from MonthlyQuotaWidget */
   onQuotaChange?: (newQuota: number) => void;
   /** Edit callbacks */
@@ -99,23 +106,6 @@ function groupByDate(activities: ActivityItem[]): DateGroup[] {
   return sorted.map(([dateStr, items]) => ({ dateStr, items }));
 }
 
-// ─── Helper: get event time for sorting ──────────────────────────────
-
-function getEventTime(item: ActivityItem): string {
-  if (item.type === "service") {
-    return (item as CustomerServiceRecord).time || "00:00";
-  }
-  if (item.type === "clinic") {
-    return (item as ClinicWorkRecord).presetShift.split(" - ")[0] || "00:00";
-  }
-  const shift = item as ShiftRecord;
-  const config = SHIFT_CONFIG[shift.shiftType];
-  if (config?.period) {
-    return config.period.split(" - ")[0] || "00:00";
-  }
-  return "00:00";
-}
-
 // ─── Timeline Row Component ──────────────────────────────────────────
 
 function TimelineRow({
@@ -123,6 +113,7 @@ function TimelineRow({
   onEditShift,
   onEditService,
   onSwapShift,
+  onSellShift,
   onEditClinicLog,
   onRequestDelete,
 }: {
@@ -130,6 +121,7 @@ function TimelineRow({
   onEditShift?: (shift: ShiftRecord) => void;
   onEditService?: (service: CustomerServiceRecord) => void;
   onSwapShift?: (shift: ShiftRecord) => void;
+  onSellShift?: (shift: ShiftRecord) => void;
   onEditClinicLog?: (clinicLog: ClinicWorkRecord) => void;
   onRequestDelete?: (item: ActivityItem) => void;
 }) {
@@ -206,6 +198,22 @@ function TimelineRow({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {!isSwapped &&
+            shift.status === "active" &&
+            (shift.shiftType === "r1" || shift.shiftType === "r2" || shift.category === "green") &&
+            onSellShift && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSellShift(shift);
+                }}
+                className="ml-auto rounded-lg p-1 text-emerald-600 hover:bg-emerald-50 active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-emerald-300 transition-all cursor-pointer"
+                title="ขายเวร Refer นี้"
+              >
+                <Ambulance className="h-3.5 w-3.5" />
+              </button>
+            )}
           {!isSwapped && onSwapShift && (
             <button
               type="button"
@@ -310,6 +318,8 @@ export default function ScheduleTodoListView({
   onViewTrail,
   onRequestUndoSwap,
   onRequestRestore,
+  onSellShift,
+  onUndoSellShift,
   quotaStats,
   currentMonthKey,
   onQuotaChange,
@@ -319,11 +329,18 @@ export default function ScheduleTodoListView({
 }: ScheduleTodoListViewProps) {
   const [subView, setSubView] = useState<SubViewMode>("card");
 
+  // Sold shifts list
+  const soldShifts = useMemo(() => {
+    return activities.filter(
+      (a) => a.type === "shift" && (a as ShiftRecord).status === "sold_out"
+    ) as ShiftRecord[];
+  }, [activities]);
+
   // Grouped Card view data
   const upcomingCardGroups = useMemo(() => {
     const groups = groupByDate(upcomingActivities);
     for (const g of groups) {
-      g.items.sort((a, b) => getEventTime(a).localeCompare(getEventTime(b)));
+      g.items.sort(compareEventsByStartTime);
     }
     return groups;
   }, [upcomingActivities]);
@@ -332,7 +349,7 @@ export default function ScheduleTodoListView({
     const groups = groupByDate(pastActivities);
     groups.reverse(); // Past dates descending
     for (const g of groups) {
-      g.items.sort((a, b) => getEventTime(a).localeCompare(getEventTime(b)));
+      g.items.sort(compareEventsByStartTime);
     }
     return groups;
   }, [pastActivities]);
@@ -341,7 +358,7 @@ export default function ScheduleTodoListView({
   const upcomingTimelineGroups = useMemo(() => {
     const groups = groupByDate(upcomingActivities);
     for (const g of groups) {
-      g.items.sort((a, b) => getEventTime(a).localeCompare(getEventTime(b)));
+      g.items.sort(compareEventsByStartTime);
     }
     return groups;
   }, [upcomingActivities]);
@@ -350,7 +367,7 @@ export default function ScheduleTodoListView({
     const groups = groupByDate(pastActivities);
     groups.reverse();
     for (const g of groups) {
-      g.items.sort((a, b) => getEventTime(a).localeCompare(getEventTime(b)));
+      g.items.sort(compareEventsByStartTime);
     }
     return groups;
   }, [pastActivities]);
@@ -368,6 +385,8 @@ export default function ScheduleTodoListView({
         quota={quotaStats.quota}
         remaining={quotaStats.remaining}
         isMet={quotaStats.isMet}
+        quotaHours={quotaStats.quotaHours}
+        weekdaysCount={quotaStats.weekdaysCount}
         onQuotaChange={onQuotaChange}
       />
 
@@ -556,6 +575,8 @@ export default function ScheduleTodoListView({
                           onViewTrail={(shift) => onViewTrail(shift)}
                           onUndoSwap={(shift) => onRequestUndoSwap(shift)}
                           onRestoreShift={(shift) => onRequestRestore(shift)}
+                          onSellShift={onSellShift}
+                          onUndoSellShift={onUndoSellShift}
                           onEditShift={onEditShift}
                           onEditService={onEditService}
                           onEditClinicLog={onEditClinicLog}
@@ -607,6 +628,8 @@ export default function ScheduleTodoListView({
                         onViewTrail={(shift) => onViewTrail(shift)}
                         onUndoSwap={(shift) => onRequestUndoSwap(shift)}
                         onRestoreShift={(shift) => onRequestRestore(shift)}
+                        onSellShift={onSellShift}
+                        onUndoSellShift={onUndoSellShift}
                         onEditShift={onEditShift}
                         onEditService={onEditService}
                         onEditClinicLog={onEditClinicLog}
@@ -615,6 +638,35 @@ export default function ScheduleTodoListView({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* SECTION 3: Sold Refer Shifts */}
+          {soldShifts.length > 0 && (
+            <div className="space-y-3 pt-3">
+              <div className="flex items-center justify-between px-1 border-t border-surface-subtle pt-3 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <Ambulance className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <h3 className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                    เวร Refer ที่ขายแล้ว ({soldShifts.length} เวร)
+                  </h3>
+                </div>
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                  รายรับ: ฿{(soldShifts.reduce((acc, s) => acc + (s.saleMeta?.salePriceSatang || 0), 0) / 100).toLocaleString()}
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {soldShifts.map((soldShift) => (
+                  <ActivityCard
+                    key={soldShift.id}
+                    item={soldShift}
+                    hideDateHeader={false}
+                    onDelete={() => onRequestDelete(soldShift)}
+                    onUndoSellShift={onUndoSellShift}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -667,6 +719,7 @@ export default function ScheduleTodoListView({
                           onEditShift={onEditShift}
                           onEditService={onEditService}
                           onSwapShift={onInitiateSwap}
+                          onSellShift={onSellShift}
                           onEditClinicLog={onEditClinicLog}
                           onRequestDelete={onRequestDelete}
                         />
@@ -713,6 +766,8 @@ export default function ScheduleTodoListView({
                           item={item}
                           onEditShift={onEditShift}
                           onEditService={onEditService}
+                          onSwapShift={onInitiateSwap}
+                          onSellShift={onSellShift}
                           onEditClinicLog={onEditClinicLog}
                           onRequestDelete={onRequestDelete}
                         />

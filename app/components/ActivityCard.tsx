@@ -1,6 +1,5 @@
 "use client";
 
-import moment from "moment";
 import "moment/locale/th";
 import {
   Moon,
@@ -23,6 +22,7 @@ import {
   canEditShift,
   canEditService,
   canEditClinicLog,
+  isShiftInPast,
 } from "../../lib/storage";
 import {
   ActivityItem,
@@ -30,7 +30,6 @@ import {
   ShiftRecord,
   ClinicWorkRecord,
   SHIFT_CONFIG,
-  SHIFT_CATEGORY_CONFIG,
   SHIFT_CODE_MAP,
 } from "../../types/vendee";
 
@@ -48,6 +47,8 @@ export interface ActivityCardProps {
   onViewTrail?: (shift: ShiftRecord) => void;
   onUndoSwap?: (shift: ShiftRecord) => void;
   onRestoreShift?: (shift: ShiftRecord) => void;
+  onSellShift?: (shift: ShiftRecord) => void;
+  onUndoSellShift?: (shift: ShiftRecord) => void;
   onEditShift?: (shift: ShiftRecord) => void;
   onEditService?: (service: CustomerServiceRecord) => void;
   onEditClinicLog?: (clinicLog: ClinicWorkRecord) => void;
@@ -60,6 +61,8 @@ export default function ActivityCard({
   onViewTrail,
   onUndoSwap,
   onRestoreShift,
+  onSellShift,
+  onUndoSellShift,
   onEditShift,
   onEditService,
   onEditClinicLog,
@@ -182,8 +185,13 @@ export default function ActivityCard({
     const shift = item as ShiftRecord;
     const shiftInfo = SHIFT_CONFIG[shift.shiftType];
     const isSwapped = Boolean(shift.swapMeta);
-    const isLocked = shift.swapMeta?.isLocked ?? false;
+    const isLocked = (shift.swapMeta?.isLocked ?? false) || isShiftInPast(shift.date);
     const isSwappedOut = shift.status === "swapped_out";
+    const isSoldOut = shift.status === "sold_out";
+    const isRefer =
+      shift.shiftType === "r1" ||
+      shift.shiftType === "r2" ||
+      shift.category === "green";
     const canEdit = canEditShift(shift);
     const code = SHIFT_CODE_MAP[shift.shiftType] || shift.shiftType;
 
@@ -203,11 +211,13 @@ export default function ActivityCard({
     return (
       <div
         className={`relative overflow-hidden rounded-2xl border p-3.5 shadow-xs transition-all hover:shadow-md ${
-          isSwappedOut
-            ? "border-surface-subtle bg-surface-subtle/50 opacity-60 dark:border-zinc-800 dark:bg-zinc-900/50"
-            : isSwapped
-              ? "border-secondary/30 bg-card-bg dark:border-secondary/40 dark:bg-zinc-900"
-              : "border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900"
+          isSoldOut
+            ? "border-emerald-300/60 bg-emerald-50/30 dark:border-emerald-800/50 dark:bg-emerald-950/20"
+            : isSwappedOut
+              ? "border-surface-subtle bg-surface-subtle/50 opacity-60 dark:border-zinc-800 dark:bg-zinc-900/50"
+              : isSwapped
+                ? "border-secondary/30 bg-card-bg dark:border-secondary/40 dark:bg-zinc-900"
+                : "border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900"
         }`}
       >
         {/* Color stripe left */}
@@ -265,6 +275,11 @@ export default function ActivityCard({
                       แลกออกแล้ว
                     </span>
                   )}
+                  {isSoldOut && (
+                    <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                      ขายแล้ว
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-text-muted dark:text-zinc-400 font-medium">
                   {shiftInfo?.period || "ทั้งวัน"}
@@ -277,6 +292,80 @@ export default function ActivityCard({
               <div className="flex items-center gap-1.5 text-xs text-text-muted dark:text-zinc-400 pl-1">
                 <MapPin className="h-3.5 w-3.5 text-text-muted shrink-0" />
                 <span>{shift.department}</span>
+              </div>
+            )}
+
+            {/* Sold Details Box (รายละเอียดการขายเวร Refer) */}
+            {isSoldOut && shift.saleMeta && (
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 p-2.5 text-xs border border-emerald-200 dark:border-emerald-800/80 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-900 dark:text-emerald-200 text-xs">
+                    <Ambulance className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>
+                      🚑 ขายให้:{" "}
+                      <strong className="text-text-main dark:text-white font-extrabold">
+                        {shift.saleMeta.buyerName}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                        shift.saleMeta.paymentStatus === "paid"
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
+                          : "bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+                      }`}
+                    >
+                      {shift.saleMeta.paymentStatus === "paid" ? "ชำระแล้ว" : "ยังไม่ชำระ"}
+                    </span>
+
+                    {onUndoSellShift && (
+                      <button
+                        type="button"
+                        disabled={isLocked}
+                        onClick={() => !isLocked && onUndoSellShift(shift)}
+                        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold transition-all ${
+                          isLocked
+                            ? "cursor-not-allowed bg-surface-subtle text-text-muted opacity-60"
+                            : "cursor-pointer bg-card-bg text-shift-red hover:bg-rose-50 border border-rose-200 dark:bg-zinc-800 dark:text-rose-400 dark:border-rose-900"
+                        }`}
+                        title={
+                          isLocked
+                            ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
+                            : "ยกเลิกการขายเวรและคืนสถานะเวรปกติ"
+                        }
+                      >
+                        {isLocked ? (
+                          <Lock className="h-3 w-3" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3" />
+                        )}
+                        <span>ยกเลิกการขาย</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-emerald-800 dark:text-emerald-300 pl-5">
+                  <span>
+                    ราคาขาย:{" "}
+                    <strong className="font-extrabold text-emerald-700 dark:text-emerald-200">
+                      ฿{((shift.saleMeta.salePriceSatang || 0) / 100).toLocaleString()}
+                    </strong>
+                  </span>
+                  {shift.saleMeta.soldDate && (
+                    <span className="text-text-muted dark:text-zinc-400">
+                      ขายเมื่อ: {shift.saleMeta.soldDate}
+                    </span>
+                  )}
+                </div>
+
+                {shift.saleMeta.note && (
+                  <p className="text-[11px] text-text-muted dark:text-zinc-300 pl-5">
+                    📝 {shift.saleMeta.note}
+                  </p>
+                )}
               </div>
             )}
 
@@ -390,7 +479,26 @@ export default function ActivityCard({
 
           {/* Actions */}
           <div className="flex items-center gap-1 shrink-0">
-            {!isSwappedOut && onSwapShift && (
+            {/* Action Button: ขายเวร Refer (สำหรับเวร Refer ที่ active) */}
+            {isRefer && !isSoldOut && !isSwappedOut && onSellShift && (
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={() => !isLocked && onSellShift(shift)}
+                className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all shadow-2xs cursor-pointer ${
+                  isLocked
+                    ? "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-zinc-800 dark:text-zinc-500 opacity-60"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95"
+                }`}
+                title={isLocked ? "เวรล็อกอยู่ ไม่สามารถขายได้" : "ขายเวร Refer นี้"}
+              >
+                <Ambulance className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">ขายเวร Refer</span>
+                <span className="sm:hidden">ขาย</span>
+              </button>
+            )}
+
+            {!isSwappedOut && !isSoldOut && onSwapShift && (
               <button
                 type="button"
                 onClick={() => onSwapShift(shift)}
@@ -400,7 +508,8 @@ export default function ActivityCard({
                 <ArrowLeftRight className="h-4 w-4" />
               </button>
             )}
-            {canEdit && onEditShift && (
+
+            {canEdit && !isSoldOut && onEditShift && (
               <button
                 type="button"
                 onClick={() => onEditShift(shift)}
@@ -410,14 +519,17 @@ export default function ActivityCard({
                 <Pencil className="h-4 w-4" />
               </button>
             )}
-            <button
-              type="button"
-              onClick={onDelete}
-              className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red transition-colors dark:hover:bg-zinc-800 cursor-pointer"
-              title="ลบ"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+
+            {!isSoldOut && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red transition-colors dark:hover:bg-zinc-800 cursor-pointer"
+                title="ลบ"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -446,27 +558,43 @@ export default function ActivityCard({
             {service.customerName}
           </div>
 
-          {/* Medications list */}
-          {service.medications && service.medications.filter(Boolean).length > 0 && (
-            <div className="rounded-xl bg-primary-light/35 p-2 text-xs text-primary-dark dark:bg-emerald-950/40 dark:text-emerald-200 border border-primary/20">
-              <span className="font-bold flex items-center gap-1 text-[11px] text-primary-dark dark:text-emerald-300 mb-0.5">
-                <Syringe className="h-3 w-3 text-primary" /> ยาที่ใช้:
-              </span>
-              <div className="text-[11px] font-semibold text-emerald-900 dark:text-emerald-200">
-                {service.medications.filter(Boolean).join(", ")}
+          <div className="flex items-center justify-between gap-2">
+            {/* Medications list */}
+            {service.medicationUsages && service.medicationUsages.filter(Boolean).length > 0 && (
+              <div className="rounded-xl w-full bg-primary-light/35 p-2 text-xs text-primary-dark dark:bg-emerald-950/40 dark:text-emerald-200 border border-primary/20">
+                <span className="font-bold flex items-center gap-1 text-[11px] text-primary-dark dark:text-emerald-300 mb-0.5">
+                  <Syringe className="h-3 w-3 text-primary" /> ยาที่ใช้:
+                </span>
+                <div className="text-[11px] font-semibold text-emerald-900 dark:text-emerald-200">
+                  {/* ยา (จำนวน/หน่วย) */}
+                  {service.medicationUsages?.map((med, idx) => (
+                    <div key={idx} className="flex items-center gap-1">
+                      {med.name} ({med.quantity} {med.unit})
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Note / Price */}
-          {(service.note || service.price) && (
+            {/* Price */}
+            {service.price && (
+              <div className="flex items-center justify-between text-[11px] text-text-muted dark:text-zinc-400">
+                <span className="font-bold text-primary-dark dark:text-primary-light">
+                  {service.price === 0 ? (
+                    "ยังไม่ได้กำหนดราคา"
+                  ) : (
+                    <span>฿{service.price.toLocaleString()}</span>
+                  )}
+                </span>
+              </div>
+            )}
+
+          </div>
+
+          {/* Note */}
+          {service.note && (
             <div className="flex items-center justify-between text-[11px] text-text-muted dark:text-zinc-400">
               {service.note && <span>📝 {service.note}</span>}
-              {service.price && (
-                <span className="font-bold text-primary-dark dark:text-primary-light">
-                  ฿{service.price.toLocaleString()}
-                </span>
-              )}
             </div>
           )}
         </div>

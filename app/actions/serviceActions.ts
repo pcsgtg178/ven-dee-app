@@ -1,14 +1,33 @@
 "use server";
 
 import { createClient } from "../../lib/supabase/server";
-import { CustomerServiceRecord, ServiceType, ActionResult } from "../../types/vendee";
+import { CustomerServiceRecord, ServiceType, ActionResult, MedicationUsageLine } from "../../types/vendee";
 import {
   checkServiceShiftOverlap,
-  calculateNetProfitSatang,
-  calculateEffectiveHourlyRateSatang,
+  calculateMedicationCostSatang,
+  calculateMedicationLineCostSatang,
   thbToSatang,
 } from "../../lib/conflictEngine";
 import { getShiftsAction } from "./shiftActions";
+
+/** Sanitize usage lines and recompute line cost server-side (never trust client totals). */
+function normalizeUsages(usages?: MedicationUsageLine[]): MedicationUsageLine[] {
+  return (usages || [])
+    .filter((u) => u && u.medicationId && Number(u.quantity) > 0)
+    .map((u) => ({
+      medicationId: u.medicationId,
+      name: u.name,
+      category: u.category,
+      quantity: Number(u.quantity),
+      unit: u.unit || "",
+      unitCostSatang: Number(u.unitCostSatang) || 0,
+      lineCostSatang: calculateMedicationLineCostSatang(Number(u.quantity), Number(u.unitCostSatang) || 0),
+    }));
+}
+
+function parseUsages(raw: any): MedicationUsageLine[] {
+  return Array.isArray(raw) ? (raw as MedicationUsageLine[]) : [];
+}
 
 /**
  * Fetch all customer services
@@ -50,6 +69,7 @@ export async function getServicesAction(params?: {
       services: (row.services || ["injection"]) as ServiceType[],
       otherServiceText: row.other_service_text || "",
       medications: Array.isArray(row.medications) ? row.medications.filter(Boolean) : [],
+      medicationUsages: parseUsages(row.medication_usages),
       note: row.note || "",
       price: row.price || 0,
       serviceFeeSatang: row.service_fee_satang || 0,
@@ -81,6 +101,7 @@ export async function createServiceAction(data: {
   services: ServiceType[];
   otherServiceText?: string;
   medications?: string[];
+  medicationUsages?: MedicationUsageLine[];
   note?: string;
   price?: number; // In THB from UI
   medicationCost?: number; // In THB from UI
@@ -109,7 +130,9 @@ export async function createServiceAction(data: {
 
     // Satang Financial Ledger Standard Conversions
     const serviceFeeSatang = thbToSatang(data.price || 0);
-    const medicationCostSatang = thbToSatang(data.medicationCost || 0);
+    const usages = normalizeUsages(data.medicationUsages);
+    const medicationCostSatang =
+      usages.length > 0 ? calculateMedicationCostSatang(usages) : thbToSatang(data.medicationCost || 0);
     const travelExpenseSatang = thbToSatang(data.travelExpense || 0);
     const otherExpensesSatang = thbToSatang(data.otherExpenses || 0);
 
@@ -132,6 +155,7 @@ export async function createServiceAction(data: {
         duration_hours: data.durationHours || null,
         travel_expense_satang: travelExpenseSatang,
         other_expenses_satang: otherExpensesSatang,
+        ...(usages.length > 0 ? { medication_usages: usages } : {}),
         status: "upcoming",
       })
       .select()
@@ -151,6 +175,7 @@ export async function createServiceAction(data: {
       services: inserted.services as ServiceType[],
       otherServiceText: inserted.other_service_text,
       medications: Array.isArray(inserted.medications) ? inserted.medications.filter(Boolean) : [],
+      medicationUsages: parseUsages(inserted.medication_usages),
       note: inserted.note,
       price: inserted.price,
       serviceFeeSatang: inserted.service_fee_satang,
@@ -184,6 +209,7 @@ export async function updateServiceAction(
     services?: ServiceType[];
     otherServiceText?: string;
     medications?: string[];
+    medicationUsages?: MedicationUsageLine[];
     note?: string;
     price?: number;
     medicationCost?: number;
@@ -196,7 +222,17 @@ export async function updateServiceAction(
     const supabase = await createClient();
 
     const serviceFeeSatang = thbToSatang(data.price || 0);
-    const medicationCostSatang = thbToSatang(data.medicationCost || 0);
+    // Medication usage lines (when provided) are the source of truth for medicationCost.
+    // Never overwrite a legacy manual cost when neither usages nor medicationCost are supplied.
+    const usages = data.medicationUsages !== undefined ? normalizeUsages(data.medicationUsages) : undefined;
+    const medicationCostSatang: number | undefined =
+      usages && usages.length > 0
+        ? calculateMedicationCostSatang(usages)
+        : data.medicationCost !== undefined
+          ? thbToSatang(data.medicationCost)
+          : usages !== undefined
+            ? 0
+            : undefined;
     const travelExpenseSatang = thbToSatang(data.travelExpense || 0);
     const otherExpensesSatang = thbToSatang(data.otherExpenses || 0);
     const formattedTime = (data.time || "09:00").slice(0, 5);
@@ -211,21 +247,38 @@ export async function updateServiceAction(
       note: data.note || "",
       price: data.price || 0,
       service_fee_satang: serviceFeeSatang,
-      medication_cost_satang: medicationCostSatang,
       duration_hours: data.durationHours || null,
       travel_expense_satang: travelExpenseSatang,
       other_expenses_satang: otherExpensesSatang,
     };
+    if (medicationCostSatang !== undefined) {
+      updatePayload.medication_cost_satang = medicationCostSatang;
+    }
+    if (usages !== undefined) {
+      updatePayload.medication_usages = usages;
+    }
     if (data.services && data.services.length > 0) {
       updatePayload.services = data.services;
     }
 
-    const { data: updated, error } = await supabase
+    let { data: updated, error } = await supabase
       .from("customer_services")
       .update(updatePayload)
       .eq("id", id)
       .select()
       .single();
+
+    // Fallback: migration 20261018 (medication_usages) not applied yet
+    if (error && /medication_usages/i.test(error.message || "")) {
+      const legacyPayload = { ...updatePayload };
+      delete legacyPayload.medication_usages;
+      ({ data: updated, error } = await supabase
+        .from("customer_services")
+        .update(legacyPayload)
+        .eq("id", id)
+        .select()
+        .single());
+    }
 
     if (error) {
       return { success: false, error: { code: "DATABASE_ERROR", message: error.message } };
@@ -241,6 +294,7 @@ export async function updateServiceAction(
       services: updated.services as ServiceType[],
       otherServiceText: updated.other_service_text,
       medications: Array.isArray(updated.medications) ? updated.medications.filter(Boolean) : [],
+      medicationUsages: parseUsages(updated.medication_usages),
       note: updated.note,
       price: updated.price,
       serviceFeeSatang: updated.service_fee_satang,

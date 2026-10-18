@@ -7,18 +7,20 @@ import {
   Plus,
   Pencil,
   Trash2,
-  DollarSign,
-  Package,
   X,
   Check,
   AlertCircle,
-  Sparkles,
   RotateCw,
-  Database,
 } from "lucide-react";
 import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
-import { Medications } from "../../types/vendee";
+import {
+  Medications,
+  MedicationCategory,
+  MEDICATION_CATEGORIES,
+  MEDICATION_CATEGORY_CONFIG,
+  resolveMedicationCategory,
+} from "../../types/vendee";
 import {
   getMedications,
   syncMedicationsFromApi,
@@ -31,13 +33,14 @@ export default function MedicationsPage() {
   const [medications, setMedications] = useState<Medications[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Modal / Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMed, setEditingMed] = useState<Medications | null>(null);
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<MedicationCategory>("other");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | MedicationCategory>("all");
   const [size, setSize] = useState("");
   const [price, setPrice] = useState("");
   const [unit, setUnit] = useState("ยูนิต");
@@ -56,10 +59,8 @@ export default function MedicationsPage() {
       try {
         const res = await syncMedicationsFromApi();
         setMedications(res.medications);
-        setIsOnline(res.isOnline);
       } catch (err) {
         console.warn("Failed to load medications from API:", err);
-        setIsOnline(false);
       } finally {
         setIsSyncing(false);
       }
@@ -80,6 +81,7 @@ export default function MedicationsPage() {
   const handleOpenAdd = () => {
     setEditingMed(null);
     setName("");
+    setCategory("other");
     setSize("");
     setPrice("");
     setUnit("ยูนิต");
@@ -91,6 +93,7 @@ export default function MedicationsPage() {
   const handleOpenEdit = (med: Medications) => {
     setEditingMed(med);
     setName(med.name);
+    setCategory(resolveMedicationCategory(med.name, med.category));
     setSize(med.size || "");
     setPrice(med.price !== undefined ? String(med.price) : "");
     setUnit(med.unit || "ยูนิต");
@@ -113,6 +116,7 @@ export default function MedicationsPage() {
       await saveMedication({
         id: editingMed ? editingMed.id : undefined,
         name: name.trim(),
+        category,
         size: size.trim() || undefined,
         price: price.trim() || undefined,
         unit: unit.trim() || undefined,
@@ -144,17 +148,21 @@ export default function MedicationsPage() {
 
   // Filtered medications by search
   const filteredMeds = useMemo(() => {
-    if (!searchQuery.trim()) return medications;
     const q = searchQuery.toLowerCase().trim();
-    return medications.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        (m.size && m.size.toLowerCase().includes(q)) ||
-        (m.unit && m.unit.toLowerCase().includes(q)) ||
-        (m.description && m.description.toLowerCase().includes(q)) ||
-        (m.note && m.note.toLowerCase().includes(q))
-    );
-  }, [medications, searchQuery]);
+    return medications
+      .filter((m) => {
+        if (categoryFilter !== "all" && resolveMedicationCategory(m.name, m.category) !== categoryFilter) return false;
+        if (!q) return true;
+        return (
+          m.name.toLowerCase().includes(q) ||
+          (m.size && m.size.toLowerCase().includes(q)) ||
+          (m.unit && m.unit.toLowerCase().includes(q)) ||
+          (m.description && m.description.toLowerCase().includes(q)) ||
+          (m.note && m.note.toLowerCase().includes(q))
+        );
+      })
+      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
+  }, [medications, searchQuery, categoryFilter]);
 
   return (
     <div className="min-h-screen bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
@@ -182,24 +190,6 @@ export default function MedicationsPage() {
                   {medications.length} รายการ
                 </span>
               </h1>
-
-              {/* Database / Sync Status Badge */}
-              {isSyncing ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-semibold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60">
-                  <RotateCw className="h-3 w-3 animate-spin text-purple-600" />
-                  <span>กำลังซิงค์...</span>
-                </span>
-              ) : isOnline === true ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>เชื่อมต่อฐานข้อมูลแล้ว</span>
-                </span>
-              ) : isOnline === false ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
-                  <AlertCircle className="h-3 w-3 text-amber-500" />
-                  <span>โหมดออฟไลน์ (แคช)</span>
-                </span>
-              ) : null}
             </div>
 
             <p className="text-xs text-text-muted dark:text-zinc-400 mt-0.5">
@@ -232,14 +222,14 @@ export default function MedicationsPage() {
 
         {/* Search Input */}
         <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted dark:text-zinc-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="ค้นหาชื่อตัวยา หรือหน่วยนับ..."
-            className="w-full rounded-2xl border border-surface-subtle bg-white pl-10 pr-4 py-2.5 text-sm text-text-main placeholder:text-text-muted shadow-2xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
+            className="w-full rounded-2xl border border-surface-subtle bg-white pl-11 pr-10 py-3 text-sm text-text-main placeholder:text-text-muted shadow-2xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
           />
+          <Search className="pointer-events-none absolute left-3.5 top-3.5 h-4 w-4 text-text-muted" />
           {searchQuery && (
             <button
               type="button"
@@ -249,6 +239,24 @@ export default function MedicationsPage() {
               <X className="h-4 w-4" />
             </button>
           )}
+        </div>
+
+        {/* Category Filter */}
+        <div className="flex flex-wrap gap-1.5">
+          {(["all", ...MEDICATION_CATEGORIES] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategoryFilter(c)}
+              className={`rounded-full px-3 py-1 text-[11px] font-bold transition-all cursor-pointer ${
+                categoryFilter === c
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "bg-white text-text-muted border border-surface-subtle hover:bg-purple-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-300"
+              }`}
+            >
+              {c === "all" ? "ทั้งหมด" : MEDICATION_CATEGORY_CONFIG[c].label}
+            </button>
+          ))}
         </div>
 
         {/* Medication Cards List */}
@@ -290,6 +298,14 @@ export default function MedicationsPage() {
                             {med.size ? `${med.size} ` : ""}{med.unit || ""}
                           </span>
                         )}
+                        {(() => {
+                          const cat = resolveMedicationCategory(med.name, med.category);
+                          return (
+                            <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${MEDICATION_CATEGORY_CONFIG[cat].badge}`}>
+                              {MEDICATION_CATEGORY_CONFIG[cat].label}
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-text-muted dark:text-zinc-400 mt-0.5">
@@ -452,6 +468,27 @@ export default function MedicationsPage() {
                     {u}
                   </button>
                 ))}
+              </div>
+
+              {/* Category */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-main dark:text-zinc-200">หมวดหมู่ตัวยา</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {MEDICATION_CATEGORIES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCategory(c)}
+                      className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all cursor-pointer ${
+                        category === c
+                          ? "bg-purple-600 text-white"
+                          : "bg-surface-subtle text-text-muted hover:bg-purple-100 hover:text-purple-700 dark:bg-zinc-800 dark:text-zinc-300"
+                      }`}
+                    >
+                      {MEDICATION_CATEGORY_CONFIG[c].label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Description */}

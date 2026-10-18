@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS public.shifts (
     shift_date DATE NOT NULL,
     shift_type TEXT NOT NULL, -- 'morning', 'afternoon', 'night', 'r1', 'r2', 'off', 'ctm', 'cta'
     category TEXT NOT NULL DEFAULT 'black', -- 'black', 'red', 'green', 'gray', 'purple'
-    status TEXT NOT NULL DEFAULT 'active', -- 'active', 'swapped_out', 'cancelled'
+    status TEXT NOT NULL DEFAULT 'active', -- 'active', 'swapped_out', 'cancelled', 'sold_out'
     department TEXT,
     note TEXT,
     swapped_with TEXT, -- ชื่อเพื่อนร่วมงานที่ตกลงแลกเวรด้วย (Audit log)
@@ -33,12 +33,20 @@ CREATE TABLE IF NOT EXISTS public.shifts (
     swap_date DATE,
     swap_reason TEXT,
     swap_history JSONB DEFAULT '[]'::jsonb,
+    -- Refer Shift Selling (Phase 6)
+    buyer_name TEXT,
+    sale_price_satang BIGINT DEFAULT 0,
+    sold_date DATE,
+    payment_status TEXT DEFAULT 'unpaid',
+    sale_note TEXT,
+    sale_meta JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Indexes for Shifts
 CREATE INDEX IF NOT EXISTS idx_shifts_date ON public.shifts(shift_date);
 CREATE INDEX IF NOT EXISTS idx_shifts_status ON public.shifts(status);
+CREATE INDEX IF NOT EXISTS idx_shifts_payment_status ON public.shifts(payment_status);
 
 -- 3. Customer Services Table (External Gig & Financial Ledger)
 CREATE TABLE IF NOT EXISTS public.customer_services (

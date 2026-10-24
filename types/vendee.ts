@@ -17,6 +17,10 @@ export interface SwapMetadata {
   swappedWith: string; // คนที่ตกลงแลกด้วย (Direct Partner) [Required]
   originalOwner?: string; // เจ้าของเวรเดิมตามตาราง (Original Owner ถ้ามี)
   parentShiftId?: string; // ID ของเวรเดิมก่อนแลก
+  givenShiftDate?: string; // วันที่ของเวรเดิมที่เรานำไปแลก (YYYY-MM-DD)
+  givenShiftType?: ShiftType; // ประเภทของเวรเดิมที่เรานำไปแลก
+  targetShiftDate?: string; // วันที่ของเวรปลายทางที่แลกไป (YYYY-MM-DD)
+  targetShiftType?: ShiftType; // ประเภทของเวรปลายทางที่แลกไป
   isLocked?: boolean; // ล็อกหรือไม่ (เวรผ่านไปแล้ว = true)
   swapDate?: string;
   swapReason?: string;

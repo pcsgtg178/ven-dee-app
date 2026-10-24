@@ -221,15 +221,16 @@ export default function ScheduleOverview() {
 
   // Filtered activities for list view
   const filteredActivities = useMemo(() => {
-    const activeActivities = activities.filter((item) => {
+    const listActivities = activities.filter((item) => {
+      // หน้ารายการเวร: แสดงเวรปกติ และเวรที่แลกออก (swapped_out) หรือยกให้คนอื่น (transferred/sold_out) โดยซ่อนเฉพาะเวรที่ยกเลิก (cancelled)
       if (item.type === "shift") {
-        return item.status === "active";
+        return item.status !== "cancelled";
       }
       return true;
     });
 
-    if (filterType === "all") return activeActivities;
-    return activeActivities.filter((item) => item.type === filterType);
+    if (filterType === "all") return listActivities;
+    return listActivities.filter((item) => item.type === filterType);
   }, [activities, filterType]);
 
   // Split into:

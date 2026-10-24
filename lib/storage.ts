@@ -833,6 +833,11 @@ export function getShifts(): ShiftRecord[] {
   }
 }
 
+export function getShiftById(id: string): ShiftRecord | undefined {
+  if (!id) return undefined;
+  return getShifts().find((s) => s.id === id);
+}
+
 export async function saveShift(
   shift: Omit<ShiftRecord, "id" | "type" | "createdAt" | "status"> & {
     id?: string;
@@ -1178,6 +1183,8 @@ export async function swapShift(params: {
       swapDate: swapDateStr,
       swapReason: params.swapReason,
       swapHistory: trail,
+      targetShiftDate: params.newDate,
+      targetShiftType: params.newShiftType,
       isLocked: oldShift.swapMeta?.isLocked ?? isShiftInPast(oldShift.date),
     },
   };
@@ -1196,6 +1203,8 @@ export async function swapShift(params: {
       swappedWith: params.swappedWith,
       originalOwner: params.originalOwner || undefined,
       parentShiftId: oldShift.id,
+      givenShiftDate: oldShift.date,
+      givenShiftType: oldShift.shiftType,
       isLocked: isShiftInPast(params.newDate),
       swapDate: swapDateStr,
       swapReason: params.swapReason,

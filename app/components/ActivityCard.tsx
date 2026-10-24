@@ -1,5 +1,6 @@
 "use client";
 
+import moment from "moment";
 import "moment/locale/th";
 import {
   Moon,
@@ -24,6 +25,7 @@ import {
   canEditService,
   canEditClinicLog,
   isShiftInPast,
+  getShiftById,
 } from "../../lib/storage";
 import {
   ActivityItem,
@@ -189,6 +191,7 @@ export default function ActivityCard({
     const isLocked = (shift.swapMeta?.isLocked ?? false) || isShiftInPast(shift.date);
     const isSwappedOut = shift.status === "swapped_out";
     const isSoldOut = shift.status === "sold_out" || shift.status === "transferred";
+    const isGivenAway = isSwappedOut || isSoldOut;
     const isOT = shift.category === "red";
     const isRefer =
       shift.shiftType === "r1" ||
@@ -213,20 +216,22 @@ export default function ActivityCard({
     return (
       <div
         className={`relative overflow-hidden rounded-2xl border p-3.5 shadow-xs transition-all hover:shadow-md ${
-          isSoldOut
+          isGivenAway
             ? isOT
-              ? "border-rose-300/60 bg-rose-50/30 dark:border-rose-800/50 dark:bg-rose-950/20"
-              : "border-emerald-300/60 bg-emerald-50/30 dark:border-emerald-800/50 dark:bg-emerald-950/20"
-            : isSwappedOut
-              ? "border-surface-subtle bg-surface-subtle/50 opacity-60 dark:border-zinc-800 dark:bg-zinc-900/50"
-              : isSwapped
-                ? "border-secondary/30 bg-card-bg dark:border-secondary/40 dark:bg-zinc-900"
-                : "border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900"
+              ? "border-rose-200/80 bg-rose-50/20 opacity-70 dark:border-rose-900/40 dark:bg-rose-950/20"
+              : isRefer
+                ? "border-emerald-200/80 bg-emerald-50/20 opacity-70 dark:border-emerald-900/40 dark:bg-emerald-950/20"
+                : "border-surface-subtle bg-surface-subtle/50 opacity-70 dark:border-zinc-800 dark:bg-zinc-900/50"
+            : isSwapped
+              ? "border-secondary/30 bg-card-bg dark:border-secondary/40 dark:bg-zinc-900"
+              : "border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900"
         }`}
       >
         {/* Color stripe left */}
         <div
           className={`absolute left-0 top-0 bottom-0 w-1.5 ${
+            isGivenAway ? "opacity-40" : ""
+          } ${
             shift.category === "green" ||
             shift.shiftType === "r1" ||
             shift.shiftType === "r2"
@@ -264,6 +269,10 @@ export default function ActivityCard({
                         : shift.category === "gray" || shift.shiftType === "off"
                           ? "bg-gray-600 text-white"
                           : "bg-shift-black text-white dark:bg-slate-100 dark:text-slate-900"
+                } ${
+                  isGivenAway
+                    ? "line-through decoration-white/90 decoration-[3px] opacity-60"
+                    : ""
                 }`}
               >
                 {code}
@@ -272,36 +281,43 @@ export default function ActivityCard({
               {/* Shift Label & Time Period */}
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.5 text-sm sm:text-base font-bold text-text-main dark:text-white leading-snug">
-                  <ShiftIcon className="h-4 w-4 text-secondary shrink-0" />
-                  <span>{shiftInfo?.label || "เวร"}</span>
-                  {isSwappedOut && (
-                    <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
-                      แลกออกแล้ว
-                    </span>
-                  )}
+                  <ShiftIcon className={`h-4 w-4 shrink-0 ${isGivenAway ? "text-text-muted" : "text-secondary"}`} />
+                  <span className={isGivenAway ? "line-through text-text-muted dark:text-zinc-400" : ""}>
+                    {shiftInfo?.label || "เวร"}
+                  </span>
+                  {isSwappedOut && (() => {
+                    const swapInfo = shift.swap || shift.swapMeta;
+                    const partner = swapInfo?.swappedWith;
+                    return (
+                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                        แลกออกแล้ว{partner ? `: ${partner}` : ""}
+                      </span>
+                    );
+                  })()}
                   {isSoldOut && (
                     <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
                       ยกให้: {shift.transferMeta?.recipientName || shift.saleMeta?.buyerName || "ผู้อื่น"}
                     </span>
                   )}
-                  {shift.category === "red" && shift.receivedFrom && (
+                  {shift.category === "red" && shift.receivedFrom && !isGivenAway && (
                     <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
                       OT (รับจาก: {shift.receivedFrom})
                     </span>
                   )}
-                  {/* กรณีเป็นเวรที่แลกคนอื่นมา (isSwapped is true) ให้แสดงชื่อเจ้าของเวร */}
-                  {isSwapped && (() => {
+                  {/* กรณีเป็นเวรที่แลกคนอื่นมา (isSwapped is true && !isSwappedOut) ให้แสดงชื่อเจ้าของเวร */}
+                  {isSwapped && !isSwappedOut && (() => {
                     const swapInfo = shift.swap || shift.swapMeta!;
+                    const ownerName = swapInfo.originalOwner || swapInfo.swappedWith;
                     return (
                       <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                        {swapInfo.swappedWith}
+                        {ownerName}
                       </span>
                     );
                   })()}
 
 
                 </div>
-                <div className="text-xs text-text-muted dark:text-zinc-400 font-medium">
+                <div className={`text-xs text-text-muted dark:text-zinc-400 font-medium ${isGivenAway ? "line-through" : ""}`}>
                   {shiftInfo?.period || "ทั้งวัน"}
                 </div>
               </div>
@@ -309,7 +325,7 @@ export default function ActivityCard({
 
             {/* Department / Ward */}
             {shift.department && (
-              <div className="flex items-center gap-1.5 text-xs text-text-muted dark:text-zinc-400 pl-1">
+              <div className={`flex items-center gap-1.5 text-xs text-text-muted dark:text-zinc-400 pl-1 ${isGivenAway ? "line-through" : ""}`}>
                 <MapPin className="h-3.5 w-3.5 text-text-muted shrink-0" />
                 <span>{shift.department}</span>
               </div>
@@ -391,17 +407,41 @@ export default function ActivityCard({
               );
             })()}
 
-            {/* Swap Details Box (ข้อความบอกแลกเวร) */}
-            {isSwapped && (shift.swap || shift.swapMeta) && (() => {
+            {/* Swap Details Box (ข้อความบอกแลกเวร สำหรับเวรที่ได้รับมาจากการแลก) */}
+            {isSwapped && !isSwappedOut && (shift.swap || shift.swapMeta) && (() => {
               const swapInfo = shift.swap || shift.swapMeta!;
+              const parentShiftId = shift.swap?.givenShiftId || shift.swapMeta?.parentShiftId;
+              const parentShift = parentShiftId ? getShiftById(parentShiftId) : undefined;
+              const rawGivenDate =
+                parentShift?.date ||
+                shift.swapMeta?.givenShiftDate ||
+                (swapInfo.swapHistory && swapInfo.swapHistory.find((n) => n.date !== shift.date)?.date);
+              const formattedGivenDate = rawGivenDate
+                ? moment(rawGivenDate).locale("th").format("D MMMM YYYY")
+                : null;
+              const givenShiftLabel = parentShift?.shiftType
+                ? SHIFT_CONFIG[parentShift.shiftType]?.label
+                : shift.swapMeta?.givenShiftType
+                  ? SHIFT_CONFIG[shift.swapMeta.givenShiftType]?.label
+                  : undefined;
+              const partnerName = swapInfo.originalOwner || swapInfo.swappedWith || "เพื่อนร่วมงาน";
+
               return (
                 <div className="rounded-xl bg-sky-50 dark:bg-sky-950/40 p-2.5 text-xs border border-sky-200 dark:border-sky-800/80 space-y-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5 font-bold text-sky-900 dark:text-sky-200 text-xs">
                       <ArrowLeftRight className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
                       <span>
-                        {/* วันที่เอาไปแลก */}
-                        {swapInfo.swapDate}
+                        {formattedGivenDate ? (
+                          <span>
+                            แลกมาจาก วันที่ {formattedGivenDate}
+                            {givenShiftLabel ? ` (${givenShiftLabel})` : ""}
+                          </span>
+                        ) : (
+                          <span>
+                            แลกมาจาก: {partnerName}
+                          </span>
+                        )}
                       </span>
                     </div>
 
@@ -459,46 +499,92 @@ export default function ActivityCard({
             )}
 
             {/* Action: กู้คืนเวรที่แลกออกไปแล้ว */}
-            {isSwappedOut && (
-              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-2.5 text-xs border border-amber-200 dark:border-amber-800/60 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-amber-900 dark:text-amber-200">
-                  ⚠️ เวรนี้ถูกแลกออกไปแล้ว
-                </span>
-                {(onUndoSwap || onRestoreShift) && (
-                  <button
-                    type="button"
-                    disabled={isLocked}
-                    onClick={() => {
-                      if (isLocked) return;
-                      if (onUndoSwap) {
-                        onUndoSwap(shift);
-                      } else if (onRestoreShift) {
-                        onRestoreShift(shift);
-                      }
-                    }}
-                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all shadow-2xs ${
-                      isLocked
-                        ? "cursor-not-allowed bg-slate-300 text-slate-500 dark:bg-zinc-800 dark:text-zinc-500 opacity-60"
-                        : "cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95"
-                    }`}
-                    title={
-                      isLocked
-                        ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
-                        : "กู้คืนเวรนี้และยกเลิกเวรที่ได้รับจากการแลก"
-                    }
-                  >
-                    {isLocked ? <Lock className="h-3 w-3" /> : <RotateCcw className="h-3 w-3" />}
-                    <span>{isLocked ? "เวรล็อกอยู่" : "กู้คืนเวร (ยกเลิกการแลก)"}</span>
-                  </button>
-                )}
-              </div>
-            )}
+            {isSwappedOut && (() => {
+              const swapInfo = shift.swap || shift.swapMeta;
+              const targetShiftId = shift.swap?.receivedShiftId;
+              const targetShift = targetShiftId ? getShiftById(targetShiftId) : undefined;
+              const rawTargetDate =
+                targetShift?.date ||
+                shift.swapMeta?.targetShiftDate ||
+                (swapInfo?.swapHistory && swapInfo.swapHistory.find((n) => n.date !== shift.date)?.date);
+              const formattedTargetDate = rawTargetDate
+                ? moment(rawTargetDate).locale("th").format("D MMMM YYYY")
+                : null;
+              const targetShiftLabel = targetShift?.shiftType
+                ? SHIFT_CONFIG[targetShift.shiftType]?.label
+                : undefined;
+              const partner = swapInfo?.swappedWith;
+
+              return (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-2.5 text-xs border border-amber-200 dark:border-amber-800/60 space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200 text-xs">
+                      <ArrowLeftRight className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>
+                        ⚠️ เวรนี้ถูกแลกออกไปแล้ว{partner ? ` (ให้ ${partner})` : ""}
+                        {formattedTargetDate && (
+                          <span className="font-normal block sm:inline text-amber-800 dark:text-amber-300 sm:ml-1 text-[11px]">
+                            • แลกเป็นเวรวันที่ {formattedTargetDate}
+                            {targetShiftLabel ? ` (${targetShiftLabel})` : ""}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {onViewTrail && (
+                        <button
+                          type="button"
+                          onClick={() => onViewTrail(shift)}
+                          className="text-[11px] font-bold text-secondary hover:underline cursor-pointer"
+                        >
+                          ประวัติ
+                        </button>
+                      )}
+                      {(onUndoSwap || onRestoreShift) && (
+                        <button
+                          type="button"
+                          disabled={isLocked}
+                          onClick={() => {
+                            if (isLocked) return;
+                            if (onUndoSwap) {
+                              onUndoSwap(shift);
+                            } else if (onRestoreShift) {
+                              onRestoreShift(shift);
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all shadow-2xs ${
+                            isLocked
+                              ? "cursor-not-allowed bg-slate-300 text-slate-500 dark:bg-zinc-800 dark:text-zinc-500 opacity-60"
+                              : "cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95"
+                          }`}
+                          title={
+                            isLocked
+                              ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
+                              : "กู้คืนเวรนี้และยกเลิกเวรที่ได้รับจากการแลก"
+                          }
+                        >
+                          {isLocked ? <Lock className="h-3 w-3" /> : <RotateCcw className="h-3 w-3" />}
+                          <span>{isLocked ? "เวรล็อกอยู่" : "กู้คืนเวร (ยกเลิกการแลก)"}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {swapInfo?.swapReason && (
+                    <p className="text-[11px] text-text-muted dark:text-zinc-300 pl-5">
+                      📝 เหตุผล: {swapInfo.swapReason}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-1 shrink-0">
             {/* Action Button: ขายเวร (สำหรับเวร Refer หรือ OT ที่ active) */}
-            {(isRefer || isOT) && !isSoldOut && !isSwappedOut && onSellShift && (
+            {(isRefer || isOT) && !isGivenAway && onSellShift && (
               <button
                 type="button"
                 disabled={isLocked}
@@ -518,7 +604,7 @@ export default function ActivityCard({
               </button>
             )}
 
-            {!isSwappedOut && !isSoldOut && onSwapShift && (
+            {!isGivenAway && onSwapShift && (
               <button
                 type="button"
                 onClick={() => onSwapShift(shift)}
@@ -529,7 +615,7 @@ export default function ActivityCard({
               </button>
             )}
 
-            {canEdit && !isSoldOut && onEditShift && (
+            {canEdit && !isGivenAway && onEditShift && (
               <button
                 type="button"
                 onClick={() => onEditShift(shift)}
@@ -540,7 +626,7 @@ export default function ActivityCard({
               </button>
             )}
 
-            {!isSoldOut && (
+            {!isGivenAway && (
               <button
                 type="button"
                 onClick={onDelete}
@@ -597,7 +683,7 @@ export default function ActivityCard({
             )}
 
             {/* Price */}
-            {service.price && (
+            {service.price !== undefined && service.price !== null && (
               <div className="flex items-center justify-between text-[11px] text-text-muted dark:text-zinc-400">
                 <span className="font-bold text-primary-dark dark:text-primary-light">
                   {service.price === 0 ? (
@@ -614,7 +700,7 @@ export default function ActivityCard({
           {/* Note */}
           {service.note && (
             <div className="flex items-center justify-between text-[11px] text-text-muted dark:text-zinc-400">
-              {service.note && <span>📝 {service.note}</span>}
+              <span>📝 {service.note}</span>
             </div>
           )}
         </div>

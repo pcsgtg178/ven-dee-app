@@ -159,17 +159,19 @@ function TimelineRow({
     const shiftConf = SHIFT_CONFIG[shift.shiftType];
     const catConf = SHIFT_CATEGORY_CONFIG[shift.category];
     const isSwapped = shift.status === "swapped_out";
+    const isSoldOut = shift.status === "sold_out" || shift.status === "transferred";
+    const isGivenAway = isSwapped || isSoldOut;
     const code = SHIFT_CODE_MAP[shift.shiftType] || shift.shiftType;
 
     return (
       <div
         className={`flex items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-xs transition-colors ${
-          isSwapped
-            ? "opacity-50 bg-surface-subtle/50 dark:bg-zinc-800/30"
+          isGivenAway
+            ? "opacity-60 bg-surface-subtle/50 dark:bg-zinc-800/30"
             : "bg-card-bg dark:bg-zinc-900"
         }`}
       >
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 min-w-0 flex-wrap">
           <span
             className={`h-2.5 w-2.5 shrink-0 rounded-full ${
               shift.category === "black"
@@ -177,39 +179,46 @@ function TimelineRow({
                 : shift.category === "red"
                   ? "bg-shift-red"
                   : "bg-emerald-500"
-            }`}
+            } ${isGivenAway ? "opacity-50" : ""}`}
           />
           <span
-            className={`font-bold ${shiftConf?.textBg || "text-text-main dark:text-white"}`}
+            className={`font-bold ${
+              isGivenAway
+                ? "line-through text-text-muted dark:text-zinc-400"
+                : shiftConf?.textBg || "text-text-main dark:text-white"
+            }`}
           >
             [{code}] {shiftConf?.shortLabel || shift.shiftType}
           </span>
-          <span className="text-text-muted dark:text-zinc-400">
+          <span className={`text-text-muted dark:text-zinc-400 ${isGivenAway ? "line-through" : ""}`}>
             {shiftConf?.period || "ทั้งวัน"}
           </span>
           <span
-            className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${catConf?.badge || ""}`}
+            className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${catConf?.badge || ""} ${isGivenAway ? "opacity-60" : ""}`}
           >
             {catConf?.label || shift.category}
           </span>
-          {isSwapped && (
-            <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
-              แลกแล้ว
-            </span>
-          )}
-          {shift.category === "red" && shift.receivedFrom && (
-            <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300 dark:border-rose-700">
-              รับจาก: {shift.receivedFrom}
-            </span>
-          )}
-          {(shift.status === "transferred" || shift.status === "sold_out") && (
+          {isSwapped && (() => {
+            const partner = shift.swap?.swappedWith || shift.swapMeta?.swappedWith;
+            return (
+              <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                แลกออกแล้ว{partner ? `: ${partner}` : ""}
+              </span>
+            );
+          })()}
+          {isSoldOut && (
             <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
               ยกให้: {shift.transferMeta?.recipientName || shift.saleMeta?.buyerName || "ผู้อื่น"}
             </span>
           )}
+          {shift.category === "red" && shift.receivedFrom && !isGivenAway && (
+            <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300 dark:border-rose-700">
+              รับจาก: {shift.receivedFrom}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {!isSwapped &&
+          {!isGivenAway &&
             shift.status === "active" &&
             (shift.shiftType === "r1" || shift.shiftType === "r2" || shift.category === "green" || shift.category === "red") &&
             onSellShift && (
@@ -233,7 +242,7 @@ function TimelineRow({
                 )}
               </button>
             )}
-          {!isSwapped && onSwapShift && (
+          {!isGivenAway && onSwapShift && (
             <button
               type="button"
               onClick={(e) => {
@@ -246,7 +255,7 @@ function TimelineRow({
               <ArrowLeftRight className="h-3.5 w-3.5" />
             </button>
           )}
-          {canEditShift(shift) && onEditShift && (
+          {canEditShift(shift) && !isGivenAway && onEditShift && (
             <button
               type="button"
               onClick={(e) => {
@@ -348,13 +357,6 @@ export default function ScheduleTodoListView({
 }: ScheduleTodoListViewProps) {
   const [subView, setSubView] = useState<SubViewMode>("card");
 
-  // Sold shifts list
-  const soldShifts = useMemo(() => {
-    return activities.filter(
-      (a) => a.type === "shift" && (a as ShiftRecord).status === "sold_out"
-    ) as ShiftRecord[];
-  }, [activities]);
-
   // Grouped Card view data
   const upcomingCardGroups = useMemo(() => {
     const groups = groupByDate(upcomingActivities);
@@ -421,7 +423,7 @@ export default function ScheduleTodoListView({
                 : "bg-surface-subtle text-text-muted hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300"
             }`}
           >
-            ทั้งหมด ({activities.filter((a) => a.type !== "shift" || (a as ShiftRecord).status === "active").length})
+            ทั้งหมด ({activities.filter((a) => a.type !== "shift" || (a as ShiftRecord).status !== "cancelled").length})
           </button>
           <button
             type="button"
@@ -434,7 +436,7 @@ export default function ScheduleTodoListView({
           >
             <Moon className="h-3 w-3" />
             <span>
-              เวร ({activities.filter((a) => a.type === "shift" && (a as ShiftRecord).status === "active").length})
+              เวร ({activities.filter((a) => a.type === "shift" && (a as ShiftRecord).status !== "cancelled").length})
             </span>
           </button>
           <button
@@ -657,35 +659,6 @@ export default function ScheduleTodoListView({
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-
-          {/* SECTION 3: Sold Refer Shifts */}
-          {soldShifts.length > 0 && (
-            <div className="space-y-3 pt-3">
-              <div className="flex items-center justify-between px-1 border-t border-surface-subtle pt-3 dark:border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <Ambulance className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  <h3 className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
-                    เวร Refer ที่ขายแล้ว ({soldShifts.length} เวร)
-                  </h3>
-                </div>
-                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                  รายรับ: ฿{(soldShifts.reduce((acc, s) => acc + (s.saleMeta?.salePriceSatang || 0), 0) / 100).toLocaleString()}
-                </span>
-              </div>
-
-              <div className="space-y-2.5">
-                {soldShifts.map((soldShift) => (
-                  <ActivityCard
-                    key={soldShift.id}
-                    item={soldShift}
-                    hideDateHeader={false}
-                    onDelete={() => onRequestDelete(soldShift)}
-                    onUndoSellShift={onUndoSellShift}
-                  />
-                ))}
-              </div>
             </div>
           )}
         </div>

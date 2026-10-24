@@ -31,6 +31,18 @@ export interface SaleMetadata {
   note?: string; // บันทึกเพิ่มเติม
 }
 
+export interface ShiftSwapRecord {
+  id: string;
+  givenShiftId: string; // ID of the shift given away (status: 'swapped_out')
+  receivedShiftId: string; // ID of the shift received (status: 'active')
+  swappedWith: string; // Direct swap partner
+  originalOwner?: string; // Original owner if top-up chain
+  swapDate: string; // YYYY-MM-DD
+  swapReason?: string;
+  swapHistory: SwapTrailNode[];
+  createdAt?: string;
+}
+
 export interface ShiftRecord {
   id: string;
   type: "shift";
@@ -38,7 +50,9 @@ export interface ShiftRecord {
   shiftType: ShiftType;
   category: ShiftCategory;
   status: ShiftStatus;
-  swapMeta?: SwapMetadata;
+  swapId?: string; // Foreign key referencing shift_swaps.id (on swapped_out shifts)
+  swap?: ShiftSwapRecord; // Joined swap record details
+  swapMeta?: SwapMetadata; // Backwards-compatible mapped swap metadata
   saleMeta?: SaleMetadata;
   department?: string;
   note?: string;

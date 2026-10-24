@@ -72,6 +72,8 @@ export default function ModalEditShift({
         note: shiftNote.trim() || undefined,
         status: shift.status,
         createdAt: shift.createdAt,
+        swapId: shift.swapId,
+        swap: shift.swap,
         swapMeta: shift.swapMeta,
       });
 

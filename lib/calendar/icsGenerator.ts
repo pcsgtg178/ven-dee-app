@@ -254,11 +254,13 @@ export function generateIcsCalendar(input: IcsGeneratorInput): string {
           `หมวดเวร: ${isRed ? "เวรแดง (OT/เวรช่วย)" : "เวรดำ (เวรประจำ)"}`,
           `เวลาปฏิบัติงาน: 08:00 - 16:00 น.`,
         ];
-        if (shift.swapMeta?.swappedWith) {
-          descParts.push(`แลกมาจาก: ${shift.swapMeta.swappedWith}`);
+        const swappedWith = shift.swap?.swappedWith || shift.swapMeta?.swappedWith;
+        const originalOwner = shift.swap?.originalOwner || shift.swapMeta?.originalOwner;
+        if (swappedWith) {
+          descParts.push(`แลกมาจาก: ${swappedWith}`);
         }
-        if (shift.swapMeta?.originalOwner) {
-          descParts.push(`เจ้าของเดิม: ${shift.swapMeta.originalOwner}`);
+        if (originalOwner) {
+          descParts.push(`เจ้าของเดิม: ${originalOwner}`);
         }
         if (shift.note) {
           descParts.push(`หมายเหตุ: ${shift.note}`);
@@ -286,11 +288,13 @@ export function generateIcsCalendar(input: IcsGeneratorInput): string {
           `หมวดเวร: ${isRed ? "เวรแดง (OT/เวรช่วย)" : "เวรดำ (เวรประจำ)"}`,
           `เวลาปฏิบัติงาน: 16:00 - 24:00 น.`,
         ];
-        if (shift.swapMeta?.swappedWith) {
-          descParts.push(`แลกมาจาก: ${shift.swapMeta.swappedWith}`);
+        const swappedWith = shift.swap?.swappedWith || shift.swapMeta?.swappedWith;
+        const originalOwner = shift.swap?.originalOwner || shift.swapMeta?.originalOwner;
+        if (swappedWith) {
+          descParts.push(`แลกมาจาก: ${swappedWith}`);
         }
-        if (shift.swapMeta?.originalOwner) {
-          descParts.push(`เจ้าของเดิม: ${shift.swapMeta.originalOwner}`);
+        if (originalOwner) {
+          descParts.push(`เจ้าของเดิม: ${originalOwner}`);
         }
         if (shift.note) {
           descParts.push(`หมายเหตุ: ${shift.note}`);
@@ -317,11 +321,13 @@ export function generateIcsCalendar(input: IcsGeneratorInput): string {
           `หมวดเวร: ${isRed ? "เวรแดง (OT/เวรช่วย)" : "เวรดำ (เวรประจำ)"}`,
           `เวลาปฏิบัติงาน: 00:00 - 08:00 น.`,
         ];
-        if (shift.swapMeta?.swappedWith) {
-          descParts.push(`แลกมาจาก: ${shift.swapMeta.swappedWith}`);
+        const swappedWith = shift.swap?.swappedWith || shift.swapMeta?.swappedWith;
+        const originalOwner = shift.swap?.originalOwner || shift.swapMeta?.originalOwner;
+        if (swappedWith) {
+          descParts.push(`แลกมาจาก: ${swappedWith}`);
         }
-        if (shift.swapMeta?.originalOwner) {
-          descParts.push(`เจ้าของเดิม: ${shift.swapMeta.originalOwner}`);
+        if (originalOwner) {
+          descParts.push(`เจ้าของเดิม: ${originalOwner}`);
         }
         if (shift.note) {
           descParts.push(`หมายเหตุ: ${shift.note}`);
@@ -354,8 +360,9 @@ export function generateIcsCalendar(input: IcsGeneratorInput): string {
           `เวร Refer ฉุกเฉิน (สแตนด์บายเตรียมพร้อมส่งต่อผู้ป่วย 24 ชม.)`,
           `ทีม: ทีม ${teamNum}`,
         ];
-        if (shift.swapMeta?.swappedWith) {
-          descParts.push(`แลกมาจาก: ${shift.swapMeta.swappedWith}`);
+        const swappedWith = shift.swap?.swappedWith || shift.swapMeta?.swappedWith;
+        if (swappedWith) {
+          descParts.push(`แลกมาจาก: ${swappedWith}`);
         }
         if (shift.note) {
           descParts.push(`หมายเหตุ: ${shift.note}`);

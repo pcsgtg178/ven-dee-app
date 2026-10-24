@@ -1,11 +1,11 @@
-import {
+import type {
   ActivityItem,
   ClinicWorkRecord,
   CustomerServiceRecord,
   PersonalEventRecord,
   ShiftRecord,
   ShiftType,
-} from "../types/vendee";
+} from "../types/vendee.ts";
 
 /**
  * Event Ordering (DOMAIN_RULES.md §3.5)

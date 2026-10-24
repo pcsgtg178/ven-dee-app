@@ -184,7 +184,7 @@ export default function ActivityCard({
   if (item.type === "shift") {
     const shift = item as ShiftRecord;
     const shiftInfo = SHIFT_CONFIG[shift.shiftType];
-    const isSwapped = Boolean(shift.swapMeta);
+    const isSwapped = Boolean(shift.swapMeta || shift.swap);
     const isLocked = (shift.swapMeta?.isLocked ?? false) || isShiftInPast(shift.date);
     const isSwappedOut = shift.status === "swapped_out";
     const isSoldOut = shift.status === "sold_out";
@@ -370,68 +370,71 @@ export default function ActivityCard({
             )}
 
             {/* Swap Details Box (ข้อความบอกแลกเวร) */}
-            {isSwapped && shift.swapMeta && (
-              <div className="rounded-xl bg-sky-50 dark:bg-sky-950/40 p-2.5 text-xs border border-sky-200 dark:border-sky-800/80 space-y-1.5">
-                <div className="flex flex-wrap items-center justify-between gap-1.5">
-                  <div className="flex items-center gap-1.5 font-bold text-sky-900 dark:text-sky-200 text-xs">
-                    <ArrowLeftRight className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                    <span>
-                      🔄 แลกมาจาก:{" "}
-                      <strong className="text-text-main dark:text-white font-extrabold">
-                        {shift.swapMeta.swappedWith}
-                      </strong>
-                      {shift.swapMeta.originalOwner && (
-                        <span className="ml-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                          (เจ้าของเดิม: {shift.swapMeta.originalOwner})
-                        </span>
-                      )}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {onViewTrail && (
-                      <button
-                        type="button"
-                        onClick={() => onViewTrail(shift)}
-                        className="text-[11px] font-bold text-secondary hover:underline cursor-pointer"
-                      >
-                        ประวัติ
-                      </button>
-                    )}
-                    {onUndoSwap && (
-                      <button
-                        type="button"
-                        disabled={isLocked}
-                        onClick={() => !isLocked && onUndoSwap(shift)}
-                        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold transition-all ${
-                          isLocked
-                            ? "cursor-not-allowed bg-surface-subtle text-text-muted opacity-60"
-                            : "cursor-pointer bg-card-bg text-shift-red hover:bg-rose-50 border border-rose-200 dark:bg-zinc-800 dark:text-rose-400 dark:border-rose-900"
-                        }`}
-                        title={
-                          isLocked
-                            ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
-                            : "ยกเลิกการแลกเวรและคืนค่าเดิม"
-                        }
-                      >
-                        {isLocked ? (
-                          <Lock className="h-3 w-3" />
-                        ) : (
-                          <RotateCcw className="h-3 w-3" />
+            {isSwapped && (shift.swap || shift.swapMeta) && (() => {
+              const swapInfo = shift.swap || shift.swapMeta!;
+              return (
+                <div className="rounded-xl bg-sky-50 dark:bg-sky-950/40 p-2.5 text-xs border border-sky-200 dark:border-sky-800/80 space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 font-bold text-sky-900 dark:text-sky-200 text-xs">
+                      <ArrowLeftRight className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                      <span>
+                        🔄 แลกมาจาก:{" "}
+                        <strong className="text-text-main dark:text-white font-extrabold">
+                          {swapInfo.swappedWith}
+                        </strong>
+                        {swapInfo.originalOwner && (
+                          <span className="ml-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                            (เจ้าของเดิม: {swapInfo.originalOwner})
+                          </span>
                         )}
-                        <span>ยกเลิกการแลก</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
+                      </span>
+                    </div>
 
-                {shift.swapMeta.swapReason && (
-                  <p className="text-[11px] text-text-muted dark:text-zinc-300 pl-5">
-                    📝 เหตุผล: {shift.swapMeta.swapReason}
-                  </p>
-                )}
-              </div>
-            )}
+                    <div className="flex items-center gap-1.5">
+                      {onViewTrail && (
+                        <button
+                          type="button"
+                          onClick={() => onViewTrail(shift)}
+                          className="text-[11px] font-bold text-secondary hover:underline cursor-pointer"
+                        >
+                          ประวัติ
+                        </button>
+                      )}
+                      {onUndoSwap && (
+                        <button
+                          type="button"
+                          disabled={isLocked}
+                          onClick={() => !isLocked && onUndoSwap(shift)}
+                          className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold transition-all ${
+                            isLocked
+                              ? "cursor-not-allowed bg-surface-subtle text-text-muted opacity-60"
+                              : "cursor-pointer bg-card-bg text-shift-red hover:bg-rose-50 border border-rose-200 dark:bg-zinc-800 dark:text-rose-400 dark:border-rose-900"
+                          }`}
+                          title={
+                            isLocked
+                              ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
+                              : "ยกเลิกการแลกเวรและคืนค่าเดิม"
+                          }
+                        >
+                          {isLocked ? (
+                            <Lock className="h-3 w-3" />
+                          ) : (
+                            <RotateCcw className="h-3 w-3" />
+                          )}
+                          <span>ยกเลิกการแลก</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {swapInfo.swapReason && (
+                    <p className="text-[11px] text-text-muted dark:text-zinc-300 pl-5">
+                      📝 เหตุผล: {swapInfo.swapReason}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Shift Note */}
             {shift.note && (

@@ -89,70 +89,35 @@ erDiagram
     USERS ||--o{ SHIFTS : "owns"
     USERS ||--o{ CUSTOMERS : "manages"
     USERS ||--o{ CUSTOMER_SERVICES : "provides"
-    USERS ||--o{ SHIFT_SWAP_TRANSACTIONS : "requests"
-    
-    SHIFTS ||--o{ SHIFT_SWAP_TRANSACTIONS : "original_shift"
-    SHIFTS ||--o{ SHIFT_SWAP_TRANSACTIONS : "resulting_shift"
-    
-    SHIFT_SWAP_TRANSACTIONS ||--o{ SWAP_TRAIL_NODES : "has_history"
+    SHIFTS ||--o| SHIFT_SWAPS : "given_in"
+    SHIFTS ||--o| SHIFT_SWAPS : "received_in"
     
     CUSTOMERS ||--o{ CUSTOMER_SERVICES : "books"
-
-    USERS {
-        uuid id PK
-        string email UK
-        string password_hash
-        string full_name
-        string phone
-        string role
-        string ward_name
-        int monthly_black_quota
-        timestamp created_at
-        timestamp updated_at
-    }
 
     SHIFTS {
         uuid id PK
         uuid user_id FK
         date shift_date
-        enum shift_type "morning, afternoon, night, r1, r2"
-        enum category "black, red, green"
-        enum status "active, swapped_out, cancelled"
+        enum shift_type "morning, afternoon, night, r1, r2, ctm, cta"
+        enum category "black, red, green, gray, purple"
+        enum status "active, swapped_out, sold_out, cancelled"
         string department
         text note
-        uuid parent_shift_id FK "nullable"
-        string swapped_with "nullable"
-        string original_owner "nullable"
-        date swap_date "nullable"
-        text swap_reason "nullable"
+        uuid swap_id FK "nullable, points to shift_swaps on swapped_out shifts"
         boolean is_locked
         timestamp created_at
         timestamp updated_at
     }
 
-    SHIFT_SWAP_TRANSACTIONS {
+    SHIFT_SWAPS {
         uuid id PK
-        uuid user_id FK
-        uuid old_shift_id FK
-        uuid new_shift_id FK
-        string partner_name
-        string original_owner "nullable"
+        uuid given_shift_id FK "เวรที่ให้ไป (swapped_out)"
+        uuid received_shift_id FK "เวรที่ได้มา (active)"
+        string swapped_with "คู่แลกเวรโดยตรง"
+        string original_owner "เจ้าของเวรเดิมตามตาราง (ถ้ามี)"
         date swap_date
-        text reason
-        enum status "completed, rolled_back"
-        timestamp created_at
-    }
-
-    SWAP_TRAIL_NODES {
-        uuid id PK
-        uuid shift_id FK
-        uuid transaction_id FK
-        int step_order
-        string from_person
-        string to_person
-        date node_date
-        string shift_label
-        text note
+        text swap_reason "nullable"
+        jsonb swap_history "ประวัติเส้นทางการแลกเปลี่ยน"
         timestamp created_at
     }
 

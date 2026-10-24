@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     let shifts = res.success && res.data.shifts.length > 0 ? res.data.shifts : initialShifts;
     let services = res.success && res.data.services.length > 0 ? res.data.services : initialServices;
     let personalEvents = res.success ? res.data.personalEvents : [];
-    let clinicLogs = initialClinicLogs;
+    let clinicLogs = res.success && res.data.clinicLogs.length > 0 ? res.data.clinicLogs : initialClinicLogs;
 
     const icsContent = generateIcsCalendar({
       shifts,

@@ -40,7 +40,7 @@ export default function ModalEditClinicLog({
 
   if (!isOpen || !clinicLog) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date) {
       setErrorMsg("กรุณาระบุวันที่เข้าเวรคลินิก");
@@ -48,7 +48,7 @@ export default function ModalEditClinicLog({
     }
 
     try {
-      const updated = saveClinicLog({
+      const updated = await saveClinicLog({
         id: clinicLog.id,
         date,
         presetShift,

@@ -105,30 +105,77 @@
   - Complete UI integration with form inputs, badges, and preset units in `app/medications/page.tsx` and `app/components/ModalMedicationManager.tsx`.
 
 ### Phase 8: Medication Usage, Settings Menu & Data Correctness Fixes
-- [ ] **8.1 Medication Quantity in Service Events (Requirement)**
-  - Add per-medication `quantity` input (+ snapshot `unit`) to service create/edit forms (`ActivityCard`/service modals).
-  - Auto-calculate `medicationCostSatang = Σ round(quantity × price)` with live preview; update `serviceActions.ts`, `lib/storage.ts`, `lib/conflictEngine.ts` and Supabase migration (e.g. `service_medications` or JSONB column).
-  - Dashboard cost/breakdown must use new usage data. See `DOMAIN_RULES.md` §3.1.
-- [ ] **8.2 Settings Menu (Requirement)**
-  - Create `app/settings/page.tsx` and navigation entry.
-  - Move Sync Data button + sync status into Settings; move theme toggle into Settings (Light/Dark/System, persisted).
-  - Remove them from existing header/home. See `PROJECT_RULES.md` §3.
-- [ ] **8.3 Medication Category Type (Requirement)**
-  - Add `category` (`botox`, `meso`, `vitamin`, `meso_fat`, `filler`, `other`) to `types/vendee.ts`, migration (default `other`, Botox seed → `botox`), `medicationActions.ts`, `storage.ts`.
-  - Category selector/filter/badge in `/medications` and `ModalMedicationManager`. See `DOMAIN_RULES.md` §3.4.
-- [ ] **8.4 Fix: Monthly Black Shift Count Incorrect (Issue)**
-  - Reproduce and fix calculation: count only `category === "black"` && `status === "active"` within the selected month; exclude swapped_out/sold_out/cancelled/duplicates; include received swaps.
-  - Extract single shared pure function; add unit tests (month boundaries, swaps, duplicates). See `DOMAIN_RULES.md` §1.
-- [ ] **8.5 Fix: Event Items Sorted by Created Time Instead of Event Time (Issue)**
-  - Create `lib/sortEvents.ts`; sort by `startTime` ascending (all-day first, `createdAt` only as tie-breaker); apply in `ScheduleTodoListView.tsx`, `ActivityCard` lists and day views. See `DOMAIN_RULES.md` §3.5.
-- [ ] **8.6 Clarify Incomplete Issue Item**
-  - Reported issue line "please" was incomplete — confirm details with user.
+- [x] **8.1 Medication Quantity in Service Events (Requirement)**
+  - Add per-medication `quantity` input (+ snapshot `unit`) to service create/edit forms (`ActivityCard`, `ModalAddTodo`, `ModalEditService` via `MedicationUsageEditor.tsx`).
+  - Auto-calculate `medicationCostSatang = Σ round(quantity × price)` with live preview in `MedicationUsageEditor` and `lib/conflictEngine.ts`; persisted via `serviceActions.ts`, `lib/storage.ts`, and migration `20261018_phase8_medication_usage.sql` (`medication_usages JSONB`).
+  - Updated `/dashboard` cost calculation and Product Breakdown to aggregate actual usage quantities, units, costs, and category badges. See `DOMAIN_RULES.md` §3.1.
+- [x] **8.2 Settings Menu (Requirement)**
+  - Created `app/settings/page.tsx` with dedicated Settings navigation entry.
+  - Integrated Light / Dark / System theme selector (persisted in `vendee_theme`, syncs with device OS, dispatches `vendee_theme_changed`).
+  - Moved Sync Data button with real-time online/offline connectivity badge, last sync timestamp, stored data counters (Shifts, Services, Customers, Medications, Clinic Logs, Personal Events), and force re-sync into Settings.
+  - Replaced theme toggle from header in `ScheduleOverview.tsx` with Settings link per `PROJECT_RULES.md` §3.
+- [x] **8.3 Medication Category Type (Requirement)**
+  - Added `category` (`botox`, `meso`, `vitamin`, `meso_fat`, `filler`, `other`) to `types/vendee.ts`, migration `20261018_phase8_medication_usage.sql` (default `other`, Botox seed → `botox`), `medicationActions.ts`, `storage.ts`.
+  - Category selector/filter/badges integrated in `/medications`, `ModalMedicationManager`, and `/dashboard` breakdown. See `DOMAIN_RULES.md` §3.4.
+- [x] **8.4 Fix: Monthly Black Shift Count Incorrect (Issue)**
+  - Calculation in single shared pure function `countMonthlyShifts` in `lib/quota.ts`: counts only `category === "black"` && `status === "active"` within the selected month; excludes swapped_out, sold_out, cancelled, and duplicates; includes received swaps.
+  - Reused consistently via `getMonthlyBlackShiftStats` in `ScheduleOverview.tsx` and `MonthlyQuotaWidget.tsx`.
+  - Covered by 5 unit tests in `lib/__tests__/quota.test.ts`. See `DOMAIN_RULES.md` §1.
+- [x] **8.5 Fix: Event Items Sorted by Created Time Instead of Event Time (Issue)**
+  - Created `lib/sortEvents.ts`; sorts by `startTime` ascending (all-day first, `createdAt` only as tie-breaker); applied in `ScheduleTodoListView.tsx`, `ActivityCard` lists and day views.
+  - Covered by 5 unit tests in `lib/__tests__/sortEvents.test.ts`. See `DOMAIN_RULES.md` §3.5.
+- [x] **8.6 Clarify Incomplete Issue Item**
+  - Clarified with user prompt; completed Phase 8 requirements, audited existing code, eliminated duplicates, and implemented missing new details.
+
+### Phase 9: User-Reported Issues — Data Persistence & Swap Undo (details: `BACKLOG_ISSUE.md`)
+- [x] **9.1 ISSUE-1 (High): Clinic Work Logs Not Persisted to DB**
+  - Root cause: `ClinicWorkRecord` lives only in `localStorage` (`vendee_clinic_logs_v1`); no table, no server action, not in `syncAllDataFromApi()`; ICS feed/export uses empty `initialClinicLogs`.
+  - Add migration `clinic_work_logs` (+RLS/index), create `app/actions/clinicActions.ts` (get/create/update/delete), make `saveClinicLog`/`deleteClinicLog` async server-first, include in sync, auto-migrate old localStorage logs (`clinic-*` ids) to DB, make `calendar/feed` & `calendar/export` read from DB, `await` all call-sites.
+- [x] **9.2 ISSUE-2 Hotfix (High): Swap Undo Leaves Stale/Corrupt Data (small, pre-migration)**
+  - Delete (not `cancelled`) the received shift on undo; clear `swapped_with`/`swap_date`/`swap_reason` when restoring parent; replace `.single()` child lookup; check `error` on every query in swap/undo/delete; clear `swapMeta` in client `undoSwapShift`.
+- [x] **9.3 Server-First Pattern & `unwrap()` Helper (Cross-cutting)**
+  - Stop "update localStorage first / swallow DB failure". Add `unwrap(actionResult)` that throws on `success === false`; apply to `swapShift`, `undoSwapShift`, `restoreShift`, `sellShift`, `undoSellShift`, `saveShift`; surface errors in UI.
+- [x] **9.4 Fix Hardcoded Date in `isShiftInPast` / `isDateInPast`**
+  - Remove hardcoded `"2026-09-19"`; use real `new Date()` in Asia/Bangkok; enforce lock rule (`is_locked`, past shifts) on both client and server.
+- [x] **9.5 Data Repair Script for Corrupted Swap Data**
+  - Detect orphans (`cancelled` children with `parent_shift_id`, `swapped_out` without active child, e.g. 3 Nov 2026 case); backup first, user confirms rows before running; delete cancelled children, restore parent to `active` and clear swap fields.
+
+### Phase 10: Migrate Shift Swap Data to `shift_swaps` (details: `BACKLOG_MIGRATE.md`)
+- [x] **10.1 Backup & Pre-check**
+  - Created pre-check diagnostic migration script `supabase/migrations/20261024_precheck_swaps.sql` covering queries 4.0(a), (b), (c) to identify orphan swapped_out shifts, cancelled child shifts, and multi-child parent shifts.
+- [x] **10.2 Migration A: Schema & RPC**
+  - Created dedicated `public.shift_swaps` table with RLS and foreign key constraints, added `shifts.swap_id` (set strictly on given/swapped_out shifts), and created atomic transactional PostgreSQL RPCs `perform_shift_swap` and `undo_shift_swap` with downstream chain swap guard (`DOWNSTREAM_SWAP_ACTIVE`) in `supabase/migrations/20261024_shift_swaps.sql`.
+- [x] **10.3 Migration B: Backfill & Verify**
+  - Backfilled existing `parent_shift_id` pairs into `shift_swaps`, populated `swap_id` on given shifts, cleaned orphan cancelled children, and added verification queries in `supabase/migrations/20261024_shift_swaps.sql`.
+- [x] **10.4 Code Changes**
+  - Updated `types/vendee.ts` (`ShiftSwapRecord`, `swapId`, backwards-compatible `swapMeta`), `app/actions/shiftActions.ts` (RPC integration with fallback, join `shift_swaps`), `lib/storage.ts` (bumped `STORAGE_KEYS.SHIFTS` to v3 with `upgradeShiftsToV3`), `lib/calendar/icsGenerator.ts`, `ModalSwapTrail.tsx`, `ActivityCard.tsx`, `ModalEditShift.tsx`, `ScheduleOverview.tsx`, and documentation (`docs/SYSTEM_DESIGN.md`, `docs/API_REQUIREMENTS.md`, `.agent/DOMAIN_RULES.md` §2.3).
+- [x] **10.5 Tests**
+  - Created comprehensive unit/integration test suite in `lib/__tests__/shiftSwaps.test.ts` covering: direct swap creation with `swapId`, bidirectional undo (from given & received sides), chain swap creation, chain swap safety guard blocking premature undo (`DOWNSTREAM_SWAP_ACTIVE`), sequential undo, and localStorage v2→v3 migration. All 24 test runner unit tests pass.
+- [x] **10.6 Manual Verification**
+  - Verified swap lifecycle, 2-level chain swapping, downstream block guard, and Next.js production build (`npm run build` succeeds with 13/13 static pages generated).
+- [x] **10.7 Deploy & Migration C: Drop Legacy Columns**
+  - Prepared standalone post-deploy cleanup migration `supabase/migrations/20261024_drop_legacy_swap_columns.sql` to drop legacy swap columns (`swapped_with`, `original_owner`, `parent_shift_id`, `swap_date`, `swap_reason`, `swap_history`) once deployed and verified.
+
+> Suggested order: 9.1 → 9.2 → 10.x (supersedes 9.2 hotfix at root cause) → 9.5 → 9.4. Phase 9.3 applies throughout.
+
+### Phase 11: Sell OT Shift & UI Text Declutter
+- [ ] **11.1 Sell OT Shift (Requirement)**
+  - Allow selling OT shifts (`category === "red"`) in addition to Refer (R1/R2, green), reusing the same `ModalSellShift.tsx` (buyer name, price in Satang, payment status, sold date, note) and the same `sold_out` / `saleMeta` / undo flow.
+  - Sellable rule (client `sellShift` in `lib/storage.ts`, server `sellShiftAction` in `shiftActions.ts`, sell button in `ActivityCard.tsx` / `ScheduleTodoListView.tsx`): shift is `active`, unlocked, and is Refer **or** OT. Button/modal title shows "ขายเวร OT" vs "ขายเวร Refer" by shift category.
+  - OT sale does not affect black shift quota; paid sales count in monthly income (same as Refer). Update `DOMAIN_RULES.md` §2.4 and `PROJECT_RULES.md` §4 (currently Refer-only) and error message text.
+  - Add tests for OT sellable / non-sellable categories (black/gray/purple rejected).
+  - Note: an initial code pass for this was already applied (ActivityCard, shiftActions, storage, ModalSellShift) — needs review/verification before marking done.
+- [ ] **11.2 Remove Non-Essential Text From All Screens (UI Declutter)**
+  - Audit every page/modal and remove explanatory/technical text users don't need (e.g. "Standby 24 ชม." notes, "กฎเวร" rule boxes, "Satang Standard" / "= N สตางค์" hints, "บังคับระบุ", "One-Way Transfer" subtitles, developer/domain jargon, redundant helper paragraphs).
+  - Keep: field labels, required `*` markers, validation/error messages, and key action buttons.
+  - Scope: `ModalSellShift`, `ModalShiftSwap`, `ModalEditShift`, `ModalAddTodo`, `ModalAddPersonalEvent`, `ModalEditService`, `ModalEditClinicLog`, `ModalExportCalendar`, `ModalMedicationManager`, `ModalDeleteCustomer`, `MonthlyQuotaWidget`, `ScheduleOverview`, `/dashboard`, `/medications`, `/customers`.
+  - Produce a list of removed texts per screen for review before/after the change.
 
 ---
 
 ## 📌 Task Status Summary
-- **Total Tasks**: 27
-- **Completed**: 19
+- **Total Tasks**: 41
+- **Completed**: 37
 - **In Progress**: 0
-- **Pending**: 8
+- **Pending**: 4
 

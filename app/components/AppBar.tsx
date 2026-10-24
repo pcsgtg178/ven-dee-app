@@ -10,6 +10,8 @@ interface AppBarProps {
 
   hideTitle?: boolean;
 
+  /** Optional element or buttons on the left side (e.g. Back button) */
+  leftAction?: React.ReactNode;
   /** Optional element or buttons on the right side */
   rightAction?: React.ReactNode;
   /** Additional CSS classes for header container */
@@ -21,6 +23,7 @@ interface AppBarProps {
 export default function AppBar({
   title,
   hideTitle = false,
+  leftAction,
   rightAction,
   className = "",
   isSyncing: propIsSyncing,
@@ -41,8 +44,10 @@ export default function AppBar({
       className={`sticky top-0 left-0 right-0 z-40 border-b border-surface-subtle bg-white/90 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90 pt-safe ${className}`}
     >
       <div className="flex h-14 items-center justify-between px-3">
-        {/* Left: Spacer to keep center title balanced if rightAction exists */}
-        <div className="flex min-w-11 shrink-0 items-center justify-start" />
+        {/* Left: Action or spacer */}
+        <div className="relative z-50 flex min-w-11 shrink-0 items-center justify-start">
+          {leftAction ?? null}
+        </div>
 
         {/* Center: Title */}
         {title && !hideTitle ? (

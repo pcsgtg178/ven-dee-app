@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import moment from "moment";
 import "moment/locale/th";
+import Link from "next/link";
 import {
   Calendar,
   ChevronLeft,
@@ -15,6 +16,7 @@ import {
   Percent,
   RotateCw,
   Ambulance,
+  Settings,
 } from "lucide-react";
 import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
@@ -22,13 +24,19 @@ import {
   CustomerServiceRecord,
   Medications,
   ShiftRecord,
+  MedicationCategory,
+  MEDICATION_CATEGORIES,
+  MEDICATION_CATEGORY_CONFIG,
+  resolveMedicationCategory,
 } from "../../types/vendee";
+import { calculateMedicationCostSatang } from "../../lib/conflictEngine";
 import {
   getServices,
   getMedications,
   getShifts,
   syncAllDataFromApi,
   subscribeToStorage,
+  getTodayDateStringBangkok,
 } from "../../lib/storage";
 
 type PeriodType = "month" | "week" | "day";
@@ -37,12 +45,13 @@ export default function DashboardPage() {
   const [services, setServices] = useState<CustomerServiceRecord[]>([]);
   const [masterMedications, setMasterMedications] = useState<Medications[]>([]);
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<"all" | MedicationCategory>("all");
   
   // Period filter state
   const [periodType, setPeriodType] = useState<PeriodType>("month");
-  // Reference moment: default to "2026-09-19" (mock anchor) or current date
+  // Reference moment: default to current date in Asia/Bangkok
   const [selectedDate, setSelectedDate] = useState<moment.Moment>(() => {
-    return moment("2026-09-19");
+    return moment(getTodayDateStringBangkok());
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
@@ -94,7 +103,7 @@ export default function DashboardPage() {
   };
 
   const handleResetCurrent = () => {
-    setSelectedDate(moment("2026-09-19"));
+    setSelectedDate(moment(getTodayDateStringBangkok()));
   };
 
   // Map of medication name -> cost price in THB
@@ -174,10 +183,18 @@ export default function DashboardPage() {
       const rev = s.price ?? (s.serviceFeeSatang ? s.serviceFeeSatang / 100 : 0);
       serviceRevenue += rev;
 
-      // 2. Cost calculation: either explicit medicationCostSatang, or sum of medication costs
+      // 2. Cost calculation: either explicit medicationCostSatang, calculated from medicationUsages, or legacy fallback
       let caseCost = 0;
       if (s.medicationCostSatang && s.medicationCostSatang > 0) {
         caseCost = s.medicationCostSatang / 100;
+      } else if (s.medicationUsages && s.medicationUsages.length > 0) {
+        const satang = calculateMedicationCostSatang(
+          s.medicationUsages.map((u) => ({
+            quantity: u.quantity,
+            unitCostSatang: u.unitCostSatang,
+          }))
+        );
+        caseCost = satang / 100;
       } else if (s.medications && s.medications.length > 0) {
         s.medications.forEach((medName) => {
           const rawKey = medName.trim().toLowerCase();
@@ -227,47 +244,104 @@ export default function DashboardPage() {
     };
   }, [periodServices, periodSoldShifts, medCostMap]);
 
-  // Product / Medication breakdown
+  // Product / Medication breakdown (uses medicationUsages with fallback to legacy medications)
   const productBreakdown = useMemo(() => {
-    const usageCountMap = new Map<string, { count: number; name: string }>();
+    interface AggregatedMed {
+      name: string;
+      category: MedicationCategory;
+      caseCount: number;
+      totalQuantity: number;
+      unit: string;
+      unitCost: number;
+      totalCost: number;
+    }
+
+    const map = new Map<string, AggregatedMed>();
 
     periodServices.forEach((s) => {
-      if (s.medications && Array.isArray(s.medications)) {
-        s.medications.forEach((med) => {
-          const trimmed = med.trim();
+      if (s.medicationUsages && s.medicationUsages.length > 0) {
+        s.medicationUsages.forEach((u) => {
+          const trimmedName = u.name.trim();
+          if (!trimmedName) return;
+          const key = trimmedName.toLowerCase();
+          const cat = u.category || resolveMedicationCategory(trimmedName);
+          const rawKey = trimmedName.toLowerCase();
+          const cleanKey = trimmedName.replace(/\s*\([^)]*\)$/, "").trim().toLowerCase();
+          const medMeta = medCostMap.get(rawKey) || medCostMap.get(cleanKey);
+
+          const unitLabel = u.unit || medMeta?.unit || "หน่วย";
+          const unitCost = u.unitCostSatang ? u.unitCostSatang / 100 : medMeta?.cost || 0;
+          const lineCost =
+            u.lineCostSatang !== undefined ? u.lineCostSatang / 100 : unitCost * u.quantity;
+
+          const existing = map.get(key) || {
+            name: trimmedName,
+            category: cat,
+            caseCount: 0,
+            totalQuantity: 0,
+            unit: unitLabel,
+            unitCost,
+            totalCost: 0,
+          };
+
+          existing.caseCount += 1;
+          existing.totalQuantity += u.quantity;
+          existing.totalCost += lineCost;
+          if (unitCost > 0) existing.unitCost = unitCost;
+          if (u.unit) existing.unit = u.unit;
+          existing.category = cat;
+          map.set(key, existing);
+        });
+      } else if (s.medications && Array.isArray(s.medications)) {
+        s.medications.forEach((medName) => {
+          const trimmed = medName.trim();
           if (!trimmed) return;
           const key = trimmed.toLowerCase();
-          const existing = usageCountMap.get(key) || { count: 0, name: trimmed };
-          existing.count += 1;
-          usageCountMap.set(key, existing);
+          const rawKey = trimmed.toLowerCase();
+          const cleanKey = trimmed.replace(/\s*\([^)]*\)$/, "").trim().toLowerCase();
+          const medMeta = medCostMap.get(rawKey) || medCostMap.get(cleanKey);
+          const cat = resolveMedicationCategory(trimmed);
+          const unitCost = medMeta?.cost || 0;
+          const unitLabel = medMeta?.unit || "หน่วย";
+
+          const existing = map.get(key) || {
+            name: trimmed,
+            category: cat,
+            caseCount: 0,
+            totalQuantity: 0,
+            unit: unitLabel,
+            unitCost,
+            totalCost: 0,
+          };
+
+          existing.caseCount += 1;
+          existing.totalQuantity += 1;
+          existing.totalCost += unitCost;
+          map.set(key, existing);
         });
       }
     });
 
-    const totalPicks = Array.from(usageCountMap.values()).reduce((sum, item) => sum + item.count, 0);
+    const allAggregated = Array.from(map.values());
+    const totalPicks = allAggregated.reduce((sum, item) => sum + item.caseCount, 0);
 
-    const items = Array.from(usageCountMap.values()).map((item) => {
-      const rawKey = item.name.toLowerCase();
-      const cleanKey = item.name.replace(/\s*\([^)]*\)$/, "").trim().toLowerCase();
-      const medMeta = medCostMap.get(rawKey) || medCostMap.get(cleanKey);
-      const unitCost = medMeta?.cost || 0;
-      const unitLabel = medMeta?.unit || "หน่วย";
-      const totalItemCost = unitCost * item.count;
-      const pickPercentage = totalPicks > 0 ? (item.count / totalPicks) * 100 : 0;
-
+    const items = allAggregated.map((item) => {
+      const pickPercentage = totalPicks > 0 ? (item.caseCount / totalPicks) * 100 : 0;
       return {
-        name: item.name,
-        count: item.count,
-        unitCost,
-        unitLabel,
-        totalItemCost,
+        ...item,
         pickPercentage,
       };
     });
 
-    // Sort descending by usage count, then cost
-    return items.sort((a, b) => b.count - a.count || b.totalItemCost - a.totalItemCost);
-  }, [periodServices, medCostMap]);
+    // Filter by selectedCategory if not 'all'
+    const filtered =
+      selectedCategory === "all"
+        ? items
+        : items.filter((item) => item.category === selectedCategory);
+
+    // Sort descending by caseCount, then totalCost
+    return filtered.sort((a, b) => b.caseCount - a.caseCount || b.totalCost - a.totalCost);
+  }, [periodServices, medCostMap, selectedCategory]);
 
   return (
     <div className="min-h-screen bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
@@ -276,16 +350,26 @@ export default function DashboardPage() {
         title="แดชบอร์ดสรุปรายได้"
         isSyncing={isSyncing}
         rightAction={
-          <button
-            type="button"
-            onClick={syncData}
-            disabled={isSyncing}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-slate-100 hover:text-text-main dark:hover:bg-zinc-800 transition-colors disabled:opacity-60 cursor-pointer"
-            title="รีเฟรชและซิงค์ข้อมูลล่าสุด"
-            aria-label="รีเฟรชข้อมูล"
-          >
-            <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-sky-600 dark:text-sky-400" : ""}`} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={syncData}
+              disabled={isSyncing}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-slate-100 hover:text-text-main dark:hover:bg-zinc-800 transition-colors disabled:opacity-60 cursor-pointer"
+              title="รีเฟรชและซิงค์ข้อมูลล่าสุด"
+              aria-label="รีเฟรชข้อมูล"
+            >
+              <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-sky-600 dark:text-sky-400" : ""}`} />
+            </button>
+            <Link
+              href="/settings"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-slate-100 hover:text-text-main dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              title="การตั้งค่า"
+              aria-label="การตั้งค่า"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+          </div>
         }
       />
 
@@ -537,6 +621,35 @@ export default function DashboardPage() {
             </span>
           </div>
 
+          {/* Category Filter Chips per DOMAIN_RULES §3.4 */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setSelectedCategory("all")}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                selectedCategory === "all"
+                  ? "bg-purple-600 text-white shadow-2xs"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300"
+              }`}
+            >
+              ทั้งหมด
+            </button>
+            {MEDICATION_CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                  selectedCategory === cat
+                    ? "bg-purple-600 text-white shadow-2xs"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300"
+                }`}
+              >
+                {MEDICATION_CATEGORY_CONFIG[cat]?.label || cat}
+              </button>
+            ))}
+          </div>
+
           {productBreakdown.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center dark:border-zinc-800">
               <Package className="mx-auto h-8 w-8 text-slate-300 dark:text-zinc-600 mb-1.5" />
@@ -549,44 +662,54 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-2.5">
-              {productBreakdown.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 transition-all hover:bg-slate-50 dark:border-zinc-800/80 dark:bg-zinc-800/40"
-                >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-text-main dark:text-white">
-                      {item.name}
-                    </span>
-                    <span className="font-extrabold text-purple-700 dark:text-purple-300">
-                      เลือก {item.count} ครั้ง
-                    </span>
-                  </div>
+              {productBreakdown.map((item, idx) => {
+                const catCfg = MEDICATION_CATEGORY_CONFIG[item.category] || MEDICATION_CATEGORY_CONFIG.other;
+                return (
+                  <div
+                    key={idx}
+                    className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 transition-all hover:bg-slate-50 dark:border-zinc-800/80 dark:bg-zinc-800/40"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-bold text-text-main dark:text-white truncate">
+                          {item.name}
+                        </span>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[9px] font-extrabold shrink-0 ${catCfg.badge}`}
+                        >
+                          {catCfg.label}
+                        </span>
+                      </div>
+                      <span className="font-extrabold text-purple-700 dark:text-purple-300 shrink-0">
+                        {item.totalQuantity > 0 ? `${item.totalQuantity.toLocaleString()} ${item.unit}` : `${item.caseCount} ครั้ง`} ({item.caseCount} เคส)
+                      </span>
+                    </div>
 
-                  {/* Progress bar representing share */}
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-700">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"
-                      style={{ width: `${Math.min(100, Math.max(8, item.pickPercentage))}%` }}
-                    />
-                  </div>
+                    {/* Progress bar representing share */}
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-700">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                        style={{ width: `${Math.min(100, Math.max(8, item.pickPercentage))}%` }}
+                      />
+                    </div>
 
-                  {/* Cost & Sub-info */}
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-text-muted dark:text-zinc-400">
-                    <span>
-                      ต้นทุนต่อหน่วย:{" "}
-                      <strong className="text-text-main dark:text-zinc-200">
-                        {item.unitCost > 0 ? `฿${item.unitCost.toLocaleString()}` : "ไม่ระบุ"}
-                      </strong>
-                      /{item.unitLabel}
-                    </span>
+                    {/* Cost & Sub-info */}
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-text-muted dark:text-zinc-400">
+                      <span>
+                        ต้นทุนต่อหน่วย:{" "}
+                        <strong className="text-text-main dark:text-zinc-200">
+                          {item.unitCost > 0 ? `฿${item.unitCost.toLocaleString()}` : "ไม่ระบุ"}
+                        </strong>
+                        /{item.unit}
+                      </span>
 
-                    <span className="font-semibold text-amber-600 dark:text-amber-400">
-                      ต้นทุนรวม: ฿{item.totalItemCost.toLocaleString()}
-                    </span>
+                      <span className="font-semibold text-amber-600 dark:text-amber-400">
+                        ต้นทุนรวม: ฿{Math.round(item.totalCost).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -627,6 +750,14 @@ export default function DashboardPage() {
                 let srvCost = 0;
                 if (srv.medicationCostSatang && srv.medicationCostSatang > 0) {
                   srvCost = srv.medicationCostSatang / 100;
+                } else if (srv.medicationUsages && srv.medicationUsages.length > 0) {
+                  srvCost =
+                    calculateMedicationCostSatang(
+                      srv.medicationUsages.map((u) => ({
+                        quantity: u.quantity,
+                        unitCostSatang: u.unitCostSatang,
+                      }))
+                    ) / 100;
                 } else if (srv.medications && srv.medications.length > 0) {
                   srv.medications.forEach((m) => {
                     const rawKey = m.trim().toLowerCase();
@@ -667,7 +798,19 @@ export default function DashboardPage() {
                         </div>
 
                         {/* Medications chosen */}
-                        {srv.medications && srv.medications.length > 0 && (
+                        {srv.medicationUsages && srv.medicationUsages.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1 mt-2">
+                            {srv.medicationUsages.map((u, uIdx) => (
+                              <span
+                                key={uIdx}
+                                className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300"
+                              >
+                                <Pill className="h-2.5 w-2.5" />
+                                <span>{u.name} ({u.quantity} {u.unit})</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : srv.medications && srv.medications.length > 0 ? (
                           <div className="flex flex-wrap items-center gap-1 mt-2">
                             {srv.medications.map((m, mIdx) => (
                               <span
@@ -679,7 +822,7 @@ export default function DashboardPage() {
                               </span>
                             ))}
                           </div>
-                        )}
+                        ) : null}
                       </div>
 
                       {/* Financial breakdown pill */}

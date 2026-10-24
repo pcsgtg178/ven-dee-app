@@ -72,15 +72,27 @@
 5. **Personal Event Overlap Alert (คำเตือนซ้อนทับธุระส่วนตัว)**:
    - หากเวลาของธุระส่วนตัว (`personal_event`) ซ้อนทับกับเวรโรงพยาบาลหรือบริการเคหะบริบาล ระบบจะไม่บล็อกการสร้าง (Non-blocking) แต่จะแสดง Visual Warning (`PERSONAL_EVENT_OVERLAP_WARNING`) บนปฏิทินเพื่อเตือนพยาบาล
 
-### 2.3 Shift Swap & Top-Up Rules
-1. **Direct Swap**: การแลกเปลี่ยนเวรโดยตรงระหว่างพยาบาลสองคน (`swappedWith`).
-2. **Top-Up Swap (การแลกต่อยอด)**:
+### 2.3 Shift Swap & Top-Up Rules (Phase 10 Dedicated shift_swaps Architecture)
+1. **Dedicated Shift Swap Storage**:
+   - ข้อมูลการแลกเวรทั้งหมดถูกแยกจัดเก็บในตารางเฉพาะ `public.shift_swaps`
+   - ตาราง `shifts` เก็บเพียง Foreign Key `swap_id` บนเวรที่ให้ไป (`status: 'swapped_out'`) เท่านั้น
+   - เวรที่ได้รับมา (`status: 'active'`) เชื่อมโยงผ่าน `shift_swaps.received_shift_id = shifts.id`
+2. **Direct Swap**: การแลกเปลี่ยนเวรโดยตรงระหว่างพยาบาลสองคน (`swappedWith`) ผ่าน Transactional RPC `perform_shift_swap`.
+3. **Top-Up Chain Swap (การแลกต่อยอด)**:
    - กรณีที่พยาบาลนำเวรที่ได้มาจากการแลกไปแลกเปลี่ยนต่อกับพยาบาลคนถัดไป
-   - ระบบต้องบันทึกทั้ง `swappedWith` (คู่แลกโดยตรง) และ `originalOwner` (เจ้าของเวรตั้งต้น) เพื่อคง Audit Trail บนสายลำดับ `SwapTrailNode` ให้สมบูรณ์
-3. **Same Shift Type & Date Category Swap Exception (การแลกเปลี่ยนหมวดเวรดำ-แดงในวันเดียวกัน)**:
+   - เวรที่ได้รับมาจาก Swap แรก สามารถกลายเป็น Given Shift ใน Swap ที่สองได้โดยไม่มีข้อขัดแย้งของ `swap_id`
+   - ระบบบันทึกทั้ง `swappedWith` (คู่แลกโดยตรง) และ `originalOwner` (เจ้าของเวรตั้งต้น) พร้อม `swap_history` (Swap Trail Nodes)
+4. **Downstream Chain Swap Guard (`DOWNSTREAM_SWAP_ACTIVE`)**:
+   - หากเวรที่ได้รับมาใน Swap A ถูกนำไปแลกเปลี่ยนต่อใน Swap B (Downstream Swap) การพยายามยกเลิก Swap A จะถูกบล็อกเด็ดขาด (`DOWNSTREAM_SWAP_ACTIVE`)
+   - ผู้ใช้งานต้องดำเนินการยกเลิก Swap B ก่อน จึงจะสามารถยกเลิก Swap A ได้ เพื่อป้องกันข้อมูลประวัติเสียหาย
+5. **Bidirectional Rollback & Hard Deletion**:
+   - การยกเลิกการแลกเวร (`undo_shift_swap`) สามารถระบุได้ทั้งเวรเดิมที่ให้ไป หรือเวรใหม่ที่ได้รับมา
+   - ระบบจะคืนสถานะเวรเดิมให้กลับมาเป็น `active` และ `swap_id = NULL`
+   - แถวใน `shift_swaps` จะถูกลบทิ้ง และเวรที่ได้รับมาจะถูกลบออกจากฐานข้อมูลแบบ Hard Delete ภายใต้ Transaction เดียวกัน
+6. **Same Shift Type & Date Category Swap Exception (การแลกเปลี่ยนหมวดเวรดำ-แดงในวันเดียวกัน)**:
    - **Allowed**: อนุญาตให้แลกเวรประเภทเดียวกันในวันเดียวกันได้ เฉพาะกรณีที่เกิดการแปลงสถานะระหว่าง **เวรดำ (`black`) กับ เวรแดง (`red`)** เท่านั้น (เช่น เช้าดำ $\leftrightarrow$ เช้าแดง)
    - **Blocked**: การแลกเวรประเภทเดียวกันในวันเดียวกันที่เป็นหมวดเดียวกัน (เช่น เช้าดำ $\leftrightarrow$ เช้าดำ) จะถูกปฏิเสธ (`DUPLICATE_SHIFT`)
-4. **Duplicate Check**: พยาบาลคนเดิมไม่สามารถถือครองเวรประเภทเดียวกันในหมวดเดียวกันซ้ำซ้อนในวันเดียวกันได้
+7. **Duplicate Check**: พยาบาลคนเดิมไม่สามารถถือครองเวรประเภทเดียวกันในหมวดเดียวกันซ้ำซ้อนในวันเดียวกันได้
 
 
 ### 2.4 Refer Shift Selling & Transfer Rules (กฎการขายเวรและการส่งต่อเวร Refer)

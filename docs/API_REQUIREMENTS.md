@@ -62,6 +62,7 @@ Content-Type: application/json
 | `CONFLICT_WITH_SHIFT` | 409 Conflict | เวลาของงานบริการลูกค้าชนกับเวลาขึ้นเวรโรงพยาบาล |
 | `CONFLICT_WITH_SERVICE`| 409 Conflict | เวลาของเวรที่จะบันทึกหรือรับแลก ชนกับนัดหมายบริการลูกค้าที่มีอยู่ |
 | `SHIFT_IS_LOCKED` | 400 Bad Request | เวรผ่านพ้นเวลาไปแล้ว (`isLocked: true`) ห้ามแก้ไขหรือยกเลิก |
+| `DOWNSTREAM_SWAP_ACTIVE` | 409 Conflict | เวรที่ได้รับมาถูกนำไปแลกเปลี่ยนต่อยอดแล้ว ต้องยกเลิกการแลกขั้นหลังก่อน |
 | `QUOTA_DEFICIT_WARNING`| 422 Unprocessable | แลกเวรแล้วทำให้เวรดำลดลงต่ำกว่าโควต้า (เมื่อ Client ร้องขอแบบ Strict) |
 | `PARENT_SHIFT_NOT_FOUND`| 404 Not Found | ไม่พบเวรต้นทางสำหรับการกู้คืน (Undo Swap) |
 | `VALIDATION_ERROR` | 400 Bad Request | ข้อมูลใน Request Body ไม่ถูกต้องหรือไม่ครบถ้วน |
@@ -322,19 +323,17 @@ Content-Type: application/json
 
 ---
 
-### 4.2 ดำเนินการแลกเวร (Execute Shift Swap)
-- **Method:** `POST`
+### 4.2 ดำเนินการแลกเวร (Execute Shift Swap / RPC: perform_shift_swap)
+- **Method:** `POST` / Supabase RPC `perform_shift_swap`
 - **Path:** `/shifts/:id/swap`
 - **Auth Required:** ต้องมี
 
-#### Core Business Rules:
-1. ระบบจะเปลี่ยนสถานะของเวรเดิม (`:id`) เป็น `swapped_out`
-2. ระบบจะสร้างเวรใหม่ขึ้นมา พร้อมผูก `parentShiftId` = `:id`
-3. ระบบจะบันทึกประวัติการแลก (Swap Trail):
-   - หากมี `originalOwner` (การแลกต่อยอด): สร้างโหนด `originalOwner` $\rightarrow$ `swappedWith` และ `swappedWith` $\rightarrow$ `ฉัน`
-   - หากเป็นการแลกตรง: สร้างโหนด `swappedWith` $\rightarrow$ `ฉัน`
-4. ตรวจสอบ Conflict เวลาและ Duplicate Shift ตามกฎของระบบ
-5. ทั้งหมดต้องทำงานภายใต้ **Database Transaction**
+#### Core Business Rules (Phase 10 Dedicated shift_swaps Architecture):
+1. ทำงานแบบ Transactional Atomicity ผ่าน Postgres Function `perform_shift_swap`
+2. ระบบจะสร้างแถวใหม่ใน `shift_swaps` (given_shift_id, received_shift_id, swapped_with, original_owner, swap_date, swap_reason, swap_history)
+3. ระบบจะเปลี่ยนสถานะของเวรเดิม (`:id`) เป็น `swapped_out` และบันทึก `shifts.swap_id` ชี้ไปยัง `shift_swaps.id`
+4. ระบบจะสร้างเวรที่ได้รับมาใหม่ใน `shifts` โดยมีสถานะเป็น `active` (`is_locked = false`)
+5. ตรวจสอบ Conflict เวลา, กฎเวรดึกต่อเช้า, และ Duplicate Shift ตามกฎของระบบ
 
 #### Request Body
 ```json
@@ -355,7 +354,8 @@ Content-Type: application/json
   "data": {
     "oldShift": {
       "id": "shift-1",
-      "status": "swapped_out"
+      "status": "swapped_out",
+      "swapId": "swap-uuid-123"
     },
     "newShift": {
       "id": "shift-new-456",
@@ -364,11 +364,12 @@ Content-Type: application/json
       "category": "black",
       "status": "active",
       "department": "วอร์ด ICU ผู้ใหญ่",
-      "swapMeta": {
+      "swap": {
+        "id": "swap-uuid-123",
+        "givenShiftId": "shift-1",
+        "receivedShiftId": "shift-new-456",
         "swappedWith": "พว.กานดา สุวรรณ",
         "originalOwner": "พว.วิภา มณีรัตน์",
-        "parentShiftId": "shift-1",
-        "isLocked": false,
         "swapDate": "2026-09-19",
         "swapReason": "พว.กานดาติดธุระด่วน จึงส่งต่อเวรให้ขึ้นแทน"
       }
@@ -391,16 +392,17 @@ Content-Type: application/json
 
 ---
 
-### 4.3 ยกเลิกการแลกเวร (Undo / Rollback Shift Swap)
-- **Method:** `POST`
+### 4.3 ยกเลิกการแลกเวร (Undo / Rollback Shift Swap / RPC: undo_shift_swap)
+- **Method:** `POST` / Supabase RPC `undo_shift_swap`
 - **Path:** `/shifts/:id/undo-swap`
 - **Auth Required:** ต้องมี
 
 #### Core Business Rules:
-1. ตรวจสอบว่าเวรนี้เป็นเวรที่มาจากการแลกหรือไม่ (`parentShiftId` ต้องมีอยู่)
-2. ตรวจสอบว่าเวรผ่านพ้นไปแล้วหรือไม่ หากวันที่ของเวร $\le$ ปัจจุบัน (`isLocked: true`) $\rightarrow$ ตอบ `400 SHIFT_IS_LOCKED`
-3. ลบหรือปรับสถานะเวร `:id` เป็น `cancelled`
-4. คืนสถานะของเวรต้นทาง (`parentShiftId`) ให้กลับมาเป็น `active` ทันที
+1. รองรับการยกเลิกได้ทั้งสองฝั่ง (Bidirectional): ส่ง `id` ของเวรเดิม (`given_shift_id`) หรือเวรที่ได้รับมา (`received_shift_id`)
+2. **Chain Swap Safety Guard**: หากเวรที่ได้รับมาถูกนำไปแลกต่อยอดใน Swap อื่นแล้ว (`DOWNSTREAM_SWAP_ACTIVE`) ระบบจะไม่อนุญาตให้ยกเลิก ต้องยกเลิกการแลกขั้นหลังก่อน
+3. ตรวจสอบว่าเวรผ่านพ้นไปแล้วหรือไม่ หากวันที่ของเวร $\le$ ปัจจุบัน (`isLocked: true`) $\rightarrow$ ตอบ `400 SHIFT_IS_LOCKED`
+4. คืนสถานะของเวรเดิมให้กลับมาเป็น `active` และล้างค่า `swap_id = NULL`
+5. ลบแถวประวัติใน `shift_swaps` และลบแถวเวรที่ได้รับมา (`received_shift_id`) ออกจากฐานข้อมูลแบบ Hard Delete ภายใต้ Transaction เดียว
 
 #### Response (200 OK)
 ```json
@@ -408,7 +410,7 @@ Content-Type: application/json
   "success": true,
   "data": {
     "cancelledShiftId": "shift-new-456",
-    "restoredShiftId": "shift-1"
+    "restoredParentId": "shift-1"
   },
   "message": "ยกเลิกการแลกเวรสำเร็จ เวรเดิมของคุณได้รับการคืนสถานะแล้ว"
 }

@@ -303,7 +303,7 @@ export default function ModalAddTodo({
 
     setIsSubmitting(true);
     try {
-      saveClinicLog({
+      await saveClinicLog({
         date: clinicDate,
         presetShift: clinicPresetShift,
         note: clinicNote.trim() || undefined,

@@ -17,10 +17,11 @@ export default function ModalSwapTrail({
   onClose,
   shift,
 }: ModalSwapTrailProps) {
-  if (!isOpen || !shift || !shift.swapMeta) return null;
+  if (!isOpen || !shift || (!shift.swapMeta && !shift.swap)) return null;
 
-  const { swapMeta } = shift;
-  const history = swapMeta.swapHistory || [];
+  const swappedWith = shift.swap?.swappedWith || shift.swapMeta?.swappedWith || "";
+  const originalOwner = shift.swap?.originalOwner || shift.swapMeta?.originalOwner;
+  const history = shift.swap?.swapHistory || shift.swapMeta?.swapHistory || [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -70,9 +71,9 @@ export default function ModalSwapTrail({
             {shift.shiftType === "night" ? "เวรดึก" : shift.shiftType === "morning" ? "เวรเช้า" : "เวรบ่าย"} • {shift.department || "วอร์ดหลัก"}
           </p>
           <div className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
-            แลกกับ: <strong className="text-slate-700 dark:text-zinc-200">{swapMeta.swappedWith}</strong>
-            {swapMeta.originalOwner && (
-              <> (เจ้าของเวรเดิม: <strong className="text-teal-600 dark:text-teal-400">{swapMeta.originalOwner}</strong>)</>
+            แลกกับ: <strong className="text-slate-700 dark:text-zinc-200">{swappedWith}</strong>
+            {originalOwner && (
+              <> (เจ้าของเวรเดิม: <strong className="text-teal-600 dark:text-teal-400">{originalOwner}</strong>)</>
             )}
           </div>
         </div>
@@ -123,7 +124,7 @@ export default function ModalSwapTrail({
                 </div>
                 <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs dark:border-zinc-800 dark:bg-zinc-800/50">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-white">
-                    <span>{swapMeta.originalOwner || swapMeta.swappedWith}</span>
+                    <span>{originalOwner || swappedWith}</span>
                     <ArrowRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                     <span className="text-teal-600 dark:text-teal-400">ฉัน (คุณ)</span>
                   </div>

@@ -1,11 +1,12 @@
 "use server";
 
 import { createClient } from "../../lib/supabase/server";
-import { ActionResult, ShiftRecord, CustomerServiceRecord, PersonalEventRecord } from "../../types/vendee";
+import { ActionResult, ShiftRecord, CustomerServiceRecord, PersonalEventRecord, ClinicWorkRecord } from "../../types/vendee";
 import { generateSecureFeedToken, DEFAULT_FEED_TOKEN } from "../../lib/calendar/feedToken";
 import { getShiftsAction } from "./shiftActions";
 import { getServicesAction } from "./serviceActions";
 import { getPersonalEventsAction } from "./personalEventActions";
+import { getClinicLogsAction } from "./clinicActions";
 
 /**
  * Server-side Feed Token Retrieval
@@ -75,13 +76,15 @@ export async function getCalendarExportDataAction(params?: {
     shifts: ShiftRecord[];
     services: CustomerServiceRecord[];
     personalEvents: PersonalEventRecord[];
+    clinicLogs: ClinicWorkRecord[];
   }>
 > {
   try {
-    const [shiftsRes, servicesRes, personalEventsRes] = await Promise.all([
+    const [shiftsRes, servicesRes, personalEventsRes, clinicLogsRes] = await Promise.all([
       getShiftsAction(params),
       getServicesAction(params),
       getPersonalEventsAction(params),
+      getClinicLogsAction(params),
     ]);
 
     return {
@@ -90,6 +93,7 @@ export async function getCalendarExportDataAction(params?: {
         shifts: shiftsRes.success ? shiftsRes.data : [],
         services: servicesRes.success ? servicesRes.data : [],
         personalEvents: personalEventsRes.success ? personalEventsRes.data : [],
+        clinicLogs: clinicLogsRes.success ? clinicLogsRes.data : [],
       },
     };
   } catch (err: any) {

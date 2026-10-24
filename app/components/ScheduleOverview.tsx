@@ -8,11 +8,13 @@ import "moment/locale/th";
 import ActivityCard from "./ActivityCard";
 import ScheduleCalendarView from "./ScheduleCalendarView";
 import ScheduleTodoListView from "./ScheduleTodoListView";
+import Link from "next/link";
 import {
   List,
   Calendar as CalendarIcon,
   Plus,
   CalendarDays,
+  Settings,
 } from "lucide-react";
 
 import {
@@ -49,10 +51,10 @@ import ModalEditService from "./ModalEditService";
 import ModalEditClinicLog from "./ModalEditClinicLog";
 import BottomSheet from "./BottomModalSheet";
 import BottomNav from "./BottomNav";
-import ThemeToggle from "./ThemeToggle";
 import ModalConfirmAction, { ConfirmVariant } from "./ModalConfirmAction";
 import ModalExportCalendar from "./ModalExportCalendar";
 import { compareEventsByStartTime } from "../../lib/sortEvents";
+import { isShiftInPast } from "../../lib/dateUtils";
 
 type ConfirmModalState =
   | {
@@ -318,8 +320,8 @@ export default function ScheduleOverview() {
           shift.shiftType === "r1" ||
           shift.shiftType === "r2" ||
           shift.category === "green";
-        const isSwapped = Boolean(shift.swapMeta);
-        const swappedWith = shift.swapMeta?.swappedWith;
+        const isSwapped = Boolean(shift.swapMeta || shift.swap);
+        const swappedWith = shift.swap?.swappedWith || shift.swapMeta?.swappedWith;
 
         return {
           code,
@@ -525,14 +527,14 @@ export default function ScheduleOverview() {
 
   // 1. Request Undo Swap -> Show modal
   const handleRequestUndoSwap = (shift: ShiftRecord) => {
-    if (shift.swapMeta?.isLocked) return;
+    if ((shift.swapMeta?.isLocked ?? false) || isShiftInPast(shift.date)) return;
     setConfirmActionState({ type: "undoSwap", shift });
   };
 
   // Execute Undo Swap
-  const handleExecuteUndoSwap = (shift: ShiftRecord) => {
+  const handleExecuteUndoSwap = async (shift: ShiftRecord) => {
     try {
-      undoSwapShift(shift.id);
+      await undoSwapShift(shift.id);
       setToastMessage("ยกเลิกการแลกเวรและคืนค่าสถานะเวรเดิมเรียบร้อยแล้ว");
       setTimeout(() => setToastMessage(null), 3500);
       setConfirmActionState(null);
@@ -548,9 +550,9 @@ export default function ScheduleOverview() {
   };
 
   // Execute Restore Shift
-  const handleExecuteRestore = (shift: ShiftRecord) => {
+  const handleExecuteRestore = async (shift: ShiftRecord) => {
     try {
-      restoreShift(shift.id);
+      await restoreShift(shift.id);
       setToastMessage("กู้คืนสถานะเวรเดิมกลับมาพร้อมใช้งานเรียบร้อยแล้ว");
       setTimeout(() => setToastMessage(null), 3500);
       setConfirmActionState(null);
@@ -580,7 +582,7 @@ export default function ScheduleOverview() {
           setTimeout(() => setToastMessage(null), 3000);
         }
       } else if (item.type === "clinic") {
-        deleteClinicLog(item.id);
+        await deleteClinicLog(item.id);
         setToastMessage("ลบบันทึกกะคลินิกเรียบร้อยแล้ว");
         setTimeout(() => setToastMessage(null), 3000);
       } else if (item.type === "personal_event") {
@@ -647,7 +649,8 @@ export default function ScheduleOverview() {
     if (confirmActionState.type === "undoSwap") {
       const shift = confirmActionState.shift;
       const shiftInfo = SHIFT_CONFIG[shift.shiftType];
-      const partner = shift.swapMeta?.swappedWith;
+      const partner = shift.swap?.swappedWith || shift.swapMeta?.swappedWith;
+      const originalOwner = shift.swap?.originalOwner || shift.swapMeta?.originalOwner;
 
       return {
         title: "ยืนยันการยกเลิกการแลกเวร",
@@ -665,11 +668,11 @@ export default function ScheduleOverview() {
             label: "แลกกับ",
             value: partner || "-",
           },
-          ...(shift.swapMeta?.originalOwner
+          ...(originalOwner
             ? [
                 {
                   label: "เจ้าของเดิม",
-                  value: shift.swapMeta.originalOwner,
+                  value: originalOwner,
                 },
               ]
             : []),
@@ -693,9 +696,9 @@ export default function ScheduleOverview() {
         const shift = item;
         const shiftInfo = SHIFT_CONFIG[shift.shiftType];
         const catInfo = SHIFT_CATEGORY_CONFIG[shift.category];
-        const isSwappedIn = !!shift.swapMeta;
+        const isSwappedIn = Boolean(shift.swap || shift.swapMeta);
         const isSwappedOut = shift.status === "swapped_out";
-        const partner = shift.swapMeta?.swappedWith;
+        const partner = shift.swap?.swappedWith || shift.swapMeta?.swappedWith;
 
         if (isSwappedIn) {
           return {
@@ -936,9 +939,16 @@ export default function ScheduleOverview() {
             </div>
           </div>
 
-          {/* Right Controls: [ Theme Toggle ] & Segmented Control: [ รายการ | ปฏิทิน ] */}
+          {/* Right Controls: [ Settings Link ] & Segmented Control: [ รายการ | ปฏิทิน ] */}
           <div className="flex items-center gap-1.5">
-            <ThemeToggle size="sm" />
+            <Link
+              href="/settings"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-subtle text-text-muted hover:bg-slate-200 hover:text-text-main dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-white transition-all cursor-pointer shadow-2xs"
+              title="การตั้งค่า (Settings)"
+              aria-label="การตั้งค่า"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
             <div className="flex items-center rounded-full bg-surface-subtle p-1 dark:bg-zinc-800 shadow-inner">
               <button
                 type="button"

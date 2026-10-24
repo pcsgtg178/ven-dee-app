@@ -1,7 +1,7 @@
 "use client";
 
 import moment from "moment";
-import "moment/locale/th";
+import "moment/locale/th.js";
 import {
   getShiftsAction,
   createShiftAction,
@@ -38,6 +38,15 @@ import {
   updateCustomerAction,
   deleteCustomerAction,
 } from "../app/actions/customerActions";
+import {
+  getClinicLogsAction,
+  createClinicLogAction,
+  updateClinicLogAction,
+  deleteClinicLogAction,
+} from "../app/actions/clinicActions";
+import { unwrap } from "./actionHelper";
+import { isShiftInPast, isDateInPast, getTodayDateStringBangkok } from "./dateUtils";
+import { repairLocalSwapInconsistencies, upgradeShiftsToV3 } from "./swapRepair";
 
 import {
   Customer,
@@ -46,6 +55,7 @@ import {
   ShiftCategory,
   ShiftType,
   SwapTrailNode,
+  ShiftSwapRecord,
   SaleMetadata,
   SHIFT_CONFIG,
   SHIFT_CATEGORY_CONFIG,
@@ -64,7 +74,7 @@ import { sortEventsByStartTime } from "./sortEvents";
 import { regenerateFeedTokenAction } from "../app/actions/calendarActions";
 
 const STORAGE_KEYS = {
-  SHIFTS: "vendee_shifts_v2", // bumped to v2 for swap schema
+  SHIFTS: "vendee_shifts_v3", // bumped to v3 for shift_swaps schema separation (BACKLOG_MIGRATE.md §5)
   SERVICES: "vendee_services_v1",
   CUSTOMERS: "vendee_customers_v1",
   MEDICATIONS: "vendee_medications_v1",
@@ -115,7 +125,7 @@ export function notifySyncEnd(isOnline?: boolean) {
 export function subscribeToSyncState(
   callback: (state: { isSyncing: boolean; isOnline: boolean | null; count: number }) => void
 ) {
-  if (typeof window === "undefined") return () => {};
+  if (typeof window === "undefined") return () => { };
   const handler = (e: Event) => {
     const custom = e as CustomEvent<{
       isSyncing: boolean;
@@ -167,24 +177,8 @@ export const initialCustomers: Customer[] = [
   },
 ];
 
-// Helper to determine if date is in past (locked)
-export function isShiftInPast(dateStr: string): boolean {
-  try {
-    const todayStr = "2026-09-19"; // Current app mock reference date
-    return dateStr < todayStr;
-  } catch {
-    return false;
-  }
-}
-
-export function isDateInPast(dateStr: string): boolean {
-  try {
-    const todayStr = "2026-09-19";
-    return dateStr < todayStr;
-  } catch {
-    return false;
-  }
-}
+// Re-export dynamic Bangkok timezone date utilities (DOMAIN_RULES.md §4.2, PROJECT_RULES.md §1)
+export { isShiftInPast, isDateInPast, getTodayDateStringBangkok };
 
 /**
  * Conditional Visibility Rule for Shift Editing:
@@ -239,6 +233,15 @@ export const initialShifts: ShiftRecord[] = [
     shiftType: "morning",
     category: "black",
     status: "active",
+    swap: {
+      id: "swap-sample-1",
+      givenShiftId: "shift-sample-swap-0",
+      receivedShiftId: "shift-sample-swap-1",
+      swappedWith: "พี่เซ",
+      swapDate: "2026-09-15",
+      swapReason: "แลกเวรเช้าแทนพี่เซ",
+      swapHistory: [],
+    },
     swapMeta: {
       swappedWith: "พี่เซ",
       isLocked: false,
@@ -254,6 +257,15 @@ export const initialShifts: ShiftRecord[] = [
     shiftType: "afternoon",
     category: "red",
     status: "active",
+    swap: {
+      id: "swap-sample-2",
+      givenShiftId: "shift-sample-swap-0b",
+      receivedShiftId: "shift-sample-swap-2",
+      swappedWith: "ดรีม",
+      swapDate: "2026-09-16",
+      swapReason: "รับเวรบ่ายต่อจากดรีม",
+      swapHistory: [],
+    },
     swapMeta: {
       swappedWith: "ดรีม",
       isLocked: false,
@@ -350,6 +362,7 @@ export async function syncAllDataFromApi(): Promise<{
   services: CustomerServiceRecord[];
   personalEvents: PersonalEventRecord[];
   medications: Medications[];
+  clinicLogs: ClinicWorkRecord[];
   isOnline: boolean;
 }> {
   if (typeof window === "undefined") {
@@ -359,6 +372,7 @@ export async function syncAllDataFromApi(): Promise<{
       services: initialServices,
       personalEvents: [],
       medications: initialMedications,
+      clinicLogs: initialClinicLogs,
       isOnline: false,
     };
   }
@@ -366,12 +380,13 @@ export async function syncAllDataFromApi(): Promise<{
   let isOnline = false;
   notifySyncStart();
   try {
-    const [shiftsRes, customersRes, servicesRes, personalEventsRes, medicationsRes] = await Promise.allSettled([
+    const [shiftsRes, customersRes, servicesRes, personalEventsRes, medicationsRes, clinicLogsRes] = await Promise.allSettled([
       getShiftsAction(),
       getCustomersAction(),
       getServicesAction(),
       getPersonalEventsAction(),
       getMedicationsAction(),
+      getClinicLogsAction(),
     ]);
 
     let shifts = getShifts();
@@ -379,11 +394,12 @@ export async function syncAllDataFromApi(): Promise<{
     let services = getServices();
     let personalEvents = getPersonalEvents();
     let medications = getMedications();
-
+    let clinicLogs = getClinicLogs();
 
     if (shiftsRes.status === "fulfilled" && shiftsRes.value.success && Array.isArray(shiftsRes.value.data)) {
       if (shiftsRes.value.data.length > 0) {
-        shifts = shiftsRes.value.data;
+        const { shifts: repaired } = repairLocalSwapInconsistencies(shiftsRes.value.data);
+        shifts = repaired;
         localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
       } else if (shifts.length > 0) {
         // Automatically migrate any unpersisted local shifts to Supabase
@@ -396,7 +412,7 @@ export async function syncAllDataFromApi(): Promise<{
               department: localShift.department,
               note: localShift.note,
             });
-          } catch (_) {}
+          } catch (_) { }
         }
         const refreshed = await getShiftsAction();
         if (refreshed.success && refreshed.data.length > 0) {
@@ -421,7 +437,7 @@ export async function syncAllDataFromApi(): Promise<{
               avatarColor: localCust.avatarColor,
               createdAt: localCust.createdAt,
             });
-          } catch (_) {}
+          } catch (_) { }
         }
         customers = [...remoteCusts, ...localOnly];
         localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
@@ -470,7 +486,7 @@ export async function syncAllDataFromApi(): Promise<{
               if (res.success && res.data) {
                 remoteMeds.push(res.data);
               }
-            } catch (_) {}
+            } catch (_) { }
           }
         }
         medications = [...remoteMeds];
@@ -486,12 +502,53 @@ export async function syncAllDataFromApi(): Promise<{
               price: localMed.price,
               description: localMed.description || localMed.note,
             });
-          } catch (_) {}
+          } catch (_) { }
         }
         const refreshed = await getMedicationsAction();
         if (refreshed.success && refreshed.data.length > 0) {
           medications = refreshed.data;
           localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
+        }
+      }
+      isOnline = true;
+    }
+
+    if (clinicLogsRes.status === "fulfilled" && clinicLogsRes.value.success && Array.isArray(clinicLogsRes.value.data)) {
+      if (clinicLogsRes.value.data.length > 0) {
+        const remoteLogs = clinicLogsRes.value.data;
+        const remoteIds = new Set(remoteLogs.map((l) => l.id));
+        const localOnly = clinicLogs.filter((l) => !remoteIds.has(l.id) && l.id.startsWith("clinic-"));
+        if (localOnly.length > 0) {
+          for (const localLog of localOnly) {
+            try {
+              const res = await createClinicLogAction({
+                date: localLog.date,
+                presetShift: localLog.presetShift,
+                note: localLog.note,
+              });
+              if (res.success && res.data) {
+                remoteLogs.push(res.data);
+              }
+            } catch (_) { }
+          }
+        }
+        clinicLogs = [...remoteLogs];
+        localStorage.setItem(STORAGE_KEYS.CLINIC_LOGS, JSON.stringify(clinicLogs));
+      } else if (clinicLogs.length > 0) {
+        // Automatically migrate / seed initial local clinic logs to Supabase
+        for (const localLog of clinicLogs) {
+          try {
+            await createClinicLogAction({
+              date: localLog.date,
+              presetShift: localLog.presetShift,
+              note: localLog.note,
+            });
+          } catch (_) { }
+        }
+        const refreshed = await getClinicLogsAction();
+        if (refreshed.success && refreshed.data.length > 0) {
+          clinicLogs = refreshed.data;
+          localStorage.setItem(STORAGE_KEYS.CLINIC_LOGS, JSON.stringify(clinicLogs));
         }
       }
       isOnline = true;
@@ -504,6 +561,7 @@ export async function syncAllDataFromApi(): Promise<{
       services,
       personalEvents,
       medications,
+      clinicLogs,
       isOnline,
     };
   } catch (err) {
@@ -514,6 +572,7 @@ export async function syncAllDataFromApi(): Promise<{
       services: getServices(),
       personalEvents: getPersonalEvents(),
       medications: getMedications(),
+      clinicLogs: getClinicLogs(),
       isOnline: false,
     };
   } finally {
@@ -708,7 +767,7 @@ export async function syncCustomersFromApi(): Promise<{
                 avatarColor: localCust.avatarColor,
                 createdAt: localCust.createdAt,
               });
-            } catch (_) {}
+            } catch (_) { }
           }
         }
         customers = [...remoteCusts, ...localOnly].sort((a, b) =>
@@ -729,12 +788,27 @@ export async function syncCustomersFromApi(): Promise<{
   }
 }
 
+// Re-export swap repair & upgrade helpers (BACKLOG.md §9.5, §10.4)
+export { repairLocalSwapInconsistencies, upgradeShiftsToV3 };
+
 // Shifts
 export function getShifts(): ShiftRecord[] {
   if (typeof window === "undefined") return initialShifts;
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SHIFTS);
+    let raw = localStorage.getItem(STORAGE_KEYS.SHIFTS);
     if (!raw) {
+      const legacyRaw = localStorage.getItem("vendee_shifts_v2");
+      if (legacyRaw) {
+        try {
+          const parsedLegacy = JSON.parse(legacyRaw);
+          if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
+            const upgraded = upgradeShiftsToV3(parsedLegacy);
+            localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(upgraded));
+            return upgraded;
+          }
+        } catch { }
+      }
+
       localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(initialShifts));
       return initialShifts;
     }
@@ -743,7 +817,11 @@ export function getShifts(): ShiftRecord[] {
       localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(initialShifts));
       return initialShifts;
     }
-    return parsed;
+    const { shifts: repaired, modified } = repairLocalSwapInconsistencies(parsed);
+    if (modified) {
+      localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(repaired));
+    }
+    return repaired;
   } catch {
     return initialShifts;
   }
@@ -760,6 +838,13 @@ export async function saveShift(
 ): Promise<ShiftRecord> {
   const current = getShifts();
   const targetStatus = shift.status || "active";
+  const isExistingInDb = Boolean(shift.id && !shift.id.startsWith("shift-"));
+  const existingShift = shift.id ? current.find((s) => s.id === shift.id) : undefined;
+
+  // Check if trying to edit locked / past shift
+  if (existingShift && (existingShift.swapMeta?.isLocked || isShiftInPast(existingShift.date))) {
+    throw new Error("ไม่สามารถแก้ไขเวรในอดีตที่ถูกล็อกแล้วได้");
+  }
 
   // Prevent duplicate active shift on the same date and same shift type
   if (targetStatus === "active") {
@@ -795,58 +880,42 @@ export async function saveShift(
 
   let createdOrUpdatedShift: ShiftRecord | null = null;
 
-  // 1. Sync with Supabase via Server Action
-  const isExistingInDb = Boolean(shift.id && !shift.id.startsWith("shift-"));
-  try {
-    if (isExistingInDb) {
-      const res = await updateShiftAction(shift.id!, {
-        shiftType: shift.shiftType,
-        category: resolvedCategory,
-        department: shift.department,
-        note: shift.note,
-        status: targetStatus,
-      });
-      if (res.success && res.data) {
-        createdOrUpdatedShift = res.data;
-      } else if (!res.success) {
-        throw new Error(res.error.message);
-      }
-    } else {
-      const res = await createShiftAction({
-        date: shift.date,
-        shiftType: shift.shiftType,
-        category: resolvedCategory,
-        department: shift.department,
-        note: shift.note,
-      });
-      if (res.success && res.data) {
-        createdOrUpdatedShift = res.data;
-      } else if (!res.success) {
-        throw new Error(res.error.message);
-      }
-    }
-  } catch (err: any) {
-    if (err.message && !err.message.includes("fetch")) {
-      throw err;
-    }
-    console.warn("Supabase saveShift warning:", err);
+  // 1. Sync with Supabase via Server Action FIRST (Server-First pattern with unwrap)
+  if (isExistingInDb) {
+    const res = await updateShiftAction(shift.id!, {
+      shiftType: shift.shiftType,
+      category: resolvedCategory,
+      department: shift.department,
+      note: shift.note,
+      status: targetStatus,
+    });
+    createdOrUpdatedShift = unwrap(res);
+  } else {
+    const res = await createShiftAction({
+      date: shift.date,
+      shiftType: shift.shiftType,
+      category: resolvedCategory,
+      department: shift.department,
+      note: shift.note,
+    });
+    createdOrUpdatedShift = unwrap(res);
   }
 
+  // 2. Save locally only after server success
   const finalId = createdOrUpdatedShift?.id || shift.id || `shift-${Date.now()}`;
-  const existingIdx = current.findIndex((s) => s.id === finalId || s.id === shift.id);
-  const existingShift = existingIdx >= 0 ? current[existingIdx] : undefined;
+  const existingIdx = current.findIndex((s) => s.id === finalId || (shift.id && s.id === shift.id));
+  const existing = existingIdx >= 0 ? current[existingIdx] : undefined;
 
   const newShift: ShiftRecord = createdOrUpdatedShift || {
-    ...existingShift,
+    ...existing,
     ...shift,
     category: resolvedCategory,
     id: finalId,
     type: "shift",
     status: targetStatus,
-    createdAt: existingShift?.createdAt || shift.createdAt || new Date().toISOString(),
+    createdAt: existing?.createdAt || shift.createdAt || new Date().toISOString(),
   };
 
-  // 2. Save locally
   let updatedList: ShiftRecord[];
   if (existingIdx >= 0) {
     updatedList = [...current];
@@ -872,38 +941,39 @@ export async function deleteShift(id: string): Promise<{ restoredParentId?: stri
     throw new Error("ไม่สามารถลบเวรที่ผ่านเวลาไปแล้วได้ (เวรถูกล็อกอยู่)");
   }
 
-  // 2. Check if shift is swapped_out OR acts as parentShiftId to another shift (DOMAIN_RULES.md 2.3.2)
-  const hasChildShift = current.some((s) => s.swapMeta?.parentShiftId === id);
-  if (target.status === "swapped_out" || hasChildShift) {
+  // 2. Check if shift acts as given shift in active swap (DOMAIN_RULES.md 2.3.2)
+  const isGivenInActiveSwap = current.some(
+    (s) => s.swap?.givenShiftId === id || s.swapMeta?.parentShiftId === id
+  );
+  if (target.status === "swapped_out" || target.swapId || isGivenInActiveSwap) {
     throw new Error(
       "ไม่สามารถลบเวรที่ถูกแลกออกไปแล้วได้ กรุณาใช้ปุ่ม 'กู้คืนเวร (ยกเลิกการแลก)' แทนการลบเพื่อป้องกันประวัติการแลกสูญหาย"
     );
   }
 
-  // 3. Call Supabase Server Action if online
+  if (target.status === "sold_out") {
+    throw new Error("ไม่สามารถลบเวรที่ขายออกไปแล้วได้ (โปรดใช้ฟีเจอร์ยกเลิกการขายเวร เพื่อคืนสถานะเวร)");
+  }
+
+  // 3. Call Supabase Server Action FIRST (Server-First with unwrap)
   let restoredParentId: string | undefined = undefined;
   if (!id.startsWith("shift-")) {
-    try {
-      const res = await deleteShiftAction(id);
-      if (!res.success) {
-        throw new Error(res.error.message);
-      }
-      restoredParentId = res.data?.restoredParentId;
-    } catch (err: any) {
-      if (err.message && !err.message.includes("fetch")) {
-        throw err;
-      }
-      console.warn("Supabase deleteShift warning:", err);
-    }
+    const res = await deleteShiftAction(id);
+    const data = unwrap(res);
+    restoredParentId = data.restoredParentId;
   }
 
   // 4. Perform local delete & restore parent if applicable (for a received shift)
   const updated = current.filter((s) => s.id !== id);
 
-  if (target.swapMeta?.parentShiftId) {
-    const parent = updated.find((s) => s.id === target.swapMeta?.parentShiftId);
+  const parentShiftId = target.swap?.givenShiftId || target.swapMeta?.parentShiftId;
+  if (parentShiftId) {
+    const parent = updated.find((s) => s.id === parentShiftId);
     if (parent && parent.status === "swapped_out") {
       parent.status = "active";
+      parent.swapId = undefined;
+      parent.swap = undefined;
+      parent.swapMeta = undefined;
       restoredParentId = parent.id;
     }
   }
@@ -924,20 +994,31 @@ export async function restoreShift(shiftId: string): Promise<ShiftRecord> {
     throw new Error("ไม่พบเวรที่ต้องการกู้คืน");
   }
 
-  target.status = "active";
+  if (target.swapMeta?.isLocked || isShiftInPast(target.date)) {
+    throw new Error("ไม่สามารถกู้คืนเวรในอดีตที่ถูกล็อกแล้วได้");
+  }
+
+  // 1. Supabase restore FIRST (Server-First with unwrap)
+  let restoredRemote: ShiftRecord | null = null;
+  if (!shiftId.startsWith("shift-")) {
+    const res = await restoreShiftAction(shiftId);
+    restoredRemote = unwrap(res);
+  }
+
+  // 2. Update local storage only after server success
+  const updatedShift: ShiftRecord = restoredRemote || {
+    ...target,
+    status: "active",
+  };
+  const targetIdx = current.findIndex((s) => s.id === shiftId);
+  if (targetIdx >= 0) {
+    current[targetIdx] = updatedShift;
+  }
+
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(current));
   triggerSync();
 
-  // Supabase restore
-  if (!shiftId.startsWith("shift-")) {
-    try {
-      await restoreShiftAction(shiftId);
-    } catch (e) {
-      console.warn("restoreShiftAction error:", e);
-    }
-  }
-
-  return target;
+  return updatedShift;
 }
 
 /**
@@ -962,6 +1043,9 @@ export async function swapShift(params: {
   }
   if (oldShift.status === "swapped_out" || oldShift.status === "sold_out") {
     throw new Error("เวรนี้ถูกแลกหรือส่งต่อออกไปแล้ว");
+  }
+  if (oldShift.swapMeta?.isLocked || isShiftInPast(oldShift.date)) {
+    throw new Error("ไม่สามารถแลกเวรในอดีตที่ถูกล็อกแล้วได้");
   }
 
   const targetCategory =
@@ -1012,11 +1096,8 @@ export async function swapShift(params: {
     }
   }
 
-  // Update old shift status to swapped_out
-  oldShift.status = "swapped_out";
-
   // Build swap trail
-  const swapDateStr = new Date().toISOString().split("T")[0];
+  const swapDateStr = getTodayDateStringBangkok();
   const trail: SwapTrailNode[] = [];
 
   if (params.originalOwner) {
@@ -1044,39 +1125,55 @@ export async function swapShift(params: {
       ? "green"
       : params.newCategory;
 
+  // 1. Supabase Server Action FIRST (Server-First pattern with unwrap)
   let dbResult: { newShift: ShiftRecord; oldShift: ShiftRecord } | null = null;
   if (!oldShift.id.startsWith("shift-")) {
-    try {
-      const res = await swapShiftAction({
-        shiftId: oldShift.id,
-        swappedWith: params.swappedWith,
-        originalOwner: params.originalOwner,
-        newDate: params.newDate,
-        newShiftType: params.newShiftType,
-        newCategory: resolvedCategory,
-        swapReason: params.swapReason,
-        swapHistory: trail,
-      });
-      if (res.success && res.data) {
-        dbResult = res.data;
-      }
-    } catch (err) {
-      console.warn("swapShiftAction warning:", err);
-    }
+    const res = await swapShiftAction({
+      shiftId: oldShift.id,
+      swappedWith: params.swappedWith,
+      originalOwner: params.originalOwner,
+      newDate: params.newDate,
+      newShiftType: params.newShiftType,
+      newCategory: resolvedCategory,
+      swapReason: params.swapReason,
+      swapHistory: trail,
+    });
+    dbResult = unwrap(res);
   }
 
-  // Update old shift status to swapped_out
-  oldShift.status = "swapped_out";
-  oldShift.swapMeta = {
-    ...oldShift.swapMeta,
+  // 2. Only after server success, update local state
+  const newShiftId = dbResult?.newShift?.id || `shift-${Date.now()}`;
+  const swapId = dbResult?.oldShift?.swapId || `swap-${Date.now()}`;
+  const swapRecord: ShiftSwapRecord = dbResult?.oldShift?.swap || {
+    id: swapId,
+    givenShiftId: oldShift.id,
+    receivedShiftId: newShiftId,
     swappedWith: params.swappedWith,
+    originalOwner: params.originalOwner || undefined,
     swapDate: swapDateStr,
     swapReason: params.swapReason,
-    isLocked: oldShift.swapMeta?.isLocked ?? isShiftInPast(oldShift.date),
+    swapHistory: trail,
+    createdAt: new Date().toISOString(),
+  };
+
+  const updatedOldShift: ShiftRecord = dbResult?.oldShift || {
+    ...oldShift,
+    status: "swapped_out",
+    swapId: swapId,
+    swap: swapRecord,
+    swapMeta: {
+      ...oldShift.swapMeta,
+      swappedWith: params.swappedWith,
+      originalOwner: params.originalOwner || undefined,
+      swapDate: swapDateStr,
+      swapReason: params.swapReason,
+      swapHistory: trail,
+      isLocked: oldShift.swapMeta?.isLocked ?? isShiftInPast(oldShift.date),
+    },
   };
 
   const newShift: ShiftRecord = dbResult?.newShift || {
-    id: `shift-${Date.now()}`,
+    id: newShiftId,
     type: "shift",
     date: params.newDate,
     shiftType: params.newShiftType,
@@ -1084,6 +1181,7 @@ export async function swapShift(params: {
     status: "active",
     department: oldShift.department,
     note: `เวรที่ได้รับจากการแลกกับ ${params.swappedWith}${params.swapReason ? ` (${params.swapReason})` : ""}`,
+    swap: swapRecord,
     swapMeta: {
       swappedWith: params.swappedWith,
       originalOwner: params.originalOwner || undefined,
@@ -1096,18 +1194,24 @@ export async function swapShift(params: {
     createdAt: new Date().toISOString(),
   };
 
-  const updated = [newShift, ...current];
-  localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
+  const oldIdx = current.findIndex((s) => s.id === oldShift.id);
+  let updatedList = [...current];
+  if (oldIdx >= 0) {
+    updatedList[oldIdx] = updatedOldShift;
+  }
+  updatedList = [newShift, ...updatedList];
+
+  localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updatedList));
   triggerSync();
 
-  return { newShift, oldShift: dbResult?.oldShift || oldShift };
+  return { newShift, oldShift: updatedOldShift };
 }
 
 /**
  * Undo / Rollback a shift swap (DOMAIN_RULES.md 2.3.3 Bidirectional Rollback)
- * - Restores parentShift to 'active'
- * - Removes/cancels the shift received during the swap
- * - Only permitted if isLocked === false
+ * - Restores parentShift to 'active' and clears swapId, swap, swapMeta
+ * - Removes the shift received during the swap
+ * - Only permitted if isLocked === false, shifts are not in the past, and no downstream swap is active
  */
 export async function undoSwapShift(shiftId: string): Promise<boolean> {
   const current = getShifts();
@@ -1123,42 +1227,74 @@ export async function undoSwapShift(shiftId: string): Promise<boolean> {
   let parentShift: ShiftRecord | undefined;
   let childShift: ShiftRecord | undefined;
 
-  if (targetShift.swapMeta?.parentShiftId) {
+  // Determine parent (given) and child (received) shift
+  if (targetShift.swap?.receivedShiftId === targetShift.id || targetShift.swapMeta?.parentShiftId) {
     // targetShift is the received shift
     childShift = targetShift;
-    parentShift = current.find((s) => s.id === targetShift.swapMeta?.parentShiftId);
-  } else if (targetShift.status === "swapped_out") {
+    const parentId = targetShift.swap?.givenShiftId || targetShift.swapMeta?.parentShiftId;
+    parentShift = current.find((s) => s.id === parentId);
+  } else if (targetShift.status === "swapped_out" || targetShift.swapId || targetShift.swap?.givenShiftId === targetShift.id) {
     // targetShift is the original shift that was swapped out
     parentShift = targetShift;
-    childShift = current.find((s) => s.swapMeta?.parentShiftId === targetShift.id);
+    const childId = targetShift.swap?.receivedShiftId;
+    childShift = current.find((s) => (childId && s.id === childId) || s.swapMeta?.parentShiftId === targetShift.id);
   } else {
-    childShift = current.find((s) => s.swapMeta?.parentShiftId === targetShift.id);
+    childShift = current.find((s) => s.swapMeta?.parentShiftId === targetShift.id || s.swap?.givenShiftId === targetShift.id);
     if (childShift) {
       parentShift = targetShift;
     }
   }
 
-  // 1. Restore parent shift to active
-  if (parentShift) {
-    parentShift.status = "active";
+  if (parentShift && (parentShift.swapMeta?.isLocked || isShiftInPast(parentShift.date))) {
+    throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรเดิมผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)");
+  }
+  if (childShift && (childShift.swapMeta?.isLocked || isShiftInPast(childShift.date))) {
+    throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรที่ได้รับมาผ่านเวลาไปแล้ว");
   }
 
-  // 2. Remove/Cancel the received child shift
+  // Downstream Chain Swap Guard (BACKLOG_MIGRATE.md §8 & DOMAIN_RULES.md §2.3)
+  // If the received shift has been swapped out in another downstream swap, block undoing this swap!
+  if (childShift) {
+    const isDownstreamSwapped = current.some(
+      (s) =>
+        s.status === "swapped_out" &&
+        (s.id === childShift!.id || s.swap?.givenShiftId === childShift!.id || s.swapMeta?.parentShiftId === childShift!.id)
+    );
+    if (isDownstreamSwapped) {
+      throw new Error(
+        "ไม่สามารถยกเลิกการแลกเวรนี้ได้ เนื่องจากเวรที่ได้รับมาถูกนำไปแลกเปลี่ยนต่อแล้ว กรุณายกเลิกการแลกขั้นหลังก่อน"
+      );
+    }
+  }
+
+  // 1. Supabase Server Action FIRST (Server-First pattern with unwrap)
+  const apiTargetId = childShift?.id || targetShift.id;
+  if (!apiTargetId.startsWith("shift-")) {
+    const res = await undoSwapShiftAction(apiTargetId);
+    unwrap(res);
+  }
+
+  // 2. Only after server success, update local state
   const childIdToRemove = childShift?.id || (targetShift.swapMeta?.parentShiftId ? targetShift.id : undefined);
-  const updated = current.filter((s) => s.id !== childIdToRemove);
+  let updated = current.filter((s) => s.id !== childIdToRemove);
+
+  // Restore parent shift to active and clear swap fields (Phase 10 & ISSUE-2 fix)
+  if (parentShift) {
+    updated = updated.map((s) =>
+      s.id === parentShift!.id
+        ? {
+            ...s,
+            status: "active" as const,
+            swapId: undefined,
+            swap: undefined,
+            swapMeta: undefined,
+          }
+        : s
+    );
+  }
 
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(updated));
   triggerSync();
-
-  // Supabase rollback
-  try {
-    const apiTargetId = childIdToRemove || shiftId;
-    if (!apiTargetId.startsWith("shift-")) {
-      await undoSwapShiftAction(apiTargetId);
-    }
-  } catch (e) {
-    console.warn("undoSwapShiftAction warning:", e);
-  }
 
   return true;
 }
@@ -1208,7 +1344,7 @@ export async function sellShift(params: {
     throw new Error("อนุญาตให้ขายได้เฉพาะเวร Refer (R1, R2) เท่านั้น");
   }
 
-  const soldDate = params.soldDate || new Date().toISOString().split("T")[0];
+  const soldDate = params.soldDate || getTodayDateStringBangkok();
   const paymentStatus = params.paymentStatus || "unpaid";
 
   const saleMeta: SaleMetadata = {
@@ -1219,31 +1355,26 @@ export async function sellShift(params: {
     note: params.note?.trim() || undefined,
   };
 
+  // 1. Supabase update FIRST (Server-First with unwrap)
   let updatedShift: ShiftRecord = {
     ...targetShift,
     status: "sold_out",
     saleMeta,
   };
 
-  // Supabase update if remote ID
   if (!params.shiftId.startsWith("shift-")) {
-    try {
-      const res = await sellShiftAction({
-        shiftId: params.shiftId,
-        buyerName: params.buyerName.trim(),
-        salePriceSatang: params.salePriceSatang,
-        soldDate,
-        paymentStatus,
-        note: params.note?.trim(),
-      });
-      if (res.success && res.data) {
-        updatedShift = res.data;
-      }
-    } catch (err) {
-      console.warn("sellShiftAction warning:", err);
-    }
+    const res = await sellShiftAction({
+      shiftId: params.shiftId,
+      buyerName: params.buyerName.trim(),
+      salePriceSatang: params.salePriceSatang,
+      soldDate,
+      paymentStatus,
+      note: params.note?.trim(),
+    });
+    updatedShift = unwrap(res);
   }
 
+  // 2. Only after server success, update local storage
   current[shiftIndex] = updatedShift;
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(current));
   triggerSync();
@@ -1275,24 +1406,19 @@ export async function undoSellShift(shiftId: string): Promise<ShiftRecord> {
     throw new Error("ไม่สามารถยกเลิกการขายเวรในอดีตที่ถูกล็อกแล้วได้");
   }
 
+  // 1. Supabase rollback FIRST (Server-First with unwrap)
   let restoredShift: ShiftRecord = {
     ...targetShift,
     status: "active",
     saleMeta: undefined,
   };
 
-  // Supabase rollback if remote ID
   if (!shiftId.startsWith("shift-")) {
-    try {
-      const res = await undoSellShiftAction(shiftId);
-      if (res.success && res.data) {
-        restoredShift = res.data;
-      }
-    } catch (err) {
-      console.warn("undoSellShiftAction warning:", err);
-    }
+    const res = await undoSellShiftAction(shiftId);
+    restoredShift = unwrap(res);
   }
 
+  // 2. Only after server success, update local storage
   current[shiftIndex] = restoredShift;
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(current));
   triggerSync();
@@ -1551,8 +1677,8 @@ export async function saveService(
         otherServiceText: service.otherServiceText,
         medications: cleanMeds,
         medicationUsages: usages,
-          medicationCost: legacyMedicationCostThb,
-          note: service.note,
+        medicationCost: legacyMedicationCostThb,
+        note: service.note,
         price: service.price,
       });
       if (res.success && res.data) {
@@ -1777,11 +1903,11 @@ export async function syncMedicationsFromApi(): Promise<{
               name: localMed.name,
               size: localMed.size,
               category: localMed.category,
-                unit: localMed.unit,
+              unit: localMed.unit,
               price: localMed.price,
               description: localMed.description || localMed.note,
             });
-          } catch (_) {}
+          } catch (_) { }
         }
         const refreshed = await getMedicationsAction();
         if (refreshed.success && refreshed.data.length > 0) {
@@ -1900,7 +2026,7 @@ export async function deleteMedication(id: string): Promise<void> {
           await deleteMedicationAction(matched.id);
         }
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   const updated = current.filter((m) => m.id !== id);
@@ -1934,18 +2060,40 @@ export function canEditClinicLog(log: ClinicWorkRecord): boolean {
   return true;
 }
 
-export function saveClinicLog(
+export async function saveClinicLog(
   log: Omit<ClinicWorkRecord, "id" | "type" | "createdAt"> & { id?: string; createdAt?: string }
-): ClinicWorkRecord {
+): Promise<ClinicWorkRecord> {
+  const isExistingInDb = Boolean(log.id && !log.id.startsWith("clinic-"));
+  let remoteRecord: ClinicWorkRecord | null = null;
+
+  // 1. Supabase action FIRST (Server-First with unwrap)
+  if (isExistingInDb) {
+    const res = await updateClinicLogAction(log.id!, {
+      date: log.date,
+      presetShift: log.presetShift,
+      note: log.note,
+    });
+    remoteRecord = unwrap(res);
+  } else {
+    const res = await createClinicLogAction({
+      id: log.id,
+      date: log.date,
+      presetShift: log.presetShift,
+      note: log.note,
+    });
+    remoteRecord = unwrap(res);
+  }
+
+  // 2. Only after server success, update local storage
   const current = getClinicLogs();
-  const id = log.id || `clinic-${Date.now()}`;
-  const idx = current.findIndex((c) => c.id === id);
+  const finalId = remoteRecord?.id || log.id || `clinic-${Date.now()}`;
+  const idx = current.findIndex((c) => c.id === finalId || (log.id && c.id === log.id));
   const existing = idx >= 0 ? current[idx] : undefined;
 
-  const newLog: ClinicWorkRecord = {
+  const newLog: ClinicWorkRecord = remoteRecord || {
     ...existing,
     ...log,
-    id,
+    id: finalId,
     type: "clinic",
     createdAt: existing?.createdAt || log.createdAt || new Date().toISOString(),
   };
@@ -1963,13 +2111,20 @@ export function saveClinicLog(
   return newLog;
 }
 
-export function deleteClinicLog(id: string): void {
+export async function deleteClinicLog(id: string): Promise<void> {
   const current = getClinicLogs();
   const target = current.find((c) => c.id === id);
   if (target && isDateInPast(target.date)) {
     throw new Error("ไม่สามารถลบบันทึกงานคลินิกย้อนหลังได้");
   }
 
+  // 1. Supabase action FIRST (Server-First with unwrap)
+  if (!id.startsWith("clinic-")) {
+    const res = await deleteClinicLogAction(id);
+    unwrap(res);
+  }
+
+  // 2. Only after server success, update local storage
   const updated = current.filter((c) => c.id !== id);
   localStorage.setItem(STORAGE_KEYS.CLINIC_LOGS, JSON.stringify(updated));
   triggerSync();
@@ -2050,18 +2205,15 @@ export async function savePersonalEvent(data: {
 }
 
 export async function deletePersonalEvent(id: string): Promise<void> {
+  if (!id.startsWith("pevent-")) {
+    const res = await deletePersonalEventAction(id);
+    unwrap(res);
+  }
+
   const events = getPersonalEvents().filter((e) => e.id !== id);
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEYS.PERSONAL_EVENTS, JSON.stringify(events));
     triggerSync();
-  }
-
-  if (!id.startsWith("pevent-")) {
-    try {
-      await deletePersonalEventAction(id);
-    } catch (e) {
-      console.warn("deletePersonalEventAction warning:", e);
-    }
   }
 }
 

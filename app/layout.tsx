@@ -53,7 +53,9 @@ export default function RootLayout({
             __html: `
               try {
                 const storedTheme = localStorage.getItem('vendee_theme');
-                if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const isDark = storedTheme === 'dark' || ((!storedTheme || storedTheme === 'system') && isSystemDark);
+                if (isDark) {
                   document.documentElement.classList.add('dark');
                 } else {
                   document.documentElement.classList.remove('dark');

@@ -194,7 +194,7 @@ export default function ModalEditService({
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
               <FileText className="h-3.5 w-3.5 text-primary" />
-              <span>บันทึกบริการ / รายละเอียด</span>
+              <span>บริการ / รายละเอียด</span>
             </label>
             <input
               type="text"

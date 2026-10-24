@@ -85,6 +85,7 @@ export default function ModalAddTodo({
   const [shiftType, setShiftType] = useState<ShiftType>("morning");
   const [shiftCategory, setShiftCategory] = useState<ShiftCategory>("black");
   const [shiftNote, setShiftNote] = useState("");
+  const [shiftReceivedFrom, setShiftReceivedFrom] = useState("");
 
   // Customer Service Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
@@ -129,6 +130,7 @@ export default function ModalAddTodo({
     setShiftType("morning");
     setShiftCategory("black");
     setShiftNote("");
+    setShiftReceivedFrom("");
 
     // Reset Customer Service form state
     setServiceTime("09:00");
@@ -204,6 +206,7 @@ export default function ModalAddTodo({
         shiftType,
         category: categoryToSave,
         note: shiftNote.trim() || undefined,
+        receivedFrom: categoryToSave === "red" ? shiftReceivedFrom.trim() || undefined : undefined,
       });
 
       resetAllFormInputs();
@@ -626,6 +629,25 @@ export default function ModalAddTodo({
                   </div>
                 </div>
               )}
+
+              {/* Received From (Only for Red / OT Shifts per BACKLOG.md §11.2) */}
+              {shiftCategory === "red" &&
+                (shiftType === "morning" ||
+                  shiftType === "afternoon" ||
+                  shiftType === "night") && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
+                      รับเวรมาจากใคร (ถ้ามี)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="เช่น พี่เปิ้ล, น้องแนน"
+                      value={shiftReceivedFrom}
+                      onChange={(e) => setShiftReceivedFrom(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:border-rose-500 focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-800 dark:text-white"
+                    />
+                  </div>
+                )}
 
               {/* Shift Category: Black / Red */}
               {(shiftType === "r1" || shiftType === "r2") && (

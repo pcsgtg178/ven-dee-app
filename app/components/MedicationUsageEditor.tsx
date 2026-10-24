@@ -184,7 +184,7 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
       </div>
 
       <div className="flex items-center justify-between border-t border-primary/20 pt-2 text-xs">
-        <span className="font-bold text-primary-dark dark:text-emerald-300">ต้นทุนยารวม (คำนวณอัตโนมัติ)</span>
+        <span className="font-bold text-primary-dark dark:text-emerald-300">ต้นทุนยารวม</span>
         <span className="text-sm font-extrabold text-emerald-700 dark:text-emerald-300">{fmtBaht(totalSatang)}</span>
       </div>
     </div>

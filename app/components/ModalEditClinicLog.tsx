@@ -76,9 +76,6 @@ export default function ModalEditClinicLog({
               <h2 className="text-base font-bold text-text-main dark:text-white">
                 แก้ไขบันทึกงานคลินิก
               </h2>
-              <p className="text-xs text-text-muted dark:text-zinc-400">
-                ปรับเปลี่ยนวันที่และช่วงเวลาปฏิบัติงาน
-              </p>
             </div>
           </div>
           <button
@@ -148,7 +145,7 @@ export default function ModalEditClinicLog({
           {/* Note Input */}
           <div>
             <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
-              หมายเหตุ (ถ้ามี)
+              หมายเหตุ
             </label>
             <input
               type="text"

@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
   Trash2,
   Ambulance,
+  Flame,
 } from "lucide-react";
 import moment from "moment";
 import "moment/locale/th";
@@ -196,11 +197,21 @@ function TimelineRow({
               แลกแล้ว
             </span>
           )}
+          {shift.category === "red" && shift.receivedFrom && (
+            <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300 dark:border-rose-700">
+              รับจาก: {shift.receivedFrom}
+            </span>
+          )}
+          {(shift.status === "transferred" || shift.status === "sold_out") && (
+            <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+              ยกให้: {shift.transferMeta?.recipientName || shift.saleMeta?.buyerName || "ผู้อื่น"}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {!isSwapped &&
             shift.status === "active" &&
-            (shift.shiftType === "r1" || shift.shiftType === "r2" || shift.category === "green") &&
+            (shift.shiftType === "r1" || shift.shiftType === "r2" || shift.category === "green" || shift.category === "red") &&
             onSellShift && (
               <button
                 type="button"
@@ -208,10 +219,18 @@ function TimelineRow({
                   e.stopPropagation();
                   onSellShift(shift);
                 }}
-                className="ml-auto rounded-lg p-1 text-emerald-600 hover:bg-emerald-50 active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-emerald-300 transition-all cursor-pointer"
-                title="ขายเวร Refer นี้"
+                className={`ml-auto rounded-lg p-1 transition-all cursor-pointer ${
+                  shift.category === "red"
+                    ? "text-shift-red hover:bg-rose-50 active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-rose-300"
+                    : "text-emerald-600 hover:bg-emerald-50 active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-emerald-300"
+                }`}
+                title={shift.category === "red" ? "ยกเวร OT นี้ให้คนอื่น" : "ยกเวร Refer นี้ให้คนอื่น"}
               >
-                <Ambulance className="h-3.5 w-3.5" />
+                {shift.category === "red" ? (
+                  <Flame className="h-3.5 w-3.5" />
+                ) : (
+                  <Ambulance className="h-3.5 w-3.5" />
+                )}
               </button>
             )}
           {!isSwapped && onSwapShift && (

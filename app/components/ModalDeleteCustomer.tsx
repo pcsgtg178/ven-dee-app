@@ -71,9 +71,6 @@ export default function ModalDeleteCustomer({
               <h2 className="text-base font-bold text-text-main dark:text-white">
                 ยืนยันการลบลูกค้า
               </h2>
-              <p className="text-[11px] text-text-muted dark:text-zinc-400">
-                การดำเนินการนี้จะลบข้อมูลและประวัติทั้งหมด
-              </p>
             </div>
           </div>
           <button
@@ -107,9 +104,7 @@ export default function ModalDeleteCustomer({
             <h3 className="font-bold text-sm text-text-main dark:text-white truncate">
               {customer.name}
             </h3>
-            <p className="text-[11px] text-text-muted dark:text-zinc-400">
-              รหัสลูกค้า: {customer.id}
-            </p>
+            
           </div>
         </div>
 

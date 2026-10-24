@@ -219,11 +219,8 @@ export default function ModalShiftSwap({
             </div>
             <div>
               <h2 className="text-sm font-bold text-text-main dark:text-white">
-                บันทึกการแลกเวร (Shift Swap)
+                บันทึกการแลกเวร
               </h2>
-              <p className="text-[11px] text-text-muted dark:text-zinc-400">
-                แลกเปลี่ยนเวรและบันทึกประวัติการส่งต่อ
-              </p>
             </div>
           </div>
 
@@ -274,7 +271,7 @@ export default function ModalShiftSwap({
             </div>
           </div>
 
-          {/* Field 1: คนที่ตกลงแลกด้วย (Direct Partner) [Required] */}
+          {/* Field 1: คนที่ตกลงแลกด้วย [Required] */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
               คนที่ตกลงแลกด้วย (Direct Partner){" "}
@@ -303,7 +300,7 @@ export default function ModalShiftSwap({
                 className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
               />
               <span className="text-xs font-bold text-slate-800 dark:text-white">
-                เวรนี้รับต่อมาจากผู้อื่น (แลกต่อยอด / Top-up)
+                เวรนี้รับต่อมาจากผู้อื่น
               </span>
             </label>
 
@@ -311,7 +308,7 @@ export default function ModalShiftSwap({
             {isTopUp && (
               <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-zinc-700/80 animate-in fade-in duration-150">
                 <label className="block text-xs font-semibold text-teal-800 dark:text-teal-300 mb-1">
-                  เจ้าของเวรเดิมตามตาราง (Original Owner){" "}
+                  เจ้าของเวรเดิมตามตาราง{" "}
                   <span className="text-rose-500">*</span>
                 </label>
                 <input
@@ -322,10 +319,7 @@ export default function ModalShiftSwap({
                   onChange={(e) => setOriginalOwner(e.target.value)}
                   className="w-full rounded-xl border border-teal-300 bg-white px-3.5 py-2 text-xs sm:text-sm text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 dark:border-teal-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"
                 />
-                <p className="mt-1 text-[10px] text-slate-500 dark:text-zinc-400">
-                  *ระบุชื่อเจ้าของเวรดั้งเดิมตามตารางเวรหลักเพื่อสร้างประวัติ
-                  Swap Trail
-                </p>
+                
               </div>
             )}
           </div>
@@ -485,9 +479,7 @@ export default function ModalShiftSwap({
                       <span className="h-2 w-2 rounded-full bg-slate-400" />
                       เวรดำ (เวรประจำ)
                     </span>
-                    <span className="text-[10px] opacity-80 mt-0.5">
-                      นับรวมในโควต้าเวรประจำ
-                    </span>
+                    
                   </button>
 
                   <button
@@ -503,9 +495,7 @@ export default function ModalShiftSwap({
                       <span className="h-2 w-2 rounded-full bg-rose-600" />
                       เวรแดง (OT/เวรช่วย)
                     </span>
-                    <span className="text-[10px] text-rose-700 dark:text-rose-300 mt-0.5">
-                      เวร OT ได้รับค่าตอบแทน
-                    </span>
+                    
                   </button>
                 </div>
               </div>
@@ -590,9 +580,7 @@ export default function ModalShiftSwap({
                   {shiftInfo.label} ➔ {SHIFT_CONFIG[newShiftType]?.label || newShiftType}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-sky-700 dark:text-sky-400">
-                *วันที่ {moment(shift.date).locale("th").format("D MMMM YYYY")} กรุณาตรวจสอบว่าท่านต้องการสลับกะในวันเดียวกันจริง
-              </p>
+              
             </div>
           )}
 
@@ -627,7 +615,7 @@ export default function ModalShiftSwap({
           {/* หมายเหตุ / เหตุผลการแลกเวร */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-              เหตุผลหรือบันทึกการแลกเวร (ถ้ามี)
+              เหตุผลการแลกเวร
             </label>
             <input
               type="text"

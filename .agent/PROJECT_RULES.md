@@ -60,14 +60,16 @@ ven-dee-app/
 - **Data Mutability & Deletion Safety**:
   - Shift swap & shift sale transactions and service creation must validate concurrency and business invariants before persisting to Supabase.
   - Transactions modifying shift ownership (Swap or Sale) must update `status`, `swapMeta` or `saleMeta`, and append audit trails atomically using Supabase transactions or Server Actions.
-  - **Refer Shift Selling Standards**:
-    - Selling Refer shifts (`r1`, `r2`) operates as a one-way transfer (`status: "sold_out"`).
-    - Must record `saleMeta` containing `buyerName`, `salePriceSatang` (Satang Standard: Integer, 1 THB = 100 Satang), `soldDate`, `paymentStatus` (`unpaid` / `paid`), and optional `note`.
+  - **Refer & OT Shift Transfer Standards (Phase 11: One-Way Shift Transfer & OT Intake)**:
+    - Transferring Refer shifts (`r1`, `r2`) or OT shifts (`red`) operates as a one-way transfer (`status: "transferred"`).
+    - Records `transferMeta` containing `recipientName`, `transferredDate`, and optional `note` (no Satang, no payment status).
     - Does NOT impact mandatory monthly black shift quota (คำนวณจากจำนวนวันทำการ จ-ศ x 8 ชม. / 8).
-    - Once sold, seller is freed from 24-hr Standby constraint on that date.
-  - Deletion of shifts involved in swap chains (`status: "swapped_out"`, `parentShiftId` references), sold shifts (`status: "sold_out"`), or locked shifts (`isLocked: true`) must be rejected to prevent data corruption and loss of financial audit trails.
+    - Black shifts (`black`) cannot be transferred one-way; must use shift swap.
+    - Recording received OT shifts allows specifying `receivedFrom` (e.g. "พี่เปิ้ล") without affecting mandatory black quota.
+    - Once transferred, user is freed from duties on that date.
+  - Deletion of shifts involved in swap chains (`status: "swapped_out"`, `parentShiftId` references), transferred/sold shifts (`status: "transferred"` / `"sold_out"`), or locked shifts (`isLocked: true`) must be rejected to prevent data corruption.
   - Rollback (Undo Swap) operations must execute atomically on both sides: restoring the original parent shift (`parentShiftId`) to `active` while cancelling/reverting the shift received during that swap (`status: "cancelled"`).
-  - Rollback (Undo Sale) operations for sold Refer shifts must restore the shift to `active`, purge `saleMeta`, and update financial summaries, permitted only if `shiftDate >= CURRENT_DATE` and `isLocked: false`.
+  - Rollback (Undo Transfer) operations for transferred shifts must restore the shift to `active` and purge `transferMeta`, permitted only if `shiftDate >= CURRENT_DATE` and `isLocked: false`.
   - Same-day same-shift-type swaps are permitted ONLY when converting between Black (`black`) and Red (`red`) categories (e.g., Morning Black ↔ Morning Red). Swapping into the exact same category on the same date must be rejected (`DUPLICATE_SHIFT`).
 
 ## 5. iPhone / Apple Calendar Export & Protocol Standards

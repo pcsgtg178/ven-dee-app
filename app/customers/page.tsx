@@ -135,7 +135,7 @@ export default function CustomersPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ค้นหาชื่อ, เบอร์โทร หรือ Note จำแนก..."
+              placeholder="ค้นหาชื่อลูกค้า..."
               className="w-full rounded-2xl border border-surface-subtle bg-card-bg py-2.5 pl-10 pr-9 text-sm text-text-main shadow-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
             />
             <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
@@ -179,7 +179,7 @@ export default function CustomersPage() {
             <p className="text-xs text-text-muted dark:text-zinc-400 mt-1 max-w-xs">
               {searchQuery
                 ? "ลองตรวจสอบคำค้นหา หรือกดปุ่มเพิ่มลูกค้าใหม่"
-                : "เพิ่มรายชื่อลูกค้าเพื่อบันทึกประวัติการดูแลและนัดหมายบริการ"}
+                : ""}
             </p>
             <button
               type="button"
@@ -247,7 +247,7 @@ export default function CustomersPage() {
                         setOpenDeleteModal(true);
                       }}
                       className="inline-flex items-center gap-1 rounded-xl bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 active:scale-95 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-950/60 transition-all border border-rose-200/60 dark:border-rose-900/40"
-                      title="ลบข้อมูลลูกค้าและประวัติทั้งหมด"
+                      title="ลบข้อมูลลูกค้า"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       <span>ลบ</span>

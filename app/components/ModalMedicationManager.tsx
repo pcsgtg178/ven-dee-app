@@ -169,15 +169,13 @@ export default function ModalMedicationManager({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-text-main dark:text-white">
-                  จัดการรายการยา (Medication Master)
+                  จัดการรายการยา
                 </h2>
                 {isSyncing && (
                   <RotateCw className="h-3.5 w-3.5 animate-spin text-purple-600" />
                 )}
               </div>
-              <p className="text-xs text-text-muted dark:text-zinc-400">
-                เพิ่ม/แก้ไข รายการยาสำหรับใช้ในระบบบริการ
-              </p>
+              
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -186,7 +184,7 @@ export default function ModalMedicationManager({
               onClick={() => loadData(true)}
               disabled={isSyncing}
               className="rounded-full p-2 text-text-muted hover:bg-slate-200 dark:hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
-              title="ดึงข้อมูลจาก API / ฐานข้อมูล"
+              title="รีเฟรชข้อมูล"
             >
               <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-purple-600" : ""}`} />
             </button>

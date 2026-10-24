@@ -15,6 +15,7 @@ export interface ShiftDetail {
   isRefer: boolean;
   isSwapped: boolean;
   swappedWith?: string;
+  receivedFrom?: string;
   shiftType: string;
   category: string;
 }
@@ -147,6 +148,13 @@ export default function ScheduleCalendarView({
                       title={detail.swappedWith}
                     >
                       {detail.swappedWith}
+                    </span>
+                  ) : detail.receivedFrom ? (
+                    <span
+                      className="text-[6.5px] sm:text-[7px] font-bold text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200/70 dark:border-rose-800/70 rounded px-0.5 truncate max-w-[32px] sm:max-w-[42px] leading-tight"
+                      title={`รับจาก: ${detail.receivedFrom}`}
+                    >
+                      {detail.receivedFrom}
                     </span>
                   ) : null}
                 </div>

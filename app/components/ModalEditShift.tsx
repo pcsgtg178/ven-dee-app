@@ -39,6 +39,7 @@ export default function ModalEditShift({
   const [shiftType, setShiftType] = useState<ShiftType>("morning");
   const [shiftCategory, setShiftCategory] = useState<ShiftCategory>("black");
   const [shiftNote, setShiftNote] = useState("");
+  const [receivedFrom, setReceivedFrom] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function ModalEditShift({
       setShiftType(shift.shiftType || "morning");
       setShiftCategory(shift.category || "black");
       setShiftNote(shift.note || "");
+      setReceivedFrom(shift.receivedFrom || "");
       setErrorMsg("");
     }
   }, [shift, isOpen]);
@@ -70,6 +72,7 @@ export default function ModalEditShift({
         shiftType,
         category: categoryToSave,
         note: shiftNote.trim() || undefined,
+        receivedFrom: categoryToSave === "red" ? receivedFrom.trim() || undefined : undefined,
         status: shift.status,
         createdAt: shift.createdAt,
         swapId: shift.swapId,
@@ -97,9 +100,6 @@ export default function ModalEditShift({
               <h2 className="text-base font-bold text-text-main dark:text-white">
                 แก้ไขตารางเวร
               </h2>
-              <p className="text-[11px] text-text-muted dark:text-zinc-400">
-                รหัสเวร: {shift.id}
-              </p>
             </div>
           </div>
           <button
@@ -142,7 +142,7 @@ export default function ModalEditShift({
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
               <Clock className="h-3.5 w-3.5 text-secondary" />
-              <span>ช่วงเวลาเวร (Shift Period)</span>
+              <span>ช่วงเวลาเวร</span>
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -267,7 +267,7 @@ export default function ModalEditShift({
             shiftType === "night") && (
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                ประเภทเวร (Category)
+                ประเภทเวร
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -286,9 +286,7 @@ export default function ModalEditShift({
                     <div className="text-xs font-bold text-text-main dark:text-white">
                       เวรดำ
                     </div>
-                    <div className="text-[10px] text-text-muted dark:text-zinc-400">
-                      เวรหลักในโควต้า
-                    </div>
+                    
                   </div>
                 </button>
 
@@ -308,20 +306,37 @@ export default function ModalEditShift({
                     <div className="text-xs font-bold text-shift-red-text dark:text-rose-300">
                       เวรแดง (OT)
                     </div>
-                    <div className="text-[10px] text-rose-600/80 dark:text-rose-400/80">
-                      เวรนอก/ขึ้นเสริม
-                    </div>
+                    
                   </div>
                 </button>
               </div>
             </div>
           )}
 
+          {/* Received From (Only for Red / OT Shifts per BACKLOG.md §11.2) */}
+          {shiftCategory === "red" &&
+            (shiftType === "morning" ||
+              shiftType === "afternoon" ||
+              shiftType === "night") && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                  รับเวรมาจากใคร (ถ้ามี)
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น พี่เปิ้ล, น้องแนน"
+                  value={receivedFrom}
+                  onChange={(e) => setReceivedFrom(e.target.value)}
+                  className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2.5 text-sm text-text-main outline-hidden focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+                />
+              </div>
+            )}
+
           {/* Note */}
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
               <FileText className="h-3.5 w-3.5 text-secondary" />
-              <span>บันทึกเพิ่มเติม (Note)</span>
+              <span>บันทึกเพิ่มเติม</span>
             </label>
             <textarea
               rows={2}

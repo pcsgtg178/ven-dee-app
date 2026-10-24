@@ -24,11 +24,14 @@
   - **Monthly Black Count Invariant (กฎการนับเวรดำรายเดือน)**: นับเฉพาะเวรที่ `category === "black"` และ `status === "active"` ภายในเดือนปฏิทินที่เลือก ($[\text{monthStart}, \text{nextMonthStart})$) เท่านั้น. ห้ามนับเวรที่ `swapped_out`, `sold_out`, `cancelled`, เวรสีอื่น (red/green/gray/purple) หรือเวรที่ซ้ำ (duplicate id). เวรที่ได้รับมาจากการแลก (black, active) ให้นับรวม. ผลรวมที่แสดงในปฏิทินและ Summary ต้องมาจากฟังก์ชันคำนวณเดียวกัน (single source of truth: `lib/quota.ts`) และต้องมี unit test ครอบคลุม.
 - **Red Shift (`red` - เวรแดง)**: Overtime (OT) / Extra shifts.
   - Applies when total validated shifts exceed required quota or for extra OT duties.
-  - Swappable without affecting mandatory black quota balance.
+  - Swappable and Transferrable without affecting mandatory black quota balance.
+  - **One-Way Shift Transfer & OT Intake (ยกเวรให้คนอื่น & รับเวรมาจากใคร - Phase 11)**:
+    - สามารถยกเวร OT ให้พยาบาลคนอื่นไปขึ้นแทนได้โดยตรงแบบ One-Way Shift Transfer (`status: "transferred"`) ไม่กระทบโควตาเวรดำ
+    - เมื่อบันทึกขึ้นเวร OT สามารถระบุ "รับเวรมาจากใคร" (`receivedFrom`) เพื่อบันทึกที่มาของเวรได้ โดยไม่กระทบโควตาเวรดำ
 - **Green Shift (`green` - เวร R)**: Emergency Refer Standby shifts (`r1`, `r2`).
   - Standby 24 ชม. สำหรับเคสส่งต่อผู้ป่วยฉุกเฉิน
   - ไม่อยู่ในเกณฑ์บังคับของโควตาเวรดำ
-  - **Shift Selling Permitted (อนุญาตให้ขายเวรได้)**: สามารถทำรายการ **"ขายเวร" (Shift Sell / Offload)** ส่งต่อเวร Refer ให้พยาบาลคนอื่นไปปฏิบัติหน้าที่แทนได้โดยตรง พร้อมบันทึกราคาขายในหน่วยสตางค์ โดยไม่กระทบยอดโควตาเวรดำ
+  - **One-Way Shift Transfer Permitted (อนุญาตให้ยกเวรให้คนอื่นได้ - Phase 11)**: สามารถทำรายการ **"ยกเวรให้คนอื่น" (One-Way Shift Transfer)** ส่งต่อเวร Refer ให้พยาบาลคนอื่นไปปฏิบัติหน้าที่แทนได้โดยตรง โดยไม่กระทบยอดโควตาเวรดำ และไม่ต้องบันทึกราคา/คำนวณรายได้ใดๆ
 - **Gray Shift (`gray` - เวรออฟ)**: Off / Leave days.
 - **Purple Shift (`purple` - เวร CT)**: Special CT Scan duties / Vacation.
 
@@ -95,34 +98,32 @@
 7. **Duplicate Check**: พยาบาลคนเดิมไม่สามารถถือครองเวรประเภทเดียวกันในหมวดเดียวกันซ้ำซ้อนในวันเดียวกันได้
 
 
-### 2.4 Refer Shift Selling & Transfer Rules (กฎการขายเวรและการส่งต่อเวร Refer)
-1. **One-Way Shift Offload (การส่งต่อเวรแบบทิศทางเดียว)**:
-   - การขายเวร (Shift Selling) แตกต่างจากการแลกเวร (Shift Swap): ไม่จำเป็นต้องมีเวรใหม่เข้ามารับแลกคืน
-   - พยาบาลผู้ขายส่งมอบเวร Refer (`r1`, `r2`) ให้พยาบาลผู้ซื้อ (`buyerName`) ไปขึ้นแทน
-   - วันดังกล่าวในตารางของพยาบาลผู้ขายจะกลายเป็นวันว่าง/ออฟ (Off) พ้นจากภาระ Standby 24 ชม. ทันที
+### 2.4 Refer & OT Shift Transfer Rules (กฎการยกเวรและการส่งต่อเวร Refer & OT - Phase 11)
+1. **One-Way Shift Transfer (การยกเวรให้ผู้อื่นแบบทิศทางเดียว)**:
+   - การยกเวร (One-Way Shift Transfer) แตกต่างจากการแลกเวร (Shift Swap): ไม่จำเป็นต้องมีเวรใหม่เข้ามารับแลกคืน
+   - พยาบาลผู้ส่งมอบสามารถยกเวร Refer (`r1`, `r2`, `green`) หรือเวร OT (`red`) ให้พยาบาลผู้รับ (`recipientName`) ไปขึ้นแทน
+   - วันดังกล่าวในตารางของพยาบาลผู้ส่งมอบจะพ้นจากภาระการปฏิบัติหน้าที่ทันที
 2. **Quota Exemption (ไม่กระทบโควตาเวรดำ)**:
-   - เวร Refer เป็นเวรหมวดสีเขียว (`green`) ไม่อยู่ในโควตาเวรดำ
-   - การขายเวร Refer จะ **ไม่ลดจำนวนเวรดำ** และ **ไม่ทำให้เกิด `QUOTA_DEFICIT_WARNING`**
-3. **Financial Invariants (Satang Standard สำหรับค่าขายเวร)**:
-   - ตัวเลขราคาขายเวรต้องจัดเก็บในหน่วยสตางค์ (Integer: $1 \text{ THB} = 100 \text{ Satang}$)
-   - ฟิลด์ข้อมูลการขาย (`SaleMetadata`):
-     - `buyerName`: ชื่อพยาบาลผู้ซื้อ/ผู้รับเวรไปขึ้นแทน [Required]
-     - `salePriceSatang`: ราคาขายเวร/ค่าตอบแทน (หน่วยสตางค์, default: 0) [Required]
-     - `soldDate`: วันที่ทำรายการขาย (YYYY-MM-DD) [Required]
-     - `paymentStatus`: สถานะการชำระเงิน (`unpaid` / `paid`) [Required]
-     - `note`: หมายเหตุเพิ่มเติม (เช่น ช่องทางชำระเงิน, เลขบัญชี, รายละเอียดเคส) [Optional]
-   - รายรับจากการขายเวรที่มีสถานะ `paid` จะถูกนำไปคำนวณรวมในสรุปรายรับสุทธิ (Total Income) ประจำเดือนของพยาบาล
-4. **Shift Status Lifecycle for Sold Shifts**:
-   - เวร Refer ที่ถูกขายออกไปจะเปลี่ยนสถานะเป็น `status: "sold_out"`
-   - เวรสถานะ `sold_out` จะถูกซ่อนจากการแสดงผลในตารางเวรทำงานปกติบนปฏิทิน แต่ยังคงแสดงในประวัติและสมุดบัญชีรายรับ
-   - **No Hard Delete**: ห้ามลบเวรสถานะ `sold_out` เด็ดขาดเพื่อรักษา Audit Trail และหลักฐานทางการเงิน
-5. **Undo Sale / Rollback (การยกเลิกการขายเวร Refer)**:
-   - การยกเลิกการขายเวร Refer สามารถทำได้เมื่อเวรนั้นยังไม่ผ่านพ้นไป (`shiftDate >= CURRENT_DATE` และ `isLocked: false`)
-   - เมื่อสั่งยกเลิกการขาย (`undoSellShift`): สถานะเวรจะคืนกลับเป็น `active`, ปลดค่า `saleMeta` และปรับสมุดรายรับทันที
-   - หากเวรผ่านไปแล้วและถูกล็อก (`isLocked: true`): ไม่อนุญาตให้ยกเลิกการขาย (HTTP 422: `SHIFT_IS_LOCKED`)
-6. **Buyer & Seller Safety Constraint Lifecycle**:
-   - เมื่อผู้ขายขายเวร Refer ออกไปแล้ว (`sold_out`):
-     - ผู้ขายสามารถรับงานบริการเคหะบริบาล (`CustomerServiceRecord`), ธุระส่วนตัว (`personal_event`) หรือแลกเวรอื่นเข้ามาในวันดังกล่าวได้โดยไม่มีข้อจำกัดของเวร Refer เดิม
+   - เวร Refer และเวร OT ไม่อยู่ในโควตาเวรดำ
+   - การยกเวร Refer หรือเวร OT จะ **ไม่ลดจำนวนเวรดำ** และ **ไม่ทำให้เกิด `QUOTA_DEFICIT_WARNING`**
+   - เวรดำ (`black`) **ไม่อนุญาตให้ยกเวรแบบทางเดียว** ต้องใช้การแลกเวร (`Shift Swap`) เท่านั้น เพื่อรักษายอดเวรดำประจำเดือน
+3. **Non-Financial Transfer (ไม่มีการคำนวณเงิน)**:
+   - ระบบการยกเวรไม่คิดมูลค่าเงิน ตัดการกรอกราคาขาย (Satang) และสถานะการชำระเงินออกทั้งหมด ไม่นำไปรวมในสมุดบัญชีรายรับของแดชบอร์ด
+   - ฟิลด์ข้อมูลการยกเวร (`TransferMetadata`):
+     - `recipientName`: ชื่อพยาบาลผู้รับเวรไปขึ้นแทน [Required]
+     - `transferredDate`: วันที่ทำรายการยกเวร (YYYY-MM-DD) [Required]
+     - `note`: หมายเหตุเพิ่มเติม (เช่น รายละเอียดงาน) [Optional]
+4. **Shift Status Lifecycle for Transferred Shifts**:
+   - เวรที่ถูกยกให้คนอื่นจะเปลี่ยนสถานะเป็น `status: "transferred"`
+   - เวรสถานะ `transferred` จะถูกซ่อนจากการแสดงผลในตารางเวรทำงานปกติบนปฏิทิน
+   - **No Hard Delete**: ห้ามลบเวรสถานะ `transferred` เด็ดขาดเพื่อรักษาประวัติข้อมูล
+5. **Undo Transfer / Rollback (การยกเลิกการยกเวร)**:
+   - การยกเลิกการยกเวรสามารถทำได้เมื่อเวรนั้นยังไม่ผ่านพ้นไป (`shiftDate >= CURRENT_DATE` และ `isLocked: false`)
+   - เมื่อสั่งยกเลิกการยกเวร (`undoTransferShift`): สถานะเวรจะคืนกลับเป็น `active` และปลดค่า `transferMeta` ทันที
+   - หากเวรผ่านไปแล้วและถูกล็อก (`isLocked: true`): ไม่อนุญาตให้ยกเลิกการยกเวร (HTTP 422: `SHIFT_IS_LOCKED`)
+6. **OT Shift Intake Invariant (กฎการรับเวร OT มาจากคนอื่น)**:
+   - เมื่อพยาบาลรับเวร OT มาจากเพื่อนร่วมงาน สามารถระบุฟิลด์ `receivedFrom` (เช่น "พี่เปิ้ล") ในหน้าบันทึกเวรหรือแก้ไขเวรได้
+   - ระบบจะแสดงป้าย `OT (รับจาก: [ชื่อ])` บนการ์ดเวรและปฏิทิน โดยเวรนี้ถือเป็นเวร OT (`category: "red"`) และไม่นับรวมในโควตาเวรดำประจำเดือน
 
 ### 2.5 Locking, Deletion & Rollback Rules (Human-in-the-Loop Operational Decision)
 1. **Immutability (Locked)**: เวรใดๆ ที่มี `shiftDate < CURRENT_DATE` จะถูกล็อกอัตโนมัติ (`isLocked: true`) ไม่สามารถแก้ไข, ลบ, ขาย หรือย้อนสถานะได้ เว้นแต่ได้รับสิทธิ์พิเศษจากผู้ดูแลระบบ

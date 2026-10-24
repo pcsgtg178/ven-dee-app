@@ -61,6 +61,14 @@ function mapRowToShiftRecord(row: any, swapRecord?: ShiftSwapRecord | number): S
         note: row.sale_meta?.note || row.sale_note || undefined,
       }
       : undefined,
+    transferMeta: (row.transfer_meta || row.recipient_name || row.transferred_date || row.buyer_name)
+      ? {
+        recipientName: row.transfer_meta?.recipientName || row.recipient_name || row.sale_meta?.buyerName || row.buyer_name || "",
+        transferredDate: row.transfer_meta?.transferredDate || row.transferred_date || row.sale_meta?.soldDate || row.sold_date || "",
+        note: row.transfer_meta?.note || row.sale_meta?.note || row.sale_note || undefined,
+      }
+      : undefined,
+    receivedFrom: row.received_from || undefined,
     department: row.department || undefined,
     note: row.note || undefined,
     createdAt: row.created_at,
@@ -151,6 +159,7 @@ export async function createShiftAction(data: {
   category?: ShiftCategory;
   department?: string;
   note?: string;
+  receivedFrom?: string;
 }): Promise<ActionResult<ShiftRecord>> {
   try {
     const supabase = await createClient();
@@ -199,6 +208,7 @@ export async function createShiftAction(data: {
         category: data.category || "black",
         department: data.department || "",
         note: data.note || "",
+        received_from: data.category === "red" && data.receivedFrom ? data.receivedFrom.trim() : null,
         status: "active",
       })
       .select()
@@ -235,6 +245,7 @@ export async function updateShiftAction(
     department?: string;
     note?: string;
     status?: ShiftStatus;
+    receivedFrom?: string;
   }
 ): Promise<ActionResult<ShiftRecord>> {
   try {
@@ -259,6 +270,9 @@ export async function updateShiftAction(
     if (data.department !== undefined) updatePayload.department = data.department;
     if (data.note !== undefined) updatePayload.note = data.note;
     if (data.status !== undefined) updatePayload.status = data.status;
+    if (data.receivedFrom !== undefined) {
+      updatePayload.received_from = data.receivedFrom?.trim() || null;
+    }
 
     const { data: updated, error } = await supabase
       .from("shifts")
@@ -946,15 +960,15 @@ export async function deleteShiftAction(id: string): Promise<ActionResult<{ dele
 }
 
 /**
- * Sell a Refer shift (One-way transfer, status: "sold_out", Satang standard)
- * Adheres to DOMAIN_RULES.md Section 2.4 & PROJECT_RULES.md Section 4
+ * One-Way Shift Transfer for Refer & OT Shifts (Phase 11: DOMAIN_RULES.md §2.4)
+ * - Transfers shift out to recipientName without reciprocal swap
+ * - No monetary calculations or Satang required
+ * - Status set to "transferred"
  */
-export async function sellShiftAction(data: {
+export async function transferShiftAction(data: {
   shiftId: string;
-  buyerName: string;
-  salePriceSatang: number;
-  soldDate: string;
-  paymentStatus: "unpaid" | "paid";
+  recipientName: string;
+  transferredDate: string;
   note?: string;
 }): Promise<ActionResult<ShiftRecord>> {
   try {
@@ -970,65 +984,65 @@ export async function sellShiftAction(data: {
     if (fetchErr || !shiftRow) {
       return {
         success: false,
-        error: { code: "SHIFT_NOT_FOUND", message: "ไม่พบเวรที่ต้องการขาย" },
+        error: { code: "SHIFT_NOT_FOUND", message: "ไม่พบเวรที่ต้องการยกให้คนอื่น" },
       };
     }
 
-    if (shiftRow.status === "sold_out") {
+    if (shiftRow.status === "transferred" || shiftRow.status === "sold_out") {
       return {
         success: false,
-        error: { code: "SHIFT_ALREADY_SOLD", message: "เวรนี้ถูกทำรายการขายไปแล้ว" },
+        error: { code: "SHIFT_ALREADY_TRANSFERRED", message: "เวรนี้ถูกทำรายการยกให้คนอื่นไปแล้ว" },
       };
     }
 
     if (shiftRow.status !== "active") {
       return {
         success: false,
-        error: { code: "INVALID_SALE_OPERATION", message: "เวรนี้ไม่ได้อยู่ในสถานะพร้อมขาย" },
+        error: { code: "INVALID_TRANSFER_OPERATION", message: "เวรนี้ไม่ได้อยู่ในสถานะพร้อมยกให้คนอื่น" },
       };
     }
 
     if (shiftRow.is_locked || isShiftInPast(shiftRow.shift_date)) {
       return {
         success: false,
-        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถขายเวรในอดีตที่ถูกล็อกแล้วได้" },
+        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเวรในอดีตที่ถูกล็อกแล้วได้" },
       };
     }
 
-    // Domain Invariant: Only Refer shifts (r1, r2 or green category) are permitted for selling
+    // Domain Invariant: Refer shifts (r1, r2, green) and OT shifts (red category) are permitted for transfer (Phase 11)
     const isRefer =
       shiftRow.shift_type === "r1" ||
       shiftRow.shift_type === "r2" ||
       shiftRow.category === "green";
+    const isOT = shiftRow.category === "red";
 
-    if (!isRefer) {
+    if (!isRefer && !isOT) {
       return {
         success: false,
         error: {
-          code: "INVALID_SALE_OPERATION",
-          message: "อนุญาตให้ขายได้เฉพาะเวร Refer (R1, R2) เท่านั้น",
+          code: "INVALID_TRANSFER_OPERATION",
+          message: "อนุญาตให้ยกได้เฉพาะเวร Refer (R1, R2) หรือเวร OT (เวรแดง) เท่านั้น",
         },
       };
     }
 
-    const saleMetaObj = {
-      buyerName: data.buyerName.trim(),
-      salePriceSatang: data.salePriceSatang,
-      soldDate: data.soldDate,
-      paymentStatus: data.paymentStatus,
+    const transferMetaObj = {
+      recipientName: data.recipientName.trim(),
+      transferredDate: data.transferredDate,
       note: data.note?.trim() || undefined,
     };
 
     const { data: updated, error: updateErr } = await supabase
       .from("shifts")
       .update({
-        status: "sold_out",
-        buyer_name: data.buyerName.trim(),
-        sale_price_satang: data.salePriceSatang,
-        sold_date: data.soldDate,
-        payment_status: data.paymentStatus,
+        status: "transferred",
+        recipient_name: data.recipientName.trim(),
+        transferred_date: data.transferredDate,
+        transfer_meta: transferMetaObj,
+        // Legacy column compatibility
+        buyer_name: data.recipientName.trim(),
+        sold_date: data.transferredDate,
         sale_note: data.note?.trim() || null,
-        sale_meta: saleMetaObj,
       })
       .eq("id", data.shiftId)
       .select()
@@ -1044,21 +1058,21 @@ export async function sellShiftAction(data: {
     return {
       success: true,
       data: mapRowToShiftRecord(updated),
-      message: "บันทึกการขายเวร Refer เรียบร้อยแล้ว",
+      message: isOT ? "บันทึกการยกเวร OT เรียบร้อยแล้ว" : "บันทึกการยกเวร Refer เรียบร้อยแล้ว",
     };
   } catch (err: any) {
     return {
       success: false,
-      error: { code: "SERVER_ERROR", message: err.message || "Failed to sell shift" },
+      error: { code: "SERVER_ERROR", message: err.message || "Failed to transfer shift" },
     };
   }
 }
 
 /**
- * Undo / Rollback Refer shift sale
- * Restores status to active and purges sale metadata
+ * Undo / Rollback One-Way Shift Transfer
+ * Restores status to active and purges transfer metadata
  */
-export async function undoSellShiftAction(shiftId: string): Promise<ActionResult<ShiftRecord>> {
+export async function undoTransferShiftAction(shiftId: string): Promise<ActionResult<ShiftRecord>> {
   try {
     const supabase = await createClient();
 
@@ -1071,21 +1085,21 @@ export async function undoSellShiftAction(shiftId: string): Promise<ActionResult
     if (fetchErr || !shiftRow) {
       return {
         success: false,
-        error: { code: "SHIFT_NOT_FOUND", message: "ไม่พบเวรที่ต้องการยกเลิกการขาย" },
+        error: { code: "SHIFT_NOT_FOUND", message: "ไม่พบเวรที่ต้องการยกเลิกการยกเวร" },
       };
     }
 
-    if (shiftRow.status !== "sold_out") {
+    if (shiftRow.status !== "transferred" && shiftRow.status !== "sold_out") {
       return {
         success: false,
-        error: { code: "INVALID_SALE_OPERATION", message: "เวรนี้ไม่ได้อยู่ในสถานะขายแล้ว" },
+        error: { code: "INVALID_TRANSFER_OPERATION", message: "เวรนี้ไม่ได้อยู่ในสถานะที่ยกให้ผู้อื่น" },
       };
     }
 
     if (shiftRow.is_locked || isShiftInPast(shiftRow.shift_date)) {
       return {
         success: false,
-        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกการขายเวรในอดีตที่ถูกล็อกแล้วได้" },
+        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกการยกเวรในอดีตที่ถูกล็อกแล้วได้" },
       };
     }
 
@@ -1093,6 +1107,10 @@ export async function undoSellShiftAction(shiftId: string): Promise<ActionResult
       .from("shifts")
       .update({
         status: "active",
+        recipient_name: null,
+        transferred_date: null,
+        transfer_meta: null,
+        // Legacy fields cleanup
         buyer_name: null,
         sale_price_satang: 0,
         sold_date: null,
@@ -1114,14 +1132,40 @@ export async function undoSellShiftAction(shiftId: string): Promise<ActionResult
     return {
       success: true,
       data: mapRowToShiftRecord(updated),
-      message: "ยกเลิกการขายเวรและคืนสถานะเวรปกติเรียบร้อยแล้ว",
+      message: "ยกเลิกการยกเวรและคืนสถานะเวรปกติเรียบร้อยแล้ว",
     };
   } catch (err: any) {
     return {
       success: false,
-      error: { code: "SERVER_ERROR", message: err.message || "Failed to undo shift sale" },
+      error: { code: "SERVER_ERROR", message: err.message || "Failed to undo shift transfer" },
     };
   }
+}
+
+/**
+ * Legacy sell shift wrapper for backwards compatibility
+ */
+export async function sellShiftAction(data: {
+  shiftId: string;
+  buyerName: string;
+  salePriceSatang?: number;
+  soldDate?: string;
+  paymentStatus?: "unpaid" | "paid";
+  note?: string;
+}): Promise<ActionResult<ShiftRecord>> {
+  return transferShiftAction({
+    shiftId: data.shiftId,
+    recipientName: data.buyerName,
+    transferredDate: data.soldDate || new Date().toISOString().split("T")[0],
+    note: data.note,
+  });
+}
+
+/**
+ * Legacy undo sell shift wrapper for backwards compatibility
+ */
+export async function undoSellShiftAction(shiftId: string): Promise<ActionResult<ShiftRecord>> {
+  return undoTransferShiftAction(shiftId);
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   Building2,
   ScanSquare,
   Bed,
+  Flame,
 } from "lucide-react";
 import {
   canEditShift,
@@ -187,7 +188,8 @@ export default function ActivityCard({
     const isSwapped = Boolean(shift.swapMeta || shift.swap);
     const isLocked = (shift.swapMeta?.isLocked ?? false) || isShiftInPast(shift.date);
     const isSwappedOut = shift.status === "swapped_out";
-    const isSoldOut = shift.status === "sold_out";
+    const isSoldOut = shift.status === "sold_out" || shift.status === "transferred";
+    const isOT = shift.category === "red";
     const isRefer =
       shift.shiftType === "r1" ||
       shift.shiftType === "r2" ||
@@ -212,7 +214,9 @@ export default function ActivityCard({
       <div
         className={`relative overflow-hidden rounded-2xl border p-3.5 shadow-xs transition-all hover:shadow-md ${
           isSoldOut
-            ? "border-emerald-300/60 bg-emerald-50/30 dark:border-emerald-800/50 dark:bg-emerald-950/20"
+            ? isOT
+              ? "border-rose-300/60 bg-rose-50/30 dark:border-rose-800/50 dark:bg-rose-950/20"
+              : "border-emerald-300/60 bg-emerald-50/30 dark:border-emerald-800/50 dark:bg-emerald-950/20"
             : isSwappedOut
               ? "border-surface-subtle bg-surface-subtle/50 opacity-60 dark:border-zinc-800 dark:bg-zinc-900/50"
               : isSwapped
@@ -277,9 +281,25 @@ export default function ActivityCard({
                   )}
                   {isSoldOut && (
                     <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                      ขายแล้ว
+                      ยกให้: {shift.transferMeta?.recipientName || shift.saleMeta?.buyerName || "ผู้อื่น"}
                     </span>
                   )}
+                  {shift.category === "red" && shift.receivedFrom && (
+                    <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
+                      OT (รับจาก: {shift.receivedFrom})
+                    </span>
+                  )}
+                  {/* กรณีเป็นเวรที่แลกคนอื่นมา (isSwapped is true) ให้แสดงชื่อเจ้าของเวร */}
+                  {isSwapped && (() => {
+                    const swapInfo = shift.swap || shift.swapMeta!;
+                    return (
+                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                        {swapInfo.swappedWith}
+                      </span>
+                    );
+                  })()}
+
+
                 </div>
                 <div className="text-xs text-text-muted dark:text-zinc-400 font-medium">
                   {shiftInfo?.period || "ทั้งวัน"}
@@ -295,30 +315,40 @@ export default function ActivityCard({
               </div>
             )}
 
-            {/* Sold Details Box (รายละเอียดการขายเวร Refer) */}
-            {isSoldOut && shift.saleMeta && (
-              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 p-2.5 text-xs border border-emerald-200 dark:border-emerald-800/80 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-1.5">
-                  <div className="flex items-center gap-1.5 font-bold text-emerald-900 dark:text-emerald-200 text-xs">
-                    <Ambulance className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>
-                      🚑 ขายให้:{" "}
-                      <strong className="text-text-main dark:text-white font-extrabold">
-                        {shift.saleMeta.buyerName}
-                      </strong>
-                    </span>
-                  </div>
+            {/* Transferred Details Box */}
+            {isSoldOut && (shift.transferMeta || shift.saleMeta) && (() => {
+              const recipient = shift.transferMeta?.recipientName || shift.saleMeta?.buyerName || "ผู้อื่น";
+              const transferredDate = shift.transferMeta?.transferredDate || shift.saleMeta?.soldDate;
+              const note = shift.transferMeta?.note || shift.saleMeta?.note;
 
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
-                        shift.saleMeta.paymentStatus === "paid"
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+              return (
+                <div
+                  className={`rounded-xl p-2.5 text-xs border space-y-1.5 ${
+                    isOT
+                      ? "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/80"
+                      : "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <div
+                      className={`flex items-center gap-1.5 font-bold text-xs ${
+                        isOT
+                          ? "text-rose-900 dark:text-rose-200"
+                          : "text-emerald-900 dark:text-emerald-200"
                       }`}
                     >
-                      {shift.saleMeta.paymentStatus === "paid" ? "ชำระแล้ว" : "ยังไม่ชำระ"}
-                    </span>
+                      {isOT ? (
+                        <Flame className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                      ) : (
+                        <Ambulance className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      )}
+                      <span>
+                        {isOT ? "ยกเวร OT ให้: " : "ยกเวร Refer ให้: "}
+                        <strong className="text-text-main dark:text-white font-extrabold">
+                          {recipient}
+                        </strong>
+                      </span>
+                    </div>
 
                     {onUndoSellShift && (
                       <button
@@ -333,7 +363,7 @@ export default function ActivityCard({
                         title={
                           isLocked
                             ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
-                            : "ยกเลิกการขายเวรและคืนสถานะเวรปกติ"
+                            : "ยกเลิกการยกเวรและคืนสถานะเวรปกติ"
                         }
                       >
                         {isLocked ? (
@@ -341,33 +371,25 @@ export default function ActivityCard({
                         ) : (
                           <RotateCcw className="h-3 w-3" />
                         )}
-                        <span>ยกเลิกการขาย</span>
+                        <span>ยกเลิกการยกเวร</span>
                       </button>
                     )}
                   </div>
-                </div>
 
-                <div className="flex items-center justify-between text-[11px] text-emerald-800 dark:text-emerald-300 pl-5">
-                  <span>
-                    ราคาขาย:{" "}
-                    <strong className="font-extrabold text-emerald-700 dark:text-emerald-200">
-                      ฿{((shift.saleMeta.salePriceSatang || 0) / 100).toLocaleString()}
-                    </strong>
-                  </span>
-                  {shift.saleMeta.soldDate && (
-                    <span className="text-text-muted dark:text-zinc-400">
-                      ขายเมื่อ: {shift.saleMeta.soldDate}
-                    </span>
+                  {transferredDate && (
+                    <div className="text-[11px] text-text-muted dark:text-zinc-400 pl-5">
+                      ยกให้เมื่อ: {transferredDate}
+                    </div>
+                  )}
+
+                  {note && (
+                    <p className="text-[11px] text-text-muted dark:text-zinc-300 pl-5">
+                      📝 {note}
+                    </p>
                   )}
                 </div>
-
-                {shift.saleMeta.note && (
-                  <p className="text-[11px] text-text-muted dark:text-zinc-300 pl-5">
-                    📝 {shift.saleMeta.note}
-                  </p>
-                )}
-              </div>
-            )}
+              );
+            })()}
 
             {/* Swap Details Box (ข้อความบอกแลกเวร) */}
             {isSwapped && (shift.swap || shift.swapMeta) && (() => {
@@ -378,15 +400,8 @@ export default function ActivityCard({
                     <div className="flex items-center gap-1.5 font-bold text-sky-900 dark:text-sky-200 text-xs">
                       <ArrowLeftRight className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
                       <span>
-                        🔄 แลกมาจาก:{" "}
-                        <strong className="text-text-main dark:text-white font-extrabold">
-                          {swapInfo.swappedWith}
-                        </strong>
-                        {swapInfo.originalOwner && (
-                          <span className="ml-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                            (เจ้าของเดิม: {swapInfo.originalOwner})
-                          </span>
-                        )}
+                        {/* วันที่เอาไปแลก */}
+                        {swapInfo.swapDate}
                       </span>
                     </div>
 
@@ -482,8 +497,8 @@ export default function ActivityCard({
 
           {/* Actions */}
           <div className="flex items-center gap-1 shrink-0">
-            {/* Action Button: ขายเวร Refer (สำหรับเวร Refer ที่ active) */}
-            {isRefer && !isSoldOut && !isSwappedOut && onSellShift && (
+            {/* Action Button: ขายเวร (สำหรับเวร Refer หรือ OT ที่ active) */}
+            {(isRefer || isOT) && !isSoldOut && !isSwappedOut && onSellShift && (
               <button
                 type="button"
                 disabled={isLocked}
@@ -491,13 +506,15 @@ export default function ActivityCard({
                 className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all shadow-2xs cursor-pointer ${
                   isLocked
                     ? "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-zinc-800 dark:text-zinc-500 opacity-60"
-                    : "bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95"
+                    : isOT
+                      ? "bg-shift-red text-white hover:bg-rose-700 active:scale-95"
+                      : "bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95"
                 }`}
-                title={isLocked ? "เวรล็อกอยู่ ไม่สามารถขายได้" : "ขายเวร Refer นี้"}
+                title={isLocked ? "เวรล็อกอยู่" : isOT ? "ยกเวร OT นี้ให้คนอื่น" : "ยกเวร Refer นี้ให้คนอื่น"}
               >
-                <Ambulance className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">ขายเวร Refer</span>
-                <span className="sm:hidden">ขาย</span>
+                {isOT ? <Flame className="h-3.5 w-3.5" /> : <Ambulance className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">ยกให้คนอื่น</span>
+                <span className="sm:hidden">ยกให้</span>
               </button>
             )}
 

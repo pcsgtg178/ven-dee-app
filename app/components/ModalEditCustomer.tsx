@@ -71,9 +71,6 @@ export default function ModalEditCustomer({
               <h2 className="text-base font-bold text-text-main dark:text-white">
                 แก้ไขข้อมูลลูกค้า
               </h2>
-              <p className="text-[11px] text-text-muted dark:text-zinc-400">
-                รหัสลูกค้า: {customer.id}
-              </p>
             </div>
           </div>
           <button

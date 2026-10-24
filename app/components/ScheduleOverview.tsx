@@ -223,7 +223,7 @@ export default function ScheduleOverview() {
   const filteredActivities = useMemo(() => {
     const activeActivities = activities.filter((item) => {
       if (item.type === "shift") {
-        return item.status !== "swapped_out" && item.status !== "cancelled" && item.status !== "sold_out";
+        return item.status === "active";
       }
       return true;
     });
@@ -262,7 +262,7 @@ export default function ScheduleOverview() {
       .filter((item) => item.date === selectedDateStr)
       .filter((item) => {
         if (item.type === "shift") {
-          return item.status !== "swapped_out" && item.status !== "cancelled" && item.status !== "sold_out";
+          return item.status === "active";
         }
         return true;
       })
@@ -274,7 +274,7 @@ export default function ScheduleOverview() {
     const activeItems = activities.filter((item) => {
       // ซ่อนเวรเก่าที่ถูกแลกออกแล้ว (swapped_out), เวรที่ขาย (sold_out) และเวรที่ถูกยกเลิก (cancelled) ออกจากปฏิทิน
       if (item.type === "shift") {
-        return item.status !== "swapped_out" && item.status !== "cancelled" && item.status !== "sold_out";
+        return item.status === "active";
       }
       return true;
     });
@@ -329,6 +329,7 @@ export default function ScheduleOverview() {
           isRefer,
           isSwapped,
           swappedWith,
+          receivedFrom: shift.category === "red" ? shift.receivedFrom : undefined,
           shiftType: shift.shiftType,
           category: shift.category,
         };
@@ -336,7 +337,7 @@ export default function ScheduleOverview() {
 
       // หากมีหลายเวรในวันเดียวกัน ให้รวมเป็น <code> / <code> เช่น 2 / 3
       const titleText = shiftDetails
-        .map((d) => `${d.code}${d.swappedWith ? `(${d.swappedWith})` : ""}`)
+        .map((d) => `${d.code}${d.swappedWith ? `(${d.swappedWith})` : d.receivedFrom ? `(${d.receivedFrom})` : ""}`)
         .join(" / ");
 
       eventsResult.push({
@@ -754,13 +755,12 @@ export default function ScheduleOverview() {
               },
               {
                 label: "สถานะปัจจุบัน",
-                value: "แลกออกแล้ว (Swapped Out)",
+                value: "แลกออกแล้ว",
               },
             ],
             warningNotice: (
               <span>
-                ⚠️ ตามกฎ <strong>DOMAIN_RULES.md (ข้อ 2.3.2)</strong> เวรที่ถูกแลกออกไปแล้วจะไม่สามารถลบถาวรได้{" "}
-                การกดปุ่มด้านล่างจะดำเนินการ <strong>กู้คืนเวรเดิมของคุณ และยกเลิกเวรที่ได้รับมาจากการแลกให้อัตโนมัติ</strong>
+                เวรที่ถูกแลกออกไปแล้วจะไม่สามารถลบถาวรได้ เพื่อรักษาประวัติการแลก การกดปุ่มด้านล่างจะกู้คืนเวรเดิมของคุณ และยกเลิกเวรที่ได้รับมาให้อัตโนมัติ
               </span>
             ),
             onConfirm: () => handleExecuteUndoSwap(shift),
@@ -944,7 +944,7 @@ export default function ScheduleOverview() {
             <Link
               href="/settings"
               className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-subtle text-text-muted hover:bg-slate-200 hover:text-text-main dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-white transition-all cursor-pointer shadow-2xs"
-              title="การตั้งค่า (Settings)"
+              title="การตั้งค่า"
               aria-label="การตั้งค่า"
             >
               <Settings className="h-4 w-4" />

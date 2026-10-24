@@ -2,7 +2,7 @@ export type ShiftType = "morning" | "afternoon" | "night" | "r1" | "r2" | "off" 
 
 export type ShiftCategory = "black" | "red" | "green" | "gray" | "purple"; // ดำ = ปกติแลกได้ขึ้นครบ, แดง = OT, เขียว = เวร R (Refer)
 
-export type ShiftStatus = "active" | "swapped_out" | "cancelled" | "sold_out";
+export type ShiftStatus = "active" | "swapped_out" | "cancelled" | "sold_out" | "transferred";
 
 export interface SwapTrailNode {
   id: string;
@@ -31,6 +31,12 @@ export interface SaleMetadata {
   note?: string; // บันทึกเพิ่มเติม
 }
 
+export interface TransferMetadata {
+  recipientName: string; // ชื่อพยาบาลผู้รับเวร/ขึ้นแทน [Required]
+  transferredDate: string; // วันที่ทำรายการยกเวร (YYYY-MM-DD) [Required]
+  note?: string; // หมายเหตุเพิ่มเติม [Optional]
+}
+
 export interface ShiftSwapRecord {
   id: string;
   givenShiftId: string; // ID of the shift given away (status: 'swapped_out')
@@ -54,6 +60,8 @@ export interface ShiftRecord {
   swap?: ShiftSwapRecord; // Joined swap record details
   swapMeta?: SwapMetadata; // Backwards-compatible mapped swap metadata
   saleMeta?: SaleMetadata;
+  transferMeta?: TransferMetadata; // ข้อมูลการยกเวรให้ผู้อื่น (Phase 11: One-Way Shift Transfer)
+  receivedFrom?: string; // ชื่อพยาบาลที่รับเวรมา (สำหรับเวร OT เช่น "พี่เปิ้ล")
   department?: string;
   note?: string;
   createdAt: string;

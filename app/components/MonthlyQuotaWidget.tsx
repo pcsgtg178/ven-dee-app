@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   ShieldCheck,
   CheckCircle2,
@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import moment from "moment";
 import "moment/locale/th";
-import { calculateMonthlyBlackShiftQuota } from "../../lib/quota";
 
 interface MonthlyQuotaWidgetProps {
   currentMonthStr?: string;
@@ -33,21 +32,12 @@ export default function MonthlyQuotaWidget({
   quota,
   remaining,
   isMet,
-  quotaHours,
-  weekdaysCount,
   onQuotaChange,
 }: MonthlyQuotaWidgetProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(String(quota));
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const quotaCalc = useMemo(
-    () => calculateMonthlyBlackShiftQuota(currentMonthStr),
-    [currentMonthStr]
-  );
-  const effectiveWeekdays = weekdaysCount ?? quotaCalc.weekdaysCount;
-  const effectiveHours = quotaHours ?? quotaCalc.blackShiftHours;
 
   const percentage = Math.min(100, Math.round((blackCount / quota) * 100));
 
@@ -241,25 +231,6 @@ export default function MonthlyQuotaWidget({
                     {quota} เวร/เดือน
                   </span>
                 )}
-              </div>
-
-              {/* 2-Step Quota Formula Explanation */}
-              <div className="rounded-xl border border-surface-subtle bg-surface-subtle/50 px-2.5 py-2 text-[10.5px] text-text-muted dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-400">
-                <div className="flex items-center gap-1 font-semibold text-text-main dark:text-zinc-200">
-                  <span>⏱️ กฎการคำนวณโควต้าเวรดำ:</span>
-                </div>
-                <div className="mt-1 space-y-0.5 pl-3 text-[10.5px]">
-                  <div>
-                    1. ชม.เวรดำ = วันทำการ จ-ศ ({effectiveWeekdays} วัน) × 8 ชม. ={" "}
-                    <strong>{effectiveHours} ชม.</strong>
-                  </div>
-                  <div>
-                    2. แปลงเป็นจำนวนเวร = {effectiveHours} ชม. ÷ 8 ชม. ={" "}
-                    <strong className="text-primary dark:text-emerald-400">
-                      {quotaCalc.quotaShifts} เวร
-                    </strong>
-                  </div>
-                </div>
               </div>
             </div>
 

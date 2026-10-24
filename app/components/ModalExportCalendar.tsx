@@ -187,9 +187,6 @@ export default function ModalExportCalendar({
               >
                 ส่งออกปฏิทิน iPhone / iOS
               </h2>
-              <p className="text-xs text-slate-500 dark:text-zinc-400">
-                ซิงก์เวรและงานลง Apple Calendar สะดวก มองเห็นบน Apple Watch
-              </p>
             </div>
           </div>
           <button
@@ -265,10 +262,7 @@ export default function ModalExportCalendar({
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1.5 flex items-center gap-1">
-                  <Info className="h-3.5 w-3.5 shrink-0 text-sky-500" />
-                  ดาวน์โหลดไฟล์ .ics สามารถเปิดเพื่อเพิ่มลงปฏิทิน Apple หรือ Google Calendar ได้ทันที
-                </p>
+                
               </div>
 
               {/* Filter Options */}
@@ -367,17 +361,7 @@ export default function ModalExportCalendar({
           {/* TAB 2: LIVE WEBCAL SUBSCRIPTION */}
           {activeTab === "subscribe" && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              {/* Highlight Card */}
-              <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 p-4 rounded-2xl">
-                <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold text-sm mb-1">
-                  <Sparkles className="h-4 w-4" />
-                  <span>ซิงก์อัปเดตอัตโนมัติ (Live Sync)</span>
-                </div>
-                <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
-                  สมัครรับปฏิทินครั้งเดียว เมื่อคุณมีการบันทึกเวรใหม่ สลับเวร หรือแก้เวลานัดในแอป
-                  ระบบของ iPhone จะอัปเดตตารางเวรให้โดยอัตโนมัติในพื้นหลัง
-                </p>
-              </div>
+
 
               {/* One-Tap Subscribe Button for iOS Safari */}
               <div>
@@ -389,15 +373,13 @@ export default function ModalExportCalendar({
                   <span>แตะเพื่อสมัครรับบน iPhone ทันที</span>
                   <ExternalLink className="h-3.5 w-3.5 ml-0.5 opacity-80" />
                 </a>
-                <p className="text-[11px] text-center text-slate-500 dark:text-zinc-400 mt-1.5">
-                  (เปิดใน Safari บน iPhone จะเปิดหน้าต่างสมัครรับของ Apple Calendar ขึ้นมาทันที)
-                </p>
+                
               </div>
 
               {/* Feed Link Copy Section */}
               <div className="bg-slate-50 dark:bg-zinc-800/50 p-3.5 rounded-2xl border border-slate-200 dark:border-zinc-800 space-y-2">
                 <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 block">
-                  หรือคัดลอกลิงก์ฟีด (Subscription Link)
+                  หรือคัดลอกลิงก์ฟีด
                 </span>
                 <div className="flex items-center gap-2">
                   <input
@@ -431,7 +413,7 @@ export default function ModalExportCalendar({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-zinc-200">
                     <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                    <span>ความปลอดภัยและรหัสโทเค็น (Feed Token)</span>
+                    <span>รหัสโทเค็นความปลอดภัย</span>
                   </div>
                   <button
                     type="button"
@@ -444,10 +426,7 @@ export default function ModalExportCalendar({
                   </button>
                 </div>
 
-                <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-normal">
-                  โทเค็นนี้ใช้สำหรับยืนยันตัวตนตารางเวรส่วนตัวของคุณ
-                  หากต้องการยกเลิกลิงก์เดิมให้กดสร้างโทเค็นใหม่
-                </p>
+                
 
                 {/* Regenerate Confirmation Box */}
                 {showRegenConfirm && (

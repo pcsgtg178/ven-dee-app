@@ -67,6 +67,7 @@
   - Add option to regenerate token if the subscription link is compromised.
 
 ### Phase 6: Refer Shift Selling & Financial Compensation System
+> *หมายเหตุ: การขายเวรใน Phase 6 ได้รับการปรับปรุงใน Phase 11 เป็นระบบ "ยกเวรให้คนอื่นแทน" (One-Way Shift Transfer) สำหรับ Refer และ OT โดยตัดการระบุราคาและการคำนวณทางการเงินออกตามความต้องการของผู้ใช้*
 - [x] **6.1 Server Actions & Data Layer for Refer Shift Selling**
   - Implement `sellShiftAction` and `undoSellShiftAction` in `app/actions/shiftActions.ts` with domain validation (only active & unlocked shifts, atomic update to `status: "sold_out"`, `SaleMetadata` persistence).
   - Update `lib/storage.ts` with `sellShift` and `undoSellShift` client methods and local state synchronization.
@@ -158,24 +159,49 @@
 
 > Suggested order: 9.1 → 9.2 → 10.x (supersedes 9.2 hotfix at root cause) → 9.5 → 9.4. Phase 9.3 applies throughout.
 
-### Phase 11: Sell OT Shift & UI Text Declutter
-- [ ] **11.1 Sell OT Shift (Requirement)**
-  - Allow selling OT shifts (`category === "red"`) in addition to Refer (R1/R2, green), reusing the same `ModalSellShift.tsx` (buyer name, price in Satang, payment status, sold date, note) and the same `sold_out` / `saleMeta` / undo flow.
-  - Sellable rule (client `sellShift` in `lib/storage.ts`, server `sellShiftAction` in `shiftActions.ts`, sell button in `ActivityCard.tsx` / `ScheduleTodoListView.tsx`): shift is `active`, unlocked, and is Refer **or** OT. Button/modal title shows "ขายเวร OT" vs "ขายเวร Refer" by shift category.
-  - OT sale does not affect black shift quota; paid sales count in monthly income (same as Refer). Update `DOMAIN_RULES.md` §2.4 and `PROJECT_RULES.md` §4 (currently Refer-only) and error message text.
-  - Add tests for OT sellable / non-sellable categories (black/gray/purple rejected).
-  - Note: an initial code pass for this was already applied (ActivityCard, shiftActions, storage, ModalSellShift) — needs review/verification before marking done.
-- [ ] **11.2 Remove Non-Essential Text From All Screens (UI Declutter)**
+### Phase 11: One-Way Shift Transfer (ยกเวรให้คนอื่น Refer & OT), บันทึกรับเวร OT & UI Text Declutter
+- [x] **11.1 One-Way Shift Transfer ("ยกให้คนอื่นแทน" สำหรับเวร Refer และ OT)**
+  - **Context & Requirement**: ปรับเปลี่ยน logic การขายเวร Refer และ OT เดิมไปเป็นการ "ยกให้คนอื่นแทน" (One-Way Shift Transfer) เนื่องจากผู้ใช้ไม่ต้องการระบุยอดเงินเพื่อนำมาคำนวณรายได้ใดๆ เพียงต้องการนำเวรออกจากตารางเวรตนเองโดยยกให้ผู้อื่นแบบไม่ใช่การแลกเวร (Non-reciprocal / No swap)
+  - **Remove Financial Calculations**: ตัดการกรอกราคาขาย (Satang Standard), สถานะการชำระเงิน (ค้างชำระ/ชำระแล้ว) และการนำยอดขายเวรไปรวมใน Financial Ledger / แดชบอร์ดรายรับออกทั้งหมด
+  - **Shift Eligibility**: เฉพาะเวร Refer (R1, R2, หมวดสีเขียว) และเวร OT (หมวดสีแดง) ที่มีสถานะ `active` และไม่อยู่ในอดีต/ไม่ได้ล็อค (เวรดำไม่อนุญาตให้ยกแบบทางเดียว ต้องใช้การแลกเวรเพื่อรักษายอด 14 เวร)
+  - **UI & Modal Refactoring (`ModalTransferShift.tsx` / `ActivityCard` / `ScheduleTodoListView`)**:
+    - ปรับปรุง/เปลี่ยนชื่อ `ModalSellShift.tsx` เป็น `ModalTransferShift.tsx` (หัวข้อ modal: "ยกเวรให้คนอื่น" / "ยกเวร Refer" / "ยกเวร OT")
+    - ปรับปุ่ม Action บนการ์ดเวรจาก "ขายเวร" เป็น "ยกให้คนอื่น"
+    - ฟอร์มคงเหลือเฉพาะข้อมูลที่จำเป็น:
+      1. ชื่อผู้รับเวร (`recipientName`) [Required]
+      2. วันที่ยกเวร (`transferredDate` - ค่าเริ่มต้นเป็นวันปัจจุบัน) [Required]
+      3. หมายเหตุเพิ่มเติม (`note`) [Optional]
+    - สถานะเวร: ปรับเป็น `transferred` (หรือ mapping เข้ากับสถานะยกเวร) เพื่อถอดเวรออกจากตารางเวรที่ต้องปฏิบัติหน้าที่
+    - ป้ายสถานะบนการ์ดเวร: แสดง "ยกให้: [ชื่อผู้รับ]"
+    - รองรับการยกเลิกการยกเวร (Undo Transfer): ดึงเวรกลับมาเป็น `active` ได้หากมีการเปลี่ยนใจ
+  - **Data Layer & Server Actions**:
+    - ปรับปรุง Server Action และ Storage API (`transferShiftAction`, `undoTransferShiftAction`, `transferShift`, `undoTransferShift`) ให้บันทึกข้อมูล `transferMeta` แทน `saleMeta` โดยไม่ต้องบันทึก Satang
+
+- [x] **11.2 Record Received OT Shift ("บันทึกการขึ้นเวร เฉพาะ OT - ระบุว่ารับเวรมาจากใคร")**
+  - **Context & Requirement**: เพิ่มเติมการบันทึกการขึ้นเวร เฉพาะหมวดเวร OT (เวรแดง) ให้สามารถบันทึกได้ว่า "รับเวรมาจากใคร" เพื่อรองรับ Use Case ที่ผู้ใช้รับเวร OT มาจากเพื่อนร่วมงานคนอื่นแบบไม่ได้แลกมา (One-Way OT Intake)
+  - **Form Input Integration (`ModalAddTodo.tsx` & `ModalEditShift.tsx`)**:
+    - ในหน้าต่างบันทึกเวร (`ModalAddTodo`) และแก้ไขเวร (`ModalEditShift`) เมื่อผู้ใช้เลือกประเภทเวรและเลือกหมวดเวรเป็น "เวรแดง (OT)" (`category === "red"`):
+      - แสดงช่องกรอกข้อมูล: "รับเวรมาจากใคร (ถ้ามี)" (เช่น "พี่เปิ้ล", "น้องแนน")
+      - ซ่อนช่องกรอกนี้เมื่อเลือกเวรประเภทอื่นที่ไม่ใช่ OT (เช่น เวรดำ, เวร Off, เวร CT)
+  - **Data Layer & Schema Support**:
+    - เพิ่มฟิลด์ `receivedFrom?: string` ในโครงสร้างข้อมูล `ShiftRecord` / `ShiftDetail` และฐานข้อมูล `shifts` (หรือ `metadata` ของเวร)
+    - อัปเดต `saveShiftAction` และ `saveShift` ให้บันทึกและอัปเดตฟิลด์ `receivedFrom` ได้อย่างถูกต้อง
+  - **Display & Calendar Visualization**:
+    - ใน `ScheduleTodoListView`, `ActivityCard`, และ Event Calendar / Day View:
+      - แสดงป้ายกำกับ Badge หรือข้อความบนการ์ดเวร OT ให้ชัดเจน เช่น `OT (รับจาก: พี่เปิ้ล)`
+    - ไม่กระทบต่อการนับยอดเวรดำประจำเดือน (คงโควตาเวรดำ 14 เวรตามเดิม)
+
+- [x] **11.3 Remove Non-Essential Text From All Screens (UI Declutter)**
   - Audit every page/modal and remove explanatory/technical text users don't need (e.g. "Standby 24 ชม." notes, "กฎเวร" rule boxes, "Satang Standard" / "= N สตางค์" hints, "บังคับระบุ", "One-Way Transfer" subtitles, developer/domain jargon, redundant helper paragraphs).
   - Keep: field labels, required `*` markers, validation/error messages, and key action buttons.
-  - Scope: `ModalSellShift`, `ModalShiftSwap`, `ModalEditShift`, `ModalAddTodo`, `ModalAddPersonalEvent`, `ModalEditService`, `ModalEditClinicLog`, `ModalExportCalendar`, `ModalMedicationManager`, `ModalDeleteCustomer`, `MonthlyQuotaWidget`, `ScheduleOverview`, `/dashboard`, `/medications`, `/customers`.
+  - Scope: `ModalTransferShift` (formerly `ModalSellShift`), `ModalShiftSwap`, `ModalEditShift`, `ModalAddTodo`, `ModalAddPersonalEvent`, `ModalEditService`, `ModalEditClinicLog`, `ModalExportCalendar`, `ModalMedicationManager`, `ModalDeleteCustomer`, `MonthlyQuotaWidget`, `ScheduleOverview`, `/dashboard`, `/medications`, `/customers`.
   - Produce a list of removed texts per screen for review before/after the change.
 
 ---
 
 ## 📌 Task Status Summary
-- **Total Tasks**: 41
-- **Completed**: 37
+- **Total Tasks**: 42
+- **Completed**: 40
 - **In Progress**: 0
-- **Pending**: 4
+- **Pending**: 2
 

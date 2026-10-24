@@ -8,6 +8,8 @@ import {
   updateShiftAction,
   swapShiftAction,
   undoSwapShiftAction,
+  transferShiftAction,
+  undoTransferShiftAction,
   sellShiftAction,
   undoSellShiftAction,
   restoreShiftAction,
@@ -47,6 +49,9 @@ import {
 import { unwrap } from "./actionHelper";
 import { isShiftInPast, isDateInPast, getTodayDateStringBangkok } from "./dateUtils";
 import { repairLocalSwapInconsistencies, upgradeShiftsToV3 } from "./swapRepair";
+import { isShiftTransferrable, validateShiftTransferrable, isShiftSellable, validateShiftSellable } from "./shiftTransfer";
+
+export { isShiftTransferrable, validateShiftTransferrable, isShiftSellable, validateShiftSellable };
 
 import {
   Customer,
@@ -57,6 +62,7 @@ import {
   SwapTrailNode,
   ShiftSwapRecord,
   SaleMetadata,
+  TransferMetadata,
   SHIFT_CONFIG,
   SHIFT_CATEGORY_CONFIG,
   Medications,
@@ -834,6 +840,7 @@ export async function saveShift(
     createdAt?: string;
     swapMeta?: any;
     department?: string;
+    receivedFrom?: string;
   }
 ): Promise<ShiftRecord> {
   const current = getShifts();
@@ -888,6 +895,7 @@ export async function saveShift(
       department: shift.department,
       note: shift.note,
       status: targetStatus,
+      receivedFrom: resolvedCategory === "red" ? shift.receivedFrom : undefined,
     });
     createdOrUpdatedShift = unwrap(res);
   } else {
@@ -897,6 +905,7 @@ export async function saveShift(
       category: resolvedCategory,
       department: shift.department,
       note: shift.note,
+      receivedFrom: resolvedCategory === "red" ? shift.receivedFrom : undefined,
     });
     createdOrUpdatedShift = unwrap(res);
   }
@@ -910,6 +919,7 @@ export async function saveShift(
     ...existing,
     ...shift,
     category: resolvedCategory,
+    receivedFrom: resolvedCategory === "red" ? shift.receivedFrom : undefined,
     id: finalId,
     type: "shift",
     status: targetStatus,
@@ -1300,75 +1310,55 @@ export async function undoSwapShift(shiftId: string): Promise<boolean> {
 }
 
 /**
- * Sell a Refer shift (DOMAIN_RULES.md 2.4 Refer Shift Selling & Transfer Rules)
- * - One-way transfer (status: "sold_out")
- * - Does not impact black shift quota (quota: 14)
- * - Frees seller from 24-hr Standby constraint
- * - Records buyerName, salePriceSatang (Integer), soldDate, paymentStatus, and note
+ * Transfer a Refer or OT shift to another person (DOMAIN_RULES.md §2.4 Phase 11)
+ * - One-way transfer (status: "transferred")
+ * - Does not impact black shift quota
+ * - Records recipientName, transferredDate, and optional note (No Satang or financial ledger)
  */
-export async function sellShift(params: {
+export async function transferShift(params: {
   shiftId: string;
-  buyerName: string;
-  salePriceSatang: number;
-  soldDate?: string;
-  paymentStatus?: "unpaid" | "paid";
+  recipientName: string;
+  transferredDate?: string;
   note?: string;
 }): Promise<ShiftRecord> {
   const current = getShifts();
   const shiftIndex = current.findIndex((s) => s.id === params.shiftId);
 
   if (shiftIndex === -1) {
-    throw new Error("ไม่พบเวรที่ต้องการขาย");
+    throw new Error("ไม่พบเวรที่ต้องการยกให้คนอื่น");
   }
 
   const targetShift = current[shiftIndex];
 
-  if (targetShift.status === "sold_out") {
-    throw new Error("เวรนี้ถูกทำรายการขายไปแล้ว");
-  }
+  validateShiftTransferrable({
+    status: targetShift.status,
+    isLocked: targetShift.swapMeta?.isLocked,
+    date: targetShift.date,
+    shiftType: targetShift.shiftType,
+    category: targetShift.category,
+  });
 
-  if (targetShift.status !== "active") {
-    throw new Error("เวรนี้ไม่ได้อยู่ในสถานะพร้อมขาย");
-  }
+  const transferredDate = params.transferredDate || getTodayDateStringBangkok();
 
-  if (targetShift.swapMeta?.isLocked || isShiftInPast(targetShift.date)) {
-    throw new Error("ไม่สามารถขายเวรในอดีตที่ถูกล็อกแล้วได้");
-  }
-
-  const isRefer =
-    targetShift.shiftType === "r1" ||
-    targetShift.shiftType === "r2" ||
-    targetShift.category === "green";
-
-  if (!isRefer) {
-    throw new Error("อนุญาตให้ขายได้เฉพาะเวร Refer (R1, R2) เท่านั้น");
-  }
-
-  const soldDate = params.soldDate || getTodayDateStringBangkok();
-  const paymentStatus = params.paymentStatus || "unpaid";
-
-  const saleMeta: SaleMetadata = {
-    buyerName: params.buyerName.trim(),
-    salePriceSatang: params.salePriceSatang,
-    soldDate,
-    paymentStatus,
+  const transferMeta: TransferMetadata = {
+    recipientName: params.recipientName.trim(),
+    transferredDate,
     note: params.note?.trim() || undefined,
   };
 
   // 1. Supabase update FIRST (Server-First with unwrap)
   let updatedShift: ShiftRecord = {
     ...targetShift,
-    status: "sold_out",
-    saleMeta,
+    status: "transferred",
+    transferMeta,
+    saleMeta: undefined,
   };
 
   if (!params.shiftId.startsWith("shift-")) {
-    const res = await sellShiftAction({
+    const res = await transferShiftAction({
       shiftId: params.shiftId,
-      buyerName: params.buyerName.trim(),
-      salePriceSatang: params.salePriceSatang,
-      soldDate,
-      paymentStatus,
+      recipientName: params.recipientName.trim(),
+      transferredDate,
       note: params.note?.trim(),
     });
     updatedShift = unwrap(res);
@@ -1383,38 +1373,39 @@ export async function sellShift(params: {
 }
 
 /**
- * Undo / Rollback a Refer shift sale (DOMAIN_RULES.md 2.4.5 & 2.5.4)
+ * Undo / Rollback a shift transfer (DOMAIN_RULES.md §2.4.5 & §2.5.4)
  * - Restores status to 'active'
- * - Clears saleMeta
+ * - Clears transferMeta
  * - Permitted only if isLocked === false and shiftDate >= CURRENT_DATE
  */
-export async function undoSellShift(shiftId: string): Promise<ShiftRecord> {
+export async function undoTransferShift(shiftId: string): Promise<ShiftRecord> {
   const current = getShifts();
   const shiftIndex = current.findIndex((s) => s.id === shiftId);
 
   if (shiftIndex === -1) {
-    throw new Error("ไม่พบเวรที่ต้องการยกเลิกการขาย");
+    throw new Error("ไม่พบเวรที่ต้องการยกเลิกการยกเวร");
   }
 
   const targetShift = current[shiftIndex];
 
-  if (targetShift.status !== "sold_out") {
-    throw new Error("เวรนี้ไม่ได้อยู่ในสถานะขายแล้ว");
+  if (targetShift.status !== "transferred" && targetShift.status !== "sold_out") {
+    throw new Error("เวรนี้ไม่ได้อยู่ในสถานะที่ยกให้ผู้อื่น");
   }
 
   if (targetShift.swapMeta?.isLocked || isShiftInPast(targetShift.date)) {
-    throw new Error("ไม่สามารถยกเลิกการขายเวรในอดีตที่ถูกล็อกแล้วได้");
+    throw new Error("ไม่สามารถยกเลิกการยกเวรในอดีตที่ถูกล็อกแล้วได้");
   }
 
   // 1. Supabase rollback FIRST (Server-First with unwrap)
   let restoredShift: ShiftRecord = {
     ...targetShift,
     status: "active",
+    transferMeta: undefined,
     saleMeta: undefined,
   };
 
   if (!shiftId.startsWith("shift-")) {
-    const res = await undoSellShiftAction(shiftId);
+    const res = await undoTransferShiftAction(shiftId);
     restoredShift = unwrap(res);
   }
 
@@ -1424,6 +1415,32 @@ export async function undoSellShift(shiftId: string): Promise<ShiftRecord> {
   triggerSync();
 
   return restoredShift;
+}
+
+/**
+ * Legacy sellShift wrapper delegating to transferShift for backwards compatibility
+ */
+export async function sellShift(params: {
+  shiftId: string;
+  buyerName: string;
+  salePriceSatang?: number;
+  soldDate?: string;
+  paymentStatus?: "unpaid" | "paid";
+  note?: string;
+}): Promise<ShiftRecord> {
+  return transferShift({
+    shiftId: params.shiftId,
+    recipientName: params.buyerName,
+    transferredDate: params.soldDate,
+    note: params.note,
+  });
+}
+
+/**
+ * Legacy undoSellShift wrapper delegating to undoTransferShift for backwards compatibility
+ */
+export async function undoSellShift(shiftId: string): Promise<ShiftRecord> {
+  return undoTransferShift(shiftId);
 }
 
 /**

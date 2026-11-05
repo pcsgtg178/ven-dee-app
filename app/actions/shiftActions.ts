@@ -3,7 +3,12 @@
 import { createClient } from "../../lib/supabase/server";
 import { ShiftRecord, ShiftType, ShiftCategory, ShiftStatus, ActionResult, SwapTrailNode, ShiftSwapRecord } from "../../types/vendee";
 import { checkNightMorningForbidden } from "../../lib/conflictEngine";
-import { isShiftInPast, getTodayDateStringBangkok } from "../../lib/dateUtils";
+import {
+  isShiftInPast,
+  getTodayDateStringBangkok,
+  isReferShift,
+  isReferShiftWithinGracePeriod,
+} from "../../lib/dateUtils";
 
 function mapRowToShiftRecord(row: any, swapRecord?: ShiftSwapRecord | number): ShiftRecord {
   const resolvedSwapRec = typeof swapRecord === "object" && swapRecord !== null ? swapRecord : undefined;
@@ -69,7 +74,6 @@ function mapRowToShiftRecord(row: any, swapRecord?: ShiftSwapRecord | number): S
       }
       : undefined,
     receivedFrom: row.received_from || undefined,
-    department: row.department || undefined,
     note: row.note || undefined,
     createdAt: row.created_at,
   };
@@ -157,7 +161,6 @@ export async function createShiftAction(data: {
   date: string;
   shiftType: ShiftType;
   category?: ShiftCategory;
-  department?: string;
   note?: string;
   receivedFrom?: string;
 }): Promise<ActionResult<ShiftRecord>> {
@@ -206,7 +209,6 @@ export async function createShiftAction(data: {
         shift_date: data.date,
         shift_type: data.shiftType,
         category: data.category || "black",
-        department: data.department || "",
         note: data.note || "",
         received_from: data.category === "red" && data.receivedFrom ? data.receivedFrom.trim() : null,
         status: "active",
@@ -242,7 +244,6 @@ export async function updateShiftAction(
   data: {
     shiftType?: ShiftType;
     category?: ShiftCategory;
-    department?: string;
     note?: string;
     status?: ShiftStatus;
     receivedFrom?: string;
@@ -253,21 +254,26 @@ export async function updateShiftAction(
 
     const { data: shiftRow } = await supabase
       .from("shifts")
-      .select("is_locked, shift_date")
+      .select("is_locked, shift_date, shift_type, category")
       .eq("id", id)
       .single();
 
     if (shiftRow && (shiftRow.is_locked || isShiftInPast(shiftRow.shift_date))) {
-      return {
-        success: false,
-        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถแก้ไขเวรในอดีตที่ถูกล็อกแล้วได้" },
-      };
+      const isReferGrace =
+        isReferShift({ shiftType: shiftRow.shift_type, category: shiftRow.category }) &&
+        isReferShiftWithinGracePeriod(shiftRow.shift_date);
+
+      if (!isReferGrace) {
+        return {
+          success: false,
+          error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถแก้ไขเวรในอดีตที่ถูกล็อกแล้วได้" },
+        };
+      }
     }
 
     const updatePayload: Record<string, any> = {};
     if (data.shiftType !== undefined) updatePayload.shift_type = data.shiftType;
     if (data.category !== undefined) updatePayload.category = data.category;
-    if (data.department !== undefined) updatePayload.department = data.department;
     if (data.note !== undefined) updatePayload.note = data.note;
     if (data.status !== undefined) updatePayload.status = data.status;
     if (data.receivedFrom !== undefined) {
@@ -316,6 +322,54 @@ export async function swapShiftAction(data: {
 }): Promise<ActionResult<{ newShift: ShiftRecord; oldShift: ShiftRecord }>> {
   try {
     const supabase = await createClient();
+
+    // Verify given shift and check safety / grace period constraints upfront
+    const { data: oldShiftRow, error: oldErr } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("id", data.shiftId)
+      .single();
+
+    if (oldErr || !oldShiftRow) {
+      return {
+        success: false,
+        error: { code: "SHIFT_NOT_FOUND", message: "ไม่พบเวรที่ต้องการแลก" },
+      };
+    }
+
+    if (oldShiftRow.status === "swapped_out" || oldShiftRow.status === "sold_out") {
+      return {
+        success: false,
+        error: { code: "SHIFT_ALREADY_SWAPPED", message: "เวรนี้ถูกแลกหรือส่งต่อออกไปแล้ว ไม่สามารถแลกซ้ำได้" },
+      };
+    }
+
+    if (oldShiftRow.is_locked || isShiftInPast(oldShiftRow.shift_date)) {
+      const isReferGrace =
+        isReferShift({ shiftType: oldShiftRow.shift_type, category: oldShiftRow.category }) &&
+        isReferShiftWithinGracePeriod(oldShiftRow.shift_date);
+
+      if (!isReferGrace) {
+        return {
+          success: false,
+          error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถแลกเวรในอดีตที่ถูกล็อกแล้วได้" },
+        };
+      }
+    }
+
+    if (isShiftInPast(data.newDate)) {
+      const isNewRefer =
+        data.newShiftType === "r1" ||
+        data.newShiftType === "r2" ||
+        data.newCategory === "green";
+
+      if (!isNewRefer || !isReferShiftWithinGracePeriod(data.newDate)) {
+        return {
+          success: false,
+          error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถแลกมารับเวรในอดีตที่อยู่นอกช่วงเวลาผ่อนผันได้" },
+        };
+      }
+    }
 
     // 1. Transactional RPC perform_shift_swap (BACKLOG_MIGRATE.md §3)
     const { data: rpcResult, error: rpcErr } = await supabase.rpc("perform_shift_swap", {
@@ -379,33 +433,6 @@ export async function swapShiftAction(data: {
     }
 
     // --- Direct Fallback ---
-    const { data: oldShiftRow, error: oldErr } = await supabase
-      .from("shifts")
-      .select("*")
-      .eq("id", data.shiftId)
-      .single();
-
-    if (oldErr || !oldShiftRow) {
-      return {
-        success: false,
-        error: { code: "SHIFT_NOT_FOUND", message: "ไม่พบเวรที่ต้องการแลก" },
-      };
-    }
-
-    if (oldShiftRow.status === "swapped_out" || oldShiftRow.status === "sold_out") {
-      return {
-        success: false,
-        error: { code: "SHIFT_ALREADY_SWAPPED", message: "เวรนี้ถูกแลกหรือส่งต่อออกไปแล้ว ไม่สามารถแลกซ้ำได้" },
-      };
-    }
-
-    if (oldShiftRow.is_locked || isShiftInPast(oldShiftRow.shift_date)) {
-      return {
-        success: false,
-        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถแลกเวรในอดีตที่ถูกล็อกแล้วได้" },
-      };
-    }
-
     const swapDateStr = getTodayDateStringBangkok();
 
     // 1. Insert new received shift
@@ -416,7 +443,6 @@ export async function swapShiftAction(data: {
         shift_type: data.newShiftType,
         category: data.newCategory || "black",
         status: "active",
-        department: oldShiftRow.department || "",
         note: `เวรที่ได้รับจากการแลกกับ ${data.swappedWith}${data.swapReason ? ` (${data.swapReason})` : ""}`,
         swapped_with: data.swappedWith,
         original_owner: data.originalOwner || null,
@@ -642,10 +668,16 @@ export async function undoSwapShiftAction(
     }
 
     if (shift.is_locked || isShiftInPast(shift.shift_date)) {
-      return {
-        success: false,
-        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)" },
-      };
+      const isReferGrace =
+        isReferShift({ shiftType: shift.shift_type, category: shift.category }) &&
+        isReferShiftWithinGracePeriod(shift.shift_date);
+
+      if (!isReferGrace) {
+        return {
+          success: false,
+          error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)" },
+        };
+      }
     }
 
     let parentId = shift.parent_shift_id;
@@ -670,10 +702,16 @@ export async function undoSwapShiftAction(
       }
 
       if (parentShift.is_locked || isShiftInPast(parentShift.shift_date)) {
-        return {
-          success: false,
-          error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกได้เนื่องจากเวรเดิมผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)" },
-        };
+        const isParentReferGrace =
+          isReferShift({ shiftType: parentShift.shift_type, category: parentShift.category }) &&
+          isReferShiftWithinGracePeriod(parentShift.shift_date);
+
+        if (!isParentReferGrace) {
+          return {
+            success: false,
+            error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกได้เนื่องจากเวรเดิมผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)" },
+          };
+        }
       }
     } else if (shift.status === "swapped_out") {
       // shift is the parent / swapped_out shift
@@ -682,7 +720,7 @@ export async function undoSwapShiftAction(
       // Find children without using .single() to avoid failure when multiple rows exist
       const { data: children, error: childErr } = await supabase
         .from("shifts")
-        .select("id, status, is_locked, shift_date")
+        .select("id, status, is_locked, shift_date, shift_type, category")
         .eq("parent_shift_id", parentId);
 
       if (childErr) {
@@ -692,10 +730,16 @@ export async function undoSwapShiftAction(
       const activeChild = (children || []).find((c) => c.status === "active") || (children || [])[0];
       if (activeChild) {
         if (activeChild.is_locked || isShiftInPast(activeChild.shift_date)) {
-          return {
-            success: false,
-            error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกได้เนื่องจากเวรที่ได้รับมาผ่านเวลาไปแล้ว" },
-          };
+          const isChildReferGrace =
+            isReferShift({ shiftType: activeChild.shift_type, category: activeChild.category }) &&
+            isReferShiftWithinGracePeriod(activeChild.shift_date);
+
+          if (!isChildReferGrace) {
+            return {
+              success: false,
+              error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกได้เนื่องจากเวรที่ได้รับมาผ่านเวลาไปแล้ว" },
+            };
+          }
         }
         childId = activeChild.id;
       }
@@ -703,7 +747,7 @@ export async function undoSwapShiftAction(
       // Check if any child references this shift as parent
       const { data: children } = await supabase
         .from("shifts")
-        .select("id, status, is_locked, shift_date")
+        .select("id, status, is_locked, shift_date, shift_type, category")
         .eq("parent_shift_id", shift.id);
 
       const activeChild = (children || []).find((c) => c.status === "active") || (children || [])[0];
@@ -827,10 +871,16 @@ export async function deleteShiftAction(id: string): Promise<ActionResult<{ dele
     }
 
     if (shift.is_locked || isShiftInPast(shift.shift_date)) {
-      return {
-        success: false,
-        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถลบเวรในอดีตที่ถูกล็อกแล้วได้" },
-      };
+      const isReferGrace =
+        isReferShift({ shiftType: shift.shift_type, category: shift.category }) &&
+        isReferShiftWithinGracePeriod(shift.shift_date);
+
+      if (!isReferGrace) {
+        return {
+          success: false,
+          error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถลบเวรในอดีตที่ถูกล็อกแล้วได้" },
+        };
+      }
     }
 
     if (shift.status === "sold_out") {
@@ -1002,13 +1052,6 @@ export async function transferShiftAction(data: {
       };
     }
 
-    if (shiftRow.is_locked || isShiftInPast(shiftRow.shift_date)) {
-      return {
-        success: false,
-        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเวรในอดีตที่ถูกล็อกแล้วได้" },
-      };
-    }
-
     // Domain Invariant: Refer shifts (r1, r2, green) and OT shifts (red category) are permitted for transfer (Phase 11)
     const isRefer =
       shiftRow.shift_type === "r1" ||
@@ -1024,6 +1067,16 @@ export async function transferShiftAction(data: {
           message: "อนุญาตให้ยกได้เฉพาะเวร Refer (R1, R2) หรือเวร OT (เวรแดง) เท่านั้น",
         },
       };
+    }
+
+    if (shiftRow.is_locked || isShiftInPast(shiftRow.shift_date)) {
+      const isReferGrace = isRefer && isReferShiftWithinGracePeriod(shiftRow.shift_date);
+      if (!isReferGrace) {
+        return {
+          success: false,
+          error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเวรในอดีตที่ถูกล็อกแล้วได้" },
+        };
+      }
     }
 
     const transferMetaObj = {
@@ -1097,10 +1150,18 @@ export async function undoTransferShiftAction(shiftId: string): Promise<ActionRe
     }
 
     if (shiftRow.is_locked || isShiftInPast(shiftRow.shift_date)) {
-      return {
-        success: false,
-        error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกการยกเวรในอดีตที่ถูกล็อกแล้วได้" },
-      };
+      const isRefer =
+        shiftRow.shift_type === "r1" ||
+        shiftRow.shift_type === "r2" ||
+        shiftRow.category === "green";
+      const isReferGrace = isRefer && isReferShiftWithinGracePeriod(shiftRow.shift_date);
+
+      if (!isReferGrace) {
+        return {
+          success: false,
+          error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกการยกเวรในอดีตที่ถูกล็อกแล้วได้" },
+        };
+      }
     }
 
     const { data: updated, error: updateErr } = await supabase
@@ -1169,6 +1230,52 @@ export async function undoSellShiftAction(shiftId: string): Promise<ActionResult
 }
 
 /**
+ * Helper to compute all valid parent shift IDs in swap chains (BACKLOG_ISSUE.md ISSUE-3)
+ */
+async function computeValidSwapParentIds(supabase: any): Promise<Set<string>> {
+  const validParentIds = new Set<string>();
+
+  // 1. Dedicated shift_swaps records
+  const { data: swaps } = await supabase
+    .from("shift_swaps")
+    .select("given_shift_id, received_shift_id");
+  (swaps || []).forEach((sw: any) => {
+    if (sw.given_shift_id) validParentIds.add(sw.given_shift_id);
+  });
+
+  // 2. Non-cancelled child shifts (direct parents and cascading chains)
+  const { data: nonCancelledChildren } = await supabase
+    .from("shifts")
+    .select("id, parent_shift_id, status")
+    .not("parent_shift_id", "is", null)
+    .neq("status", "cancelled");
+
+  (nonCancelledChildren || []).forEach((c: any) => {
+    if (c.parent_shift_id) validParentIds.add(c.parent_shift_id);
+  });
+
+  // 3. Trace ancestor chains up from terminal shifts (active, sold_out, transferred)
+  const childrenById = new Map<string, any>();
+  (nonCancelledChildren || []).forEach((c: any) => childrenById.set(c.id, c));
+
+  const terminals = (nonCancelledChildren || []).filter(
+    (c: any) => c.status === "active" || c.status === "sold_out" || c.status === "transferred"
+  );
+
+  for (const term of terminals) {
+    let curr = term;
+    const visited = new Set<string>();
+    while (curr && curr.parent_shift_id && !visited.has(curr.parent_shift_id)) {
+      visited.add(curr.parent_shift_id);
+      validParentIds.add(curr.parent_shift_id);
+      curr = childrenById.get(curr.parent_shift_id);
+    }
+  }
+
+  return validParentIds;
+}
+
+/**
  * Detect corrupted swap records in the database (BACKLOG.md §9.5, BACKLOG_ISSUE.md §Data repair)
  * 1. Cancelled children that still have parent_shift_id
  * 2. Shifts stuck in 'swapped_out' without an active child
@@ -1201,29 +1308,25 @@ export async function detectCorruptedSwapDataAction(): Promise<
       .eq("shift_type", "afternoon")
       .or("swapped_with.eq.บีม,original_owner.eq.บีม,parent_shift_id.not.is.null");
 
-    // 3. Swapped out parents
+    // 3. Swapped out parents without valid child/chain
     const { data: swappedOutParents } = await supabase
       .from("shifts")
       .select("id, shift_date, shift_type, status, swapped_with")
       .eq("status", "swapped_out");
 
-    const { data: activeChildren } = await supabase
-      .from("shifts")
-      .select("parent_shift_id")
-      .eq("status", "active")
-      .not("parent_shift_id", "is", null);
+    const validParentIds = await computeValidSwapParentIds(supabase);
+    const orphanParents = (swappedOutParents || []).filter((p) => !validParentIds.has(p.id));
 
-    const activeParentIds = new Set((activeChildren || []).map((c) => c.parent_shift_id));
-    const orphanParents = (swappedOutParents || []).filter((p) => !activeParentIds.has(p.id));
-
-    // 4. Lingering swap metadata on active shifts
+    // 4. Lingering swap metadata on active shifts (not received shifts and not valid parents)
     const { data: activeWithSwapMeta } = await supabase
       .from("shifts")
-      .select("id, shift_date, shift_type, swapped_with, original_owner")
+      .select("id, shift_date, shift_type, swapped_with, original_owner, parent_shift_id")
       .eq("status", "active")
       .or("swapped_with.not.is.null,original_owner.not.is.null");
 
-    const lingering = (activeWithSwapMeta || []).filter((s) => !activeParentIds.has(s.id));
+    const lingering = (activeWithSwapMeta || []).filter(
+      (s) => !validParentIds.has(s.id) && !s.parent_shift_id
+    );
 
     return {
       success: true,
@@ -1281,14 +1384,8 @@ export async function repairCorruptedSwapDataAction(): Promise<
       return { success: false, error: { code: "DATABASE_ERROR", message: errCancelled.message } };
     }
 
-    // 3. Find parent shifts that remain swapped_out without active children
-    const { data: activeChildren } = await supabase
-      .from("shifts")
-      .select("parent_shift_id")
-      .eq("status", "active")
-      .not("parent_shift_id", "is", null);
-
-    const activeParentIds = new Set((activeChildren || []).map((c) => c.parent_shift_id));
+    // 3. Find parent shifts that remain swapped_out without valid child or cascading swap chain
+    const validParentIds = await computeValidSwapParentIds(supabase);
 
     const { data: allSwappedOut } = await supabase
       .from("shifts")
@@ -1297,7 +1394,7 @@ export async function repairCorruptedSwapDataAction(): Promise<
 
     const parentsToRestore = (allSwappedOut || [])
       .map((p) => p.id)
-      .filter((id) => !activeParentIds.has(id));
+      .filter((id) => !validParentIds.has(id));
 
     let restoredCount = 0;
     if (parentsToRestore.length > 0) {
@@ -1320,16 +1417,16 @@ export async function repairCorruptedSwapDataAction(): Promise<
       restoredCount = restored?.length || 0;
     }
 
-    // 4. Clear lingering swap metadata on active shifts without active child
+    // 4. Clear lingering swap metadata on active shifts without active child or parent_shift_id
     const { data: activeWithMeta } = await supabase
       .from("shifts")
-      .select("id")
+      .select("id, parent_shift_id")
       .eq("status", "active")
       .or("swapped_with.not.is.null,original_owner.not.is.null");
 
     const lingeringToClear = (activeWithMeta || [])
-      .map((s) => s.id)
-      .filter((id) => !activeParentIds.has(id));
+      .filter((s) => !validParentIds.has(s.id) && !s.parent_shift_id)
+      .map((s) => s.id);
 
     let clearedCount = 0;
     if (lingeringToClear.length > 0) {

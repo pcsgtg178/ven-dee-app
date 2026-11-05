@@ -1,12 +1,13 @@
 # BACKLOG_ISSUE — Issue ที่ผู้ใช้แจ้ง
 
-สถานะ: **Phase 9 Resolved (ISSUE-1 Solved + ISSUE-2 Hotfix & Server-First Applied)**
+สถานะ: **Resolved (ISSUE-1, ISSUE-2, and ISSUE-3 Cascading Swap Solved & Verified)**
 ความสัมพันธ์: Phase 10 [BACKLOG_MIGRATE.md](./BACKLOG_MIGRATE.md) (แยก `shift_swaps`) จะต่อยอดโครงสร้างให้เป็นตารางแยกและ RPC เต็มรูปแบบ
 
 | ID | หัวข้อ | Severity | ประเภท |
 |---|---|---|---|
 | ISSUE-1 | บันทึกงานคลินิกแล้วไม่พบใน DB | **High** (data loss) | Missing persistence |
 | ISSUE-2 | คืนเวรแล้วข้อมูลแลกเวรค้าง/เวรเดิมถูกใส่เป็นของคนอื่น | **High** (data corruption) | Logic + error handling |
+| ISSUE-3 | แลกเวรเป็นทอดๆ แล้วเวรต้นทางกลับมาแสดงซ้ำ (Cascading Swap / False Orphan Repair) | **High** (UI / state corruption) | Auto-repair logic flaw |
 
 ---
 
@@ -139,6 +140,64 @@ SELECT * FROM public.shifts WHERE shift_date = '2026-11-03' ORDER BY shift_type,
 - [x] Reload/sync แล้ว UI ตรงกับ DB
 - [x] เวรที่ผ่านไปแล้วจริง (ตามเวลาจริง) คืนไม่ได้ ทั้ง client และ server
 - [x] Test: unit/integration สำหรับ swap → undo → state ตรง DB (รวมกรณี fail กลางทาง)
+
+---
+
+## ISSUE-3: แลกเวรเป็นทอดๆ แล้วเวรต้นทางกลับมาแสดงซ้ำ (Cascading Swap / False Orphan Repair)
+
+### สถานการณ์ที่ผู้ใช้เจอ (ยืนยันจาก DB จริง เมื่อ 3 พ.ย. 2026)
+1. ผู้ใช้มี **เวรบ่าย 29 พ.ย. 2026 (Shift A: `f57fbbe7-...`)**
+2. นำไปแลกกับ "พี่ไกร" ได้ **เวรบ่าย 30 พ.ย. 2026 (Shift B: `bbca5b20-...`)**
+   - Shift A เปลี่ยนสถานะเป็น `swapped_out` ซ่อนจากตารางเวรตามปกติ ถูกต้อง
+3. ต่อมา นำ **เวรบ่าย 30 พ.ย. 2026 (Shift B)** ไปแลกต่อกับ "บีม" ได้ **เวรเช้า 12 พ.ย. 2026 (Shift C: `43dce317-...`)**
+4. **พบบัค:** **เวรบ่าย 29 พ.ย. (Shift A)** กลับมาโผล่แสดงเป็นเวรปกติ (`active`) บนตารางเวรอีกครั้ง ทั้งๆ ที่ไม่ได้กดยกเลิกการแลก
+
+### ข้อมูลบนฐานข้อมูลจริง (Supabase)
+- **Shift A (29 พ.ย. บ่าย):** `status: swapped_out`, `swap_id: 49a558b8-...` (ถูกต้อง)
+- **Shift B (30 พ.ย. บ่าย):** `status: swapped_out`, `parent_shift_id: Shift A`, `swap_id: 2f25f9a6-...` (ถูกต้อง)
+- **Shift C (12 พ.ย. เช้า):** `status: active`, `parent_shift_id: Shift B` (ถูกต้อง)
+- ในตาราง `shift_swaps` มีประวัติการแลกครบทั้ง 2 ทอด (แลกกับพี่ไกร เมื่อ 11:55:38 น. และแลกต่อกับบีม เมื่อ 11:56:01 น.)
+- **ข้อสรุปสำคัญ:** ข้อมูลบนฐานข้อมูล Supabase ถูกต้อง แต่ถูก Logic Client-Side Mutate สถานะใน LocalStorage/UI ให้กลายเป็น `active`
+
+### Root causes (ยืนยันจากโค้ด)
+
+**A. ฟังก์ชัน Auto-Repair `repairLocalSwapInconsistencies` กรองเฉพาะเวรลูกที่ `active`**
+ใน [lib/swapRepair.ts#L33-L50](./lib/swapRepair.ts#L33-L50):
+```typescript
+const activeParentIds = new Set(
+  filtered
+    .filter((s) => s.status === "active" && (s.swap?.givenShiftId || s.swapMeta?.parentShiftId))
+    .map((s) => s.swap?.givenShiftId || s.swapMeta!.parentShiftId!)
+);
+```
+- ใน Chain การแลก (A ➔ B ➔ C): Shift B ถูกแลกออกไปจึงมีสถานะเป็น `swapped_out` (ไม่ใช่ `active`)
+- ฟังก์ชันจึงข้าม Shift B ทำให้ parent ID ของ Shift A ไม่ถูกนับรวมใน `activeParentIds` (มีเฉพาะ `{ B }`)
+- เมื่อวนลูปตรวจสอบเวรที่เป็น `swapped_out`:
+  - ตรวจ Shift A: `!activeParentIds.has(A.id)` เป็นจริง!
+  - ฟังก์ชันเข้าใจผิดว่า Shift A เป็น **"เวรที่เคยถูก swap ออกไปแต่ไม่มีลูกเหลืออยู่ (Orphan)"**
+  - จึงสั่ง Force-Restore Shift A กลับมาเป็น `status = 'active'` และล้าง `swapMeta` / `swapId` ทิ้งทันที!
+
+**B. Auto-Repair ถูกเรียกทำงานอัตโนมัติในทุกๆ การอ่านข้อมูล**
+- ใน [lib/storage.ts#L831](./lib/storage.ts#L831): ฟังก์ชัน `getShifts()` เรียก `repairLocalSwapInconsistencies(parsed)` ทุกครั้งที่โหลดเวร และเซฟทับลง `localStorage` ทันทีที่ `modified === true`
+- ใน [lib/storage.ts#L408](./lib/storage.ts#L408): ฟังก์ชัน `syncWithDatabase()` เรียก `repairLocalSwapInconsistencies(shiftsRes.value.data)` ซ้ำอีกครั้งตอนดึงข้อมูลจาก Supabase ทำให้แม้รีเฟรชหน้าจอก็ยังถูกแปลงกลับมาเป็น `active`
+
+**C. Server Actions มีสมมติฐานเดียวกัน**
+- ใน [app/actions/shiftActions.ts#L1210-L1217](./app/actions/shiftActions.ts#L1210-L1217) (`detectCorruptedSwapDataAction`) และบรรทัดที่ 1284–1300 (`repairCorruptedSwapDataAction`) ต่างก็ใช้ `.eq("status", "active")` ในการหา child จึงมองว่า Shift A เป็น orphan เช่นเดียวกัน
+
+### แนวทางแก้
+1. **แก้ `repairLocalSwapInconsistencies` ใน `lib/swapRepair.ts`:**
+   - ในการหา valid parent IDs ต้องนับเวรลูกที่อยู่ในสถานะ `swapped_out`, `sold_out`, หรือ `transferred` ด้วย (ไม่ใช่เฉพาะ `active`) หรือ Traverse Chain ตรวจสอบจนถึงปลายทาง
+   - เวรบรรพบุรุษที่มีลูกอยู่ในห่วงโซ่การแลก (Chain Swap) จะต้องไม่ถูก restore กลับเป็น `active`
+2. **แก้ Server Actions ใน `app/actions/shiftActions.ts`:**
+   - ปรับ `detectCorruptedSwapDataAction` และ `repairCorruptedSwapDataAction` ให้รองรับ chain swap
+3. **เพิ่ม Unit Test สำหรับ Cascading Swap Repair:**
+   - เพิ่มเคสทดสอบ Chain A ➔ B ➔ C ใน `lib/__tests__/swapUndoRepair.test.ts` เพื่อป้องกันไม่ให้เกิด Regression ในอนาคต
+
+### Acceptance criteria
+- [x] แลกเวร A ➔ B แล้วแลกต่อ B ➔ C → เวร A และ B ต้องคงสถานะ `swapped_out` ไม่โผล่ขึ้นมาในตารางเวร
+- [x] เมื่อเรียก `repairLocalSwapInconsistencies` กับข้อมูลเวรใน Chain จะต้องไม่ flag เวร A เป็น orphan และไม่เปลี่ยนกลับเป็น `active`
+- [x] เมื่อ reload/sync หน้าจอ เวร A ยังคงซ่อนอยู่ตามปกติ และเวร C แสดงผลเป็น `active`
+- [x] Unit test สำหรับ cascading swap repair ผ่าน 100%
 
 ---
 

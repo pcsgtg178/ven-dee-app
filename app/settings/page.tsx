@@ -34,6 +34,7 @@ import {
   getPersonalEvents,
   syncAllDataFromApi,
   subscribeToSyncState,
+  isDbSyncDisabled,
 } from "../../lib/storage";
 
 type ThemeOption = "light" | "dark" | "system";
@@ -48,6 +49,7 @@ export default function SettingsPage() {
   const [isOnline, setIsOnline] = useState<boolean | null>(true);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [isDevTestMode, setIsDevTestMode] = useState(false);
 
   // Data counts
   const [counts, setCounts] = useState({
@@ -121,6 +123,12 @@ export default function SettingsPage() {
     window.addEventListener("offline", handleOffline);
     setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
 
+    setIsDevTestMode(isDbSyncDisabled());
+    const handleConfigChange = () => {
+      setIsDevTestMode(isDbSyncDisabled());
+    };
+    window.addEventListener("vendee_sync_config_changed", handleConfigChange);
+
     // Sync state subscription
     const unsubSync = subscribeToSyncState((state) => {
       setIsSyncing(state.isSyncing);
@@ -133,6 +141,7 @@ export default function SettingsPage() {
       mediaQuery.removeEventListener("change", handleMediaChange);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("vendee_sync_config_changed", handleConfigChange);
       unsubSync();
     };
   }, [refreshCounts]);
@@ -174,6 +183,13 @@ export default function SettingsPage() {
     if (isSyncing) return;
     setIsSyncing(true);
     setSyncMessage(null);
+
+    if (isDbSyncDisabled()) {
+      setIsSyncing(false);
+      setSyncMessage("กำลังทำงานในโหมดทดสอบในเครื่อง (Local Test Only): ปิดการซิงก์ฐานข้อมูลเพื่อความปลอดภัย");
+      setTimeout(() => setSyncMessage(null), 4000);
+      return;
+    }
 
     try {
       const res = await syncAllDataFromApi();
@@ -356,48 +372,75 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Online / Offline Status Badge */}
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
-                isOnline
-                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300"
-                  : "bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300"
-              }`}
-            >
-              {isOnline ? (
-                <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <Wifi className="h-3 w-3" />
-                  <span>ออนไลน์</span>
-                </>
-              ) : (
-                <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                  <WifiOff className="h-3 w-3" />
-                  <span>ออฟไลน์</span>
-                </>
-              )}
-            </span>
+            {/* Online / Offline / Test Mode Status Badge */}
+            {isDevTestMode ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-extrabold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                <ShieldCheck className="h-3 w-3" />
+                <span>โหมดทดสอบในเครื่อง</span>
+              </span>
+            ) : (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+                  isOnline
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300"
+                    : "bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300"
+                }`}
+              >
+                {isOnline ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <Wifi className="h-3 w-3" />
+                    <span>ออนไลน์</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                    <WifiOff className="h-3 w-3" />
+                    <span>ออฟไลน์</span>
+                  </>
+                )}
+              </span>
+            )}
           </div>
+
+          {/* Test Mode Notice Banner */}
+          {isDevTestMode && (
+            <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <span>เปิดโหมดทดสอบในเครื่อง (Local Test Only)</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-amber-700/90 dark:text-amber-300/80">
+                ระบบจะไม่ซิงก์ข้อมูลหรือบันทึกข้อมูลใดๆ ลงฐานข้อมูล Supabase ขณะทดสอบ (ข้อมูลจะถูกจัดเก็บใน localStorage ภายในเครื่องเท่านั้น)
+              </p>
+            </div>
+          )}
 
           {/* Sync Time Status Bar */}
           <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/40 space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="text-text-muted dark:text-zinc-400">ซิงก์ล่าสุด:</span>
               <span className="font-bold text-text-main dark:text-zinc-200">
-                {lastSyncTime || "ยังไม่มีข้อมูลบันทึก"}
+                {isDevTestMode ? "ปิดการซิงก์ (โหมดทดสอบ)" : lastSyncTime || "ยังไม่มีข้อมูลบันทึก"}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-text-muted dark:text-zinc-400">สถานะการทำงาน:</span>
               <span
                 className={`font-extrabold ${
-                  isSyncing
+                  isDevTestMode
+                    ? "text-amber-600 dark:text-amber-400"
+                    : isSyncing
                     ? "text-sky-600 dark:text-sky-400 animate-pulse"
                     : "text-emerald-600 dark:text-emerald-400"
                 }`}
               >
-                {isSyncing ? "กำลังเชื่อมต่อและซิงก์..." : "พร้อมใช้งาน (Synchronized)"}
+                {isDevTestMode
+                  ? "ทำงานแบบออฟไลน์ในเครื่อง (Local Test Only)"
+                  : isSyncing
+                  ? "กำลังเชื่อมต่อและซิงก์..."
+                  : "พร้อมใช้งาน (Synchronized)"}
               </span>
             </div>
           </div>

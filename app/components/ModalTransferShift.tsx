@@ -13,7 +13,7 @@ import {
 import moment from "moment";
 import "moment/locale/th";
 import { ShiftRecord, SHIFT_CONFIG } from "../../types/vendee";
-import { transferShift } from "../../lib/storage";
+import { transferShift, isShiftInPast, isReferShift } from "../../lib/storage";
 
 export interface ModalTransferShiftProps {
   isOpen: boolean;
@@ -50,6 +50,8 @@ export default function ModalTransferShift({
   if (!isOpen || !shift) return null;
 
   const isOT = shift.category === "red";
+  const isRefer = isReferShift(shift);
+  const isRetroactiveRefer = isRefer && isShiftInPast(shift.date);
   const shiftInfo = SHIFT_CONFIG[shift.shiftType];
   const formattedShiftDate = moment(shift.date).isValid()
     ? moment(shift.date).locale("th").format("ddddที่ D MMMM YYYY")
@@ -163,6 +165,14 @@ export default function ModalTransferShift({
           <div className="flex items-center gap-2 rounded-2xl bg-rose-50 p-3 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
             <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
             <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Retroactive Warning Alert Banner (Phase 12.3) */}
+        {isRetroactiveRefer && (
+          <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200 border border-amber-200 dark:border-amber-900/60">
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <span>คุณกำลังทำรายการย้อนหลังสำหรับเวร Refer โปรดตรวจสอบวันที่และชื่อผู้รับเวรให้ถูกต้อง</span>
           </div>
         )}
 

@@ -40,6 +40,7 @@ import {
   getMonthlyBlackShiftStats,
   syncAllDataFromApi,
   subscribeToSyncState,
+  isDbSyncDisabled,
 } from "../../lib/storage";
 import ModalAddTodo from "./ModalAddTodo";
 import ModalAddPersonalEvent from "./ModalAddPersonalEvent";
@@ -54,7 +55,7 @@ import BottomNav from "./BottomNav";
 import ModalConfirmAction, { ConfirmVariant } from "./ModalConfirmAction";
 import ModalExportCalendar from "./ModalExportCalendar";
 import { compareEventsByStartTime } from "../../lib/sortEvents";
-import { isShiftInPast } from "../../lib/dateUtils";
+import { isShiftInPast, isShiftLocked } from "../../lib/dateUtils";
 
 type ConfirmModalState =
   | {
@@ -159,8 +160,9 @@ export default function ScheduleOverview() {
     setActivities(getAllActivities());
   }, []);
 
-  // Background sync with backend API (http://localhost:8080/api/v1)
+  // Background sync with backend API (skipped in local test mode)
   const syncApiData = useCallback(async () => {
+    if (isDbSyncDisabled()) return;
     try {
       setIsSyncing(true);
       await syncAllDataFromApi();
@@ -529,7 +531,7 @@ export default function ScheduleOverview() {
 
   // 1. Request Undo Swap -> Show modal
   const handleRequestUndoSwap = (shift: ShiftRecord) => {
-    if ((shift.swapMeta?.isLocked ?? false) || isShiftInPast(shift.date)) return;
+    if (isShiftLocked(shift)) return;
     setConfirmActionState({ type: "undoSwap", shift });
   };
 

@@ -19,7 +19,7 @@ import {
   SHIFT_CONFIG,
   SHIFT_CATEGORY_CONFIG,
 } from "../../types/vendee";
-import { swapShift, getMonthlyBlackShiftStats } from "../../lib/storage";
+import { swapShift, getMonthlyBlackShiftStats, isShiftInPast } from "../../lib/storage";
 import moment from "moment";
 import "moment/locale/th";
 import ModalConfirmAction from "./ModalConfirmAction";
@@ -200,6 +200,11 @@ export default function ModalShiftSwap({
 
   const shiftInfo = SHIFT_CONFIG[shift.shiftType];
   const catInfo = SHIFT_CATEGORY_CONFIG[shift.category];
+  const isRefer =
+    shift.shiftType === "r1" ||
+    shift.shiftType === "r2" ||
+    shift.category === "green";
+  const isRetroactiveRefer = isRefer && isShiftInPast(shift.date);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -246,6 +251,14 @@ export default function ModalShiftSwap({
             </div>
           )}
 
+          {/* Retroactive Warning Alert Banner (Phase 12.3) */}
+          {isRetroactiveRefer && (
+            <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200 border border-amber-200 dark:border-amber-900/60">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+              <span>คุณกำลังทำรายการย้อนหลังสำหรับเวร Refer โปรดตรวจสอบวันที่และชื่อผู้รับเวรให้ถูกต้อง</span>
+            </div>
+          )}
+
           {/* Current Shift being swapped out */}
           <div className="rounded-2xl border border-blue-200/80 bg-blue-50/50 p-3.5 dark:border-blue-900/50 dark:bg-blue-950/30">
             <span className="text-[11px] font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5 mb-1.5">
@@ -259,8 +272,7 @@ export default function ModalShiftSwap({
                     .format("ddddที่ D MMMM YYYY")}
                 </p>
                 <p className="text-xs text-slate-600 dark:text-zinc-300 mt-0.5">
-                  {shiftInfo.label} ({shiftInfo.period}) •{" "}
-                  {shift.department || "วอร์ดหลัก"}
+                  {shiftInfo.label} ({shiftInfo.period})
                 </p>
               </div>
               <span

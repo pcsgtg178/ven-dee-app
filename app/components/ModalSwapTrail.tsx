@@ -68,7 +68,7 @@ export default function ModalSwapTrail({
             </span>
           </div>
           <p className="mt-1 text-slate-600 dark:text-zinc-300">
-            {shift.shiftType === "night" ? "เวรดึก" : shift.shiftType === "morning" ? "เวรเช้า" : "เวรบ่าย"} • {shift.department || "วอร์ดหลัก"}
+            {shift.shiftType === "night" ? "เวรดึก" : shift.shiftType === "morning" ? "เวรเช้า" : "เวรบ่าย"}
           </p>
           <div className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
             แลกกับ: <strong className="text-slate-700 dark:text-zinc-200">{swappedWith}</strong>

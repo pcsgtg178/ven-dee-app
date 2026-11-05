@@ -37,6 +37,7 @@ import {
   syncAllDataFromApi,
   subscribeToStorage,
   getTodayDateStringBangkok,
+  isDbSyncDisabled,
 } from "../../lib/storage";
 
 type PeriodType = "month" | "week" | "day";
@@ -63,6 +64,7 @@ export default function DashboardPage() {
   }, []);
 
   const syncData = useCallback(async () => {
+    if (isDbSyncDisabled()) return;
     setIsSyncing(true);
     try {
       await syncAllDataFromApi();

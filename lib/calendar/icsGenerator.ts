@@ -1,12 +1,14 @@
-import {
+import type {
   ShiftRecord,
   CustomerServiceRecord,
   PersonalEventRecord,
   ClinicWorkRecord,
   CalendarExportOptions,
+} from "../../types/vendee.ts";
+import {
   SERVICE_CONFIG,
   RELATIONSHIP_CONFIG,
-} from "../../types/vendee";
+} from "../../types/vendee.ts";
 
 /**
  * RFC 5545 Compliant iCalendar Generator Engine for VenDee
@@ -232,18 +234,17 @@ export function generateIcsCalendar(input: IcsGeneratorInput): string {
 
       const uid = `vendee-shift-${shift.id}@vendee.app`;
       const dateIcs = formatIcsDate(shift.date);
-      const dept = shift.department ? shift.department.trim() : "รพ.";
 
       lines.push("BEGIN:VEVENT");
       lines.push(`UID:${uid}`);
       lines.push(`DTSTAMP:${dtstamp}`);
       lines.push("STATUS:CONFIRMED");
 
-      // Shift Time Boundaries & Summaries per DOMAIN_RULES 4.2 & 4.3
+      // Shift Time Boundaries & Summaries per DOMAIN_RULES 4.2 & 4.3 (Phase 13 Emergency Room Specialization)
       if (shift.shiftType === "morning") {
         // Morning: 08:00 - 16:00
         const isRed = shift.category === "red";
-        const summary = isRed ? `🔴 [เวรแดง OT] เช้า ${dept}` : `☀️ [เวรเช้า] ${dept}`;
+        const summary = isRed ? `🔴 [เวรแดง OT] เช้า` : `☀️ [เวรเช้า]`;
 
         lines.push(`DTSTART;TZID=Asia/Bangkok:${dateIcs}T080000`);
         lines.push(`DTEND;TZID=Asia/Bangkok:${dateIcs}T160000`);
@@ -277,7 +278,7 @@ export function generateIcsCalendar(input: IcsGeneratorInput): string {
         // Afternoon: 16:00 - 24:00 (ends next day 00:00:00)
         const isRed = shift.category === "red";
         const nextDayIcs = getNextDayDateString(shift.date);
-        const summary = isRed ? `🔴 [เวรแดง OT] บ่าย ${dept}` : `🌤️ [เวรบ่าย] ${dept}`;
+        const summary = isRed ? `🔴 [เวรแดง OT] บ่าย` : `🌤️ [เวรบ่าย]`;
 
         lines.push(`DTSTART;TZID=Asia/Bangkok:${dateIcs}T160000`);
         lines.push(`DTEND;TZID=Asia/Bangkok:${nextDayIcs}T000000`);
@@ -310,7 +311,7 @@ export function generateIcsCalendar(input: IcsGeneratorInput): string {
       } else if (shift.shiftType === "night") {
         // Night: 00:00 - 08:00
         const isRed = shift.category === "red";
-        const summary = isRed ? `🔴 [เวรแดง OT] ดึก ${dept}` : `🌙 [เวรดึก] ${dept}`;
+        const summary = isRed ? `🔴 [เวรแดง OT] ดึก` : `🌙 [เวรดึก]`;
 
         lines.push(`DTSTART;TZID=Asia/Bangkok:${dateIcs}T000000`);
         lines.push(`DTEND;TZID=Asia/Bangkok:${dateIcs}T080000`);
@@ -376,11 +377,11 @@ export function generateIcsCalendar(input: IcsGeneratorInput): string {
         lines.push("TRIGGER:-PT0M");
         lines.push("END:VALARM");
       } else if (shift.shiftType === "ctm" || shift.shiftType === "cta") {
-        // CT Scan Slots
+        // CT Scan Slots (Phase 13: Emergency Room Specialization)
         const isMorning = shift.shiftType === "ctm";
         const summary = isMorning
-          ? `🩺 [เวร CT เช้า] ${shift.department || "ห้อง CT"}`
-          : `🩺 [เวร CT บ่าย] ${shift.department || "ห้อง CT"}`;
+          ? `🩺 [เวร CT เช้า]`
+          : `🩺 [เวร CT บ่าย]`;
 
         const startTime = isMorning ? "080000" : "120000";
         const endTime = isMorning ? "160000" : "200000";

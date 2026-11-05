@@ -118,15 +118,20 @@
    - เวรสถานะ `transferred` จะถูกซ่อนจากการแสดงผลในตารางเวรทำงานปกติบนปฏิทิน
    - **No Hard Delete**: ห้ามลบเวรสถานะ `transferred` เด็ดขาดเพื่อรักษาประวัติข้อมูล
 5. **Undo Transfer / Rollback (การยกเลิกการยกเวร)**:
-   - การยกเลิกการยกเวรสามารถทำได้เมื่อเวรนั้นยังไม่ผ่านพ้นไป (`shiftDate >= CURRENT_DATE` และ `isLocked: false`)
+   - การยกเลิกการยกเวรสามารถทำได้เมื่อเวรนั้นยังไม่ผ่านพ้นไป (`shiftDate >= CURRENT_DATE` และ `isLocked: false`) หรือเป็นเวร Refer ที่ยังอยู่ในช่วงผ่อนปรน (Grace Period)
    - เมื่อสั่งยกเลิกการยกเวร (`undoTransferShift`): สถานะเวรจะคืนกลับเป็น `active` และปลดค่า `transferMeta` ทันที
-   - หากเวรผ่านไปแล้วและถูกล็อก (`isLocked: true`): ไม่อนุญาตให้ยกเลิกการยกเวร (HTTP 422: `SHIFT_IS_LOCKED`)
+   - หากเวรผ่านไปแล้วและถูกล็อก (`isLocked: true` หรืออยู่นอก Grace Period): ไม่อนุญาตให้ยกเลิกการยกเวร (HTTP 422: `SHIFT_IS_LOCKED`)
 6. **OT Shift Intake Invariant (กฎการรับเวร OT มาจากคนอื่น)**:
    - เมื่อพยาบาลรับเวร OT มาจากเพื่อนร่วมงาน สามารถระบุฟิลด์ `receivedFrom` (เช่น "พี่เปิ้ล") ในหน้าบันทึกเวรหรือแก้ไขเวรได้
    - ระบบจะแสดงป้าย `OT (รับจาก: [ชื่อ])` บนการ์ดเวรและปฏิทิน โดยเวรนี้ถือเป็นเวร OT (`category: "red"`) และไม่นับรวมในโควตาเวรดำประจำเดือน
+7. **Refer Shift Retroactive Operations & Grace Period (การผ่อนปรนทำรายการย้อนหลังสำหรับเวร Refer - Phase 12)**:
+   - เนื่องจากเวร Refer (`r1`, `r2`, `green`) เป็นเวรสแตนด์บายฉุกเฉิน 24 ชม. และไม่กระทบโควตา 14 เวรดำ จึงมีข้อยกเว้นผ่อนปรน (Grace Period) ให้ทำรายการย้อนหลัง (แลกเวร, ยกเวรให้คนอื่น, แก้ไขรายละเอียด, และกู้คืนเวร/ยกเลิกรายการ) ได้ภายใต้กฎ:
+     - **Rule 1 (Current Month)**: วันที่ของเวร Refer อยู่ในเดือนเดียวกันกับเดือนปัจจุบัน (`YYYY-MM`) สามารถทำรายการย้อนหลังได้
+     - **Rule 2 (Previous Month Grace Window)**: หากวันปัจจุบันอยู่ในวันที่ 1–7 ของเดือน อนุญาตให้ทำรายการย้อนหลังของเดือนก่อนหน้า (`YYYY-MM`) ได้
+     - **Rule 3 (Expired Months & Non-Refer Shifts)**: หากเลยช่วงผ่อนปรน หรือเป็นเวรหมวดอื่น (เช่น เวรดำ, เวร OT) ยังคงถูกล็อกตามกฎ Immutability เดิม
 
 ### 2.5 Locking, Deletion & Rollback Rules (Human-in-the-Loop Operational Decision)
-1. **Immutability (Locked)**: เวรใดๆ ที่มี `shiftDate < CURRENT_DATE` จะถูกล็อกอัตโนมัติ (`isLocked: true`) ไม่สามารถแก้ไข, ลบ, ขาย หรือย้อนสถานะได้ เว้นแต่ได้รับสิทธิ์พิเศษจากผู้ดูแลระบบ
+1. **Immutability (Locked)**: เวรใดๆ ที่มี `shiftDate < CURRENT_DATE` จะถูกล็อกอัตโนมัติ (`isLocked: true`) ไม่สามารถแก้ไข, ลบ, หรือย้อนสถานะได้ เว้นแต่เป็นเวร Refer ที่อยู่ภายใต้ข้อกำหนด Grace Period (§2.4.7) หรือได้รับสิทธิ์พิเศษจากผู้ดูแลระบบ
 2. **Deletion Restriction on Swapped & Sold Shifts**:
    - เวรที่อยู่ในสถานะ `swapped_out`, `sold_out`, เป็น `parentShiftId` หรือมีประวัติอ้างอิงใน `SwapTrailNode` **ห้ามลบเด็ดขาด (No Hard Delete)**
    - หากต้องการยกเลิก ต้องใช้คำสั่ง Rollback (Undo Swap / Undo Sale) เท่านั้น เพื่อป้องกันปัญหา `PARENT_SHIFT_NOT_FOUND`
@@ -246,12 +251,13 @@
      - Customer Service: `vendee-service-{service.id}@vendee.app`
      - Personal Event: `vendee-event-{event.id}@vendee.app`
      - Clinic Duty: `vendee-clinic-{clinic.id}@vendee.app`
-2. **Glanceable Summary Convention (การตั้งชื่อให้เห็นปุ๊บรู้ปั๊บ)**:
-   - ชื่อ Event บน iPhone Notification, Dynamic Island, Lock Screen และ Apple Watch ต้องกระชับ สื่อความหมาย และใช้ Visual Emoji:
-     - ☀️ `[เวรเช้า] {department หรือ "รพ."}` (กรณีเวรดำ)
-     - 🔴 `[เวรแดง OT] เช้า {department}` (กรณีเวรแดง/OT)
-     - 🌤️ `[เวรบ่าย] {department}`
-     - 🌙 `[เวรดึก] {department}`
+2. **Glanceable Summary Convention (การตั้งชื่อให้เห็นปุ๊บรู้ปั๊บ - Phase 13 Emergency Room Specialization)**:
+   - ชื่อ Event บน iPhone Notification, Dynamic Island, Lock Screen และ Apple Watch ต้องกระชับ สื่อความหมาย และใช้ Visual Emoji (ตัดข้อมูลแผนก/รพ. ออกทั้งหมดสำหรับพยาบาลห้องฉุกเฉิน):
+     - ☀️ `[เวรเช้า]` (กรณีเวรดำ)
+     - 🔴 `[เวรแดง OT] เช้า`, `บ่าย`, `ดึก` (กรณีเวรแดง/OT)
+     - 🌤️ `[เวรบ่าย]`
+     - 🌙 `[เวรดึก]`
+     - 🩺 `[เวร CT เช้า]`, `[เวร CT บ่าย]`
      - 🚑 `[เวร Refer] ทีม 1 (Standby 24 ชม.)`
      - 💉 `เคหะ: คุณ{customerName} ({serviceLabels})`
      - 🌸 `ธุระ: {title}`

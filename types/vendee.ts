@@ -66,7 +66,6 @@ export interface ShiftRecord {
   saleMeta?: SaleMetadata;
   transferMeta?: TransferMetadata; // ข้อมูลการยกเวรให้ผู้อื่น (Phase 11: One-Way Shift Transfer)
   receivedFrom?: string; // ชื่อพยาบาลที่รับเวรมา (สำหรับเวร OT เช่น "พี่เปิ้ล")
-  department?: string;
   note?: string;
   createdAt: string;
 }

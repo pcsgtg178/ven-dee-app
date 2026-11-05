@@ -85,7 +85,6 @@ export const shiftsApi = {
     date: string;
     shiftType: ShiftType;
     category?: ShiftCategory;
-    department?: string;
     note?: string;
   }) => {
     return request<ShiftRecord>("/shifts", {
@@ -94,7 +93,7 @@ export const shiftsApi = {
     });
   },
 
-  update: (id: string, data: { department?: string; note?: string }) => {
+  update: (id: string, data: { note?: string }) => {
     return request<ShiftRecord>(`/shifts/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),

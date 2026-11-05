@@ -47,11 +47,28 @@ import {
   deleteClinicLogAction,
 } from "../app/actions/clinicActions";
 import { unwrap } from "./actionHelper";
-import { isShiftInPast, isDateInPast, getTodayDateStringBangkok } from "./dateUtils";
+import {
+  isShiftInPast,
+  isDateInPast,
+  getTodayDateStringBangkok,
+  isReferShift,
+  isReferShiftWithinGracePeriod,
+  isShiftLocked,
+} from "./dateUtils";
 import { repairLocalSwapInconsistencies, upgradeShiftsToV3 } from "./swapRepair";
 import { isShiftTransferrable, validateShiftTransferrable, isShiftSellable, validateShiftSellable } from "./shiftTransfer";
+import { isDbSyncDisabled } from "./dbSyncConfig";
 
-export { isShiftTransferrable, validateShiftTransferrable, isShiftSellable, validateShiftSellable };
+export {
+  isShiftTransferrable,
+  validateShiftTransferrable,
+  isShiftSellable,
+  validateShiftSellable,
+  isDbSyncDisabled,
+  isReferShift,
+  isReferShiftWithinGracePeriod,
+  isShiftLocked,
+};
 
 import {
   Customer,
@@ -183,22 +200,21 @@ export const initialCustomers: Customer[] = [
   },
 ];
 
-// Re-export dynamic Bangkok timezone date utilities (DOMAIN_RULES.md §4.2, PROJECT_RULES.md §1)
+// Re-export dynamic Bangkok timezone date utilities (DOMAIN_RULES.md §4.2, PROJECT_RULES.md §1, BACKLOG.md Phase 12)
 export { isShiftInPast, isDateInPast, getTodayDateStringBangkok };
 
 /**
- * Conditional Visibility Rule for Shift Editing:
+ * Conditional Visibility Rule for Shift Editing (DOMAIN_RULES.md §2.5 & Phase 12 Grace Period):
  * - Hide completely if shift cannot be edited.
  * - Do NOT display if:
- *   1. Shift is already past/locked (isLocked === true or historical date).
+ *   1. Shift is already past/locked (isLocked === true or historical date), UNLESS it is a Refer shift in Grace Period.
  *   2. Shift has been swapped out (status === 'swapped_out').
  *   3. Shift is cancelled (status === 'cancelled').
- * - Only shifts with status === 'active' and future/unlocked dates (today or future) can be edited.
+ * - Only shifts with status === 'active' and unlocked dates can be edited.
  */
 export function canEditShift(shift: ShiftRecord): boolean {
   if (shift.status !== "active") return false;
-  if (shift.swapMeta?.isLocked) return false;
-  if (isShiftInPast(shift.date)) return false;
+  if (isShiftLocked(shift)) return false;
   return true;
 }
 
@@ -371,14 +387,14 @@ export async function syncAllDataFromApi(): Promise<{
   clinicLogs: ClinicWorkRecord[];
   isOnline: boolean;
 }> {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || isDbSyncDisabled()) {
     return {
-      shifts: initialShifts,
-      customers: initialCustomers,
-      services: initialServices,
-      personalEvents: [],
-      medications: initialMedications,
-      clinicLogs: initialClinicLogs,
+      shifts: getShifts(),
+      customers: getCustomers(),
+      services: getServices(),
+      personalEvents: getPersonalEvents(),
+      medications: getMedications(),
+      clinicLogs: getClinicLogs(),
       isOnline: false,
     };
   }
@@ -415,7 +431,6 @@ export async function syncAllDataFromApi(): Promise<{
               date: localShift.date,
               shiftType: localShift.shiftType,
               category: localShift.category,
-              department: localShift.department,
               note: localShift.note,
             });
           } catch (_) { }
@@ -638,28 +653,30 @@ export async function saveCustomer(customer: Omit<Customer, "id"> & { id?: strin
   const isUpdate = Boolean(customer.id && current.some((c) => c.id === customer.id));
 
   // 1. Supabase Sync via Server Actions
-  try {
-    if (isUpdate) {
-      const updateRes = await updateCustomerAction(id, {
-        name: newCustomer.name,
-        avatarColor: newCustomer.avatarColor,
-      });
-      if (updateRes.success && updateRes.data) {
-        newCustomer = updateRes.data;
+  if (!isDbSyncDisabled()) {
+    try {
+      if (isUpdate) {
+        const updateRes = await updateCustomerAction(id, {
+          name: newCustomer.name,
+          avatarColor: newCustomer.avatarColor,
+        });
+        if (updateRes.success && updateRes.data) {
+          newCustomer = updateRes.data;
+        }
+      } else {
+        const createRes = await createCustomerAction({
+          id: newCustomer.id,
+          name: newCustomer.name,
+          avatarColor: newCustomer.avatarColor,
+          createdAt: newCustomer.createdAt,
+        });
+        if (createRes.success && createRes.data) {
+          newCustomer = createRes.data;
+        }
       }
-    } else {
-      const createRes = await createCustomerAction({
-        id: newCustomer.id,
-        name: newCustomer.name,
-        avatarColor: newCustomer.avatarColor,
-        createdAt: newCustomer.createdAt,
-      });
-      if (createRes.success && createRes.data) {
-        newCustomer = createRes.data;
-      }
+    } catch (err) {
+      console.warn("saveCustomer remote warning:", err);
     }
-  } catch (err) {
-    console.warn("saveCustomer remote warning:", err);
   }
 
   // 2. Save locally
@@ -724,16 +741,18 @@ export async function deleteCustomer(id: string): Promise<void> {
   localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(remainingServices));
 
   // 3. Supabase sync
-  try {
-    await deleteCustomerAction(id);
-    await deleteServicesByCustomerIdAction(id);
-    for (const srv of servicesToDelete) {
-      if (!srv.id.startsWith("srv-")) {
-        await deleteServiceAction(srv.id);
+  if (!isDbSyncDisabled()) {
+    try {
+      await deleteCustomerAction(id);
+      await deleteServicesByCustomerIdAction(id);
+      for (const srv of servicesToDelete) {
+        if (!srv.id.startsWith("srv-")) {
+          await deleteServiceAction(srv.id);
+        }
       }
+    } catch (err) {
+      console.warn("deleteCustomer remote warning:", err);
     }
-  } catch (err) {
-    console.warn("deleteCustomer remote warning:", err);
   }
 
   // 4. Trigger UI sync
@@ -747,9 +766,9 @@ export async function syncCustomersFromApi(): Promise<{
   customers: Customer[];
   isOnline: boolean;
 }> {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || isDbSyncDisabled()) {
     return {
-      customers: initialCustomers,
+      customers: getCustomers(),
       isOnline: false,
     };
   }
@@ -844,7 +863,6 @@ export async function saveShift(
     status?: ShiftRecord["status"];
     createdAt?: string;
     swapMeta?: any;
-    department?: string;
     receivedFrom?: string;
   }
 ): Promise<ShiftRecord> {
@@ -853,8 +871,8 @@ export async function saveShift(
   const isExistingInDb = Boolean(shift.id && !shift.id.startsWith("shift-"));
   const existingShift = shift.id ? current.find((s) => s.id === shift.id) : undefined;
 
-  // Check if trying to edit locked / past shift
-  if (existingShift && (existingShift.swapMeta?.isLocked || isShiftInPast(existingShift.date))) {
+  // Check if trying to edit locked / past shift (Phase 12: Refer Grace Period allowed)
+  if (existingShift && isShiftLocked(existingShift)) {
     throw new Error("ไม่สามารถแก้ไขเวรในอดีตที่ถูกล็อกแล้วได้");
   }
 
@@ -893,26 +911,26 @@ export async function saveShift(
   let createdOrUpdatedShift: ShiftRecord | null = null;
 
   // 1. Sync with Supabase via Server Action FIRST (Server-First pattern with unwrap)
-  if (isExistingInDb) {
-    const res = await updateShiftAction(shift.id!, {
-      shiftType: shift.shiftType,
-      category: resolvedCategory,
-      department: shift.department,
-      note: shift.note,
-      status: targetStatus,
-      receivedFrom: resolvedCategory === "red" ? shift.receivedFrom : undefined,
-    });
-    createdOrUpdatedShift = unwrap(res);
-  } else {
-    const res = await createShiftAction({
-      date: shift.date,
-      shiftType: shift.shiftType,
-      category: resolvedCategory,
-      department: shift.department,
-      note: shift.note,
-      receivedFrom: resolvedCategory === "red" ? shift.receivedFrom : undefined,
-    });
-    createdOrUpdatedShift = unwrap(res);
+  if (!isDbSyncDisabled()) {
+    if (isExistingInDb) {
+      const res = await updateShiftAction(shift.id!, {
+        shiftType: shift.shiftType,
+        category: resolvedCategory,
+        note: shift.note,
+        status: targetStatus,
+        receivedFrom: resolvedCategory === "red" ? shift.receivedFrom : undefined,
+      });
+      createdOrUpdatedShift = unwrap(res);
+    } else {
+      const res = await createShiftAction({
+        date: shift.date,
+        shiftType: shift.shiftType,
+        category: resolvedCategory,
+        note: shift.note,
+        receivedFrom: resolvedCategory === "red" ? shift.receivedFrom : undefined,
+      });
+      createdOrUpdatedShift = unwrap(res);
+    }
   }
 
   // 2. Save locally only after server success
@@ -951,8 +969,8 @@ export async function deleteShift(id: string): Promise<{ restoredParentId?: stri
 
   if (!target) return {};
 
-  // 1. Check if shift is in the past or locked (DOMAIN_RULES.md 2.3.1)
-  if (target.swapMeta?.isLocked || isShiftInPast(target.date)) {
+  // 1. Check if shift is in the past or locked (DOMAIN_RULES.md 2.3.1 & Phase 12 Grace Period)
+  if (isShiftLocked(target)) {
     throw new Error("ไม่สามารถลบเวรที่ผ่านเวลาไปแล้วได้ (เวรถูกล็อกอยู่)");
   }
 
@@ -972,7 +990,7 @@ export async function deleteShift(id: string): Promise<{ restoredParentId?: stri
 
   // 3. Call Supabase Server Action FIRST (Server-First with unwrap)
   let restoredParentId: string | undefined = undefined;
-  if (!id.startsWith("shift-")) {
+  if (!isDbSyncDisabled() && !id.startsWith("shift-")) {
     const res = await deleteShiftAction(id);
     const data = unwrap(res);
     restoredParentId = data.restoredParentId;
@@ -1015,7 +1033,7 @@ export async function restoreShift(shiftId: string): Promise<ShiftRecord> {
 
   // 1. Supabase restore FIRST (Server-First with unwrap)
   let restoredRemote: ShiftRecord | null = null;
-  if (!shiftId.startsWith("shift-")) {
+  if (!isDbSyncDisabled() && !shiftId.startsWith("shift-")) {
     const res = await restoreShiftAction(shiftId);
     restoredRemote = unwrap(res);
   }
@@ -1059,7 +1077,7 @@ export async function swapShift(params: {
   if (oldShift.status === "swapped_out" || oldShift.status === "sold_out") {
     throw new Error("เวรนี้ถูกแลกหรือส่งต่อออกไปแล้ว");
   }
-  if (oldShift.swapMeta?.isLocked || isShiftInPast(oldShift.date)) {
+  if (isShiftLocked(oldShift)) {
     throw new Error("ไม่สามารถแลกเวรในอดีตที่ถูกล็อกแล้วได้");
   }
 
@@ -1067,6 +1085,16 @@ export async function swapShift(params: {
     params.newShiftType === "r1" || params.newShiftType === "r2"
       ? "green"
       : params.newCategory;
+
+  if (isShiftInPast(params.newDate)) {
+    const isNewRefer =
+      params.newShiftType === "r1" ||
+      params.newShiftType === "r2" ||
+      targetCategory === "green";
+    if (!isNewRefer || !isReferShiftWithinGracePeriod(params.newDate)) {
+      throw new Error("ไม่สามารถแลกมารับเวรในอดีตที่อยู่นอกช่วงเวลาผ่อนผันได้");
+    }
+  }
 
   // Same Shift Type & Date Category Swap Exception (DOMAIN_RULES.md 2.2.3):
   // Permit same date + same shiftType swap IF AND ONLY IF changing between Black and Red categories
@@ -1142,7 +1170,7 @@ export async function swapShift(params: {
 
   // 1. Supabase Server Action FIRST (Server-First pattern with unwrap)
   let dbResult: { newShift: ShiftRecord; oldShift: ShiftRecord } | null = null;
-  if (!oldShift.id.startsWith("shift-")) {
+  if (!isDbSyncDisabled() && !oldShift.id.startsWith("shift-")) {
     const res = await swapShiftAction({
       shiftId: oldShift.id,
       swappedWith: params.swappedWith,
@@ -1185,7 +1213,7 @@ export async function swapShift(params: {
       swapHistory: trail,
       targetShiftDate: params.newDate,
       targetShiftType: params.newShiftType,
-      isLocked: oldShift.swapMeta?.isLocked ?? isShiftInPast(oldShift.date),
+      isLocked: isShiftLocked(oldShift),
     },
   };
 
@@ -1196,7 +1224,6 @@ export async function swapShift(params: {
     shiftType: params.newShiftType,
     category: resolvedCategory,
     status: "active",
-    department: oldShift.department,
     note: `เวรที่ได้รับจากการแลกกับ ${params.swappedWith}${params.swapReason ? ` (${params.swapReason})` : ""}`,
     swap: swapRecord,
     swapMeta: {
@@ -1205,7 +1232,7 @@ export async function swapShift(params: {
       parentShiftId: oldShift.id,
       givenShiftDate: oldShift.date,
       givenShiftType: oldShift.shiftType,
-      isLocked: isShiftInPast(params.newDate),
+      isLocked: isShiftLocked({ date: params.newDate, shiftType: params.newShiftType, category: resolvedCategory }),
       swapDate: swapDateStr,
       swapReason: params.swapReason,
       swapHistory: trail,
@@ -1239,7 +1266,7 @@ export async function undoSwapShift(shiftId: string): Promise<boolean> {
     return false;
   }
 
-  if (targetShift.swapMeta?.isLocked || isShiftInPast(targetShift.date)) {
+  if (isShiftLocked(targetShift)) {
     throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)");
   }
 
@@ -1264,10 +1291,10 @@ export async function undoSwapShift(shiftId: string): Promise<boolean> {
     }
   }
 
-  if (parentShift && (parentShift.swapMeta?.isLocked || isShiftInPast(parentShift.date))) {
+  if (parentShift && isShiftLocked(parentShift)) {
     throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรเดิมผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)");
   }
-  if (childShift && (childShift.swapMeta?.isLocked || isShiftInPast(childShift.date))) {
+  if (childShift && isShiftLocked(childShift)) {
     throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรที่ได้รับมาผ่านเวลาไปแล้ว");
   }
 
@@ -1288,7 +1315,7 @@ export async function undoSwapShift(shiftId: string): Promise<boolean> {
 
   // 1. Supabase Server Action FIRST (Server-First pattern with unwrap)
   const apiTargetId = childShift?.id || targetShift.id;
-  if (!apiTargetId.startsWith("shift-")) {
+  if (!isDbSyncDisabled() && !apiTargetId.startsWith("shift-")) {
     const res = await undoSwapShiftAction(apiTargetId);
     unwrap(res);
   }
@@ -1363,7 +1390,7 @@ export async function transferShift(params: {
     saleMeta: undefined,
   };
 
-  if (!params.shiftId.startsWith("shift-")) {
+  if (!isDbSyncDisabled() && !params.shiftId.startsWith("shift-")) {
     const res = await transferShiftAction({
       shiftId: params.shiftId,
       recipientName: params.recipientName.trim(),
@@ -1401,7 +1428,7 @@ export async function undoTransferShift(shiftId: string): Promise<ShiftRecord> {
     throw new Error("เวรนี้ไม่ได้อยู่ในสถานะที่ยกให้ผู้อื่น");
   }
 
-  if (targetShift.swapMeta?.isLocked || isShiftInPast(targetShift.date)) {
+  if (isShiftLocked(targetShift)) {
     throw new Error("ไม่สามารถยกเลิกการยกเวรในอดีตที่ถูกล็อกแล้วได้");
   }
 
@@ -1413,7 +1440,7 @@ export async function undoTransferShift(shiftId: string): Promise<ShiftRecord> {
     saleMeta: undefined,
   };
 
-  if (!shiftId.startsWith("shift-")) {
+  if (!isDbSyncDisabled() && !shiftId.startsWith("shift-")) {
     const res = await undoTransferShiftAction(shiftId);
     restoredShift = unwrap(res);
   }
@@ -1639,45 +1666,69 @@ export async function saveService(
 
   let remoteService: CustomerServiceRecord | null = null;
 
-  if (isUpdate) {
-    // If updating a record that exists in Supabase (UUID), use updateServiceAction
-    if (!id.startsWith("srv-")) {
-      try {
-        const res = await updateServiceAction(id, {
-          customerId: service.customerId,
-          customerName: service.customerName,
-          date: service.date,
-          time: normalizedTime,
-          services: service.services || existingService?.services || ["injection"],
-          otherServiceText:
-            service.otherServiceText !== undefined
-              ? service.otherServiceText
-              : existingService?.otherServiceText,
-          medications: cleanMeds,
-          medicationUsages: usages,
-          medicationCost: legacyMedicationCostThb,
-          note: service.note,
-          price: service.price,
-        });
-        if (res.success && res.data) {
-          remoteService = res.data;
+  if (!isDbSyncDisabled()) {
+    if (isUpdate) {
+      // If updating a record that exists in Supabase (UUID), use updateServiceAction
+      if (!id.startsWith("srv-")) {
+        try {
+          const res = await updateServiceAction(id, {
+            customerId: service.customerId,
+            customerName: service.customerName,
+            date: service.date,
+            time: normalizedTime,
+            services: service.services || existingService?.services || ["injection"],
+            otherServiceText:
+              service.otherServiceText !== undefined
+                ? service.otherServiceText
+                : existingService?.otherServiceText,
+            medications: cleanMeds,
+            medicationUsages: usages,
+            medicationCost: legacyMedicationCostThb,
+            note: service.note,
+            price: service.price,
+          });
+          if (res.success && res.data) {
+            remoteService = res.data;
+          }
+        } catch (e) {
+          console.warn("updateServiceAction warning:", e);
         }
-      } catch (e) {
-        console.warn("updateServiceAction warning:", e);
+      } else {
+        // Local record updating online, push to Supabase as new record
+        try {
+          const res = await createServiceAction({
+            customerId: service.customerId,
+            customerName: service.customerName,
+            date: service.date,
+            time: normalizedTime,
+            services: service.services || existingService?.services || ["injection"],
+            otherServiceText:
+              service.otherServiceText !== undefined
+                ? service.otherServiceText
+                : existingService?.otherServiceText,
+            medications: cleanMeds,
+            medicationUsages: usages,
+            medicationCost: legacyMedicationCostThb,
+            note: service.note,
+            price: service.price,
+          });
+          if (res.success && res.data) {
+            remoteService = res.data;
+          }
+        } catch (e) {
+          console.warn("createServiceAction for local service warning:", e);
+        }
       }
     } else {
-      // Local record updating online, push to Supabase as new record
+      // Creating a brand new service record
       try {
         const res = await createServiceAction({
           customerId: service.customerId,
           customerName: service.customerName,
           date: service.date,
           time: normalizedTime,
-          services: service.services || existingService?.services || ["injection"],
-          otherServiceText:
-            service.otherServiceText !== undefined
-              ? service.otherServiceText
-              : existingService?.otherServiceText,
+          services: service.services || ["injection"],
+          otherServiceText: service.otherServiceText,
           medications: cleanMeds,
           medicationUsages: usages,
           medicationCost: legacyMedicationCostThb,
@@ -1688,30 +1739,8 @@ export async function saveService(
           remoteService = res.data;
         }
       } catch (e) {
-        console.warn("createServiceAction for local service warning:", e);
+        console.warn("createServiceAction warning:", e);
       }
-    }
-  } else {
-    // Creating a brand new service record
-    try {
-      const res = await createServiceAction({
-        customerId: service.customerId,
-        customerName: service.customerName,
-        date: service.date,
-        time: normalizedTime,
-        services: service.services || ["injection"],
-        otherServiceText: service.otherServiceText,
-        medications: cleanMeds,
-        medicationUsages: usages,
-        medicationCost: legacyMedicationCostThb,
-        note: service.note,
-        price: service.price,
-      });
-      if (res.success && res.data) {
-        remoteService = res.data;
-      }
-    } catch (e) {
-      console.warn("createServiceAction warning:", e);
     }
   }
 
@@ -1755,7 +1784,7 @@ export async function deleteService(id: string): Promise<void> {
   }
 
   // 2. Call Supabase delete action
-  if (!id.startsWith("srv-")) {
+  if (!isDbSyncDisabled() && !id.startsWith("srv-")) {
     try {
       await deleteServiceAction(id);
     } catch (err: any) {
@@ -1876,9 +1905,9 @@ export async function syncMedicationsFromApi(): Promise<{
   medications: Medications[];
   isOnline: boolean;
 }> {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || isDbSyncDisabled()) {
     return {
-      medications: initialMedications,
+      medications: getMedications(),
       isOnline: false,
     };
   }
@@ -1921,27 +1950,6 @@ export async function syncMedicationsFromApi(): Promise<{
         localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
         triggerSync();
         return { medications, isOnline: true };
-      } else if (medications.length > 0) {
-        // Automatically migrate / seed initial local medications to Supabase
-        for (const localMed of medications) {
-          try {
-            await createMedicationAction({
-              name: localMed.name,
-              size: localMed.size,
-              category: localMed.category,
-              unit: localMed.unit,
-              price: localMed.price,
-              description: localMed.description || localMed.note,
-            });
-          } catch (_) { }
-        }
-        const refreshed = await getMedicationsAction();
-        if (refreshed.success && refreshed.data.length > 0) {
-          medications = refreshed.data;
-          localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(medications));
-          triggerSync();
-          return { medications, isOnline: true };
-        }
       }
       return { medications, isOnline: true };
     }
@@ -1964,43 +1972,45 @@ export async function saveMedication(
   let remoteMed: Medications | null = null;
   const isDbId = med.id && !med.id.startsWith("med-");
 
-  try {
-    if (isDbId) {
-      const res = await updateMedicationAction(med.id!, {
-        name: med.name,
-        size: med.size,
-        category: med.category,
-        unit: med.unit,
-        price: priceVal,
-        description: med.description || med.note,
-      });
-      if (res.success && res.data) {
-        remoteMed = res.data;
-      } else if (!res.success) {
-        console.error("Supabase updateMedicationAction error:", res.error);
-        throw new Error(res.error?.message || "ไม่สามารถอัปเดตข้อมูลยาในฐานข้อมูลได้");
+  if (!isDbSyncDisabled()) {
+    try {
+      if (isDbId) {
+        const res = await updateMedicationAction(med.id!, {
+          name: med.name,
+          size: med.size,
+          category: med.category,
+          unit: med.unit,
+          price: priceVal,
+          description: med.description || med.note,
+        });
+        if (res.success && res.data) {
+          remoteMed = res.data;
+        } else if (!res.success) {
+          console.error("Supabase updateMedicationAction error:", res.error);
+          throw new Error(res.error?.message || "ไม่สามารถอัปเดตข้อมูลยาในฐานข้อมูลได้");
+        }
+      } else {
+        const res = await createMedicationAction({
+          name: med.name,
+          size: med.size,
+          category: med.category,
+          unit: med.unit,
+          price: priceVal,
+          description: med.description || med.note,
+        });
+        if (res.success && res.data) {
+          remoteMed = res.data;
+        } else if (!res.success) {
+          console.error("Supabase createMedicationAction error:", res.error);
+          throw new Error(res.error?.message || "ไม่สามารถบันทึกข้อมูลยาลงฐานข้อมูลได้");
+        }
       }
-    } else {
-      const res = await createMedicationAction({
-        name: med.name,
-        size: med.size,
-        category: med.category,
-        unit: med.unit,
-        price: priceVal,
-        description: med.description || med.note,
-      });
-      if (res.success && res.data) {
-        remoteMed = res.data;
-      } else if (!res.success) {
-        console.error("Supabase createMedicationAction error:", res.error);
-        throw new Error(res.error?.message || "ไม่สามารถบันทึกข้อมูลยาลงฐานข้อมูลได้");
+    } catch (err: any) {
+      console.warn("Supabase saveMedication warning:", err);
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      if (!isOffline && !err.message?.includes("fetch")) {
+        throw err;
       }
-    }
-  } catch (err: any) {
-    console.warn("Supabase saveMedication warning:", err);
-    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
-    if (!isOffline && !err.message?.includes("fetch")) {
-      throw err;
     }
   }
 
@@ -2033,26 +2043,28 @@ export async function deleteMedication(id: string): Promise<void> {
   const current = getMedications();
   const target = current.find((m) => m.id === id);
 
-  if (!id.startsWith("med-")) {
-    try {
-      await deleteMedicationAction(id);
-    } catch (err) {
-      console.warn("deleteMedicationAction warning:", err);
-    }
-  } else if (target) {
-    try {
-      const res = await getMedicationsAction();
-      if (res.success && res.data) {
-        const matched = res.data.find(
-          (m) =>
-            m.name.toLowerCase() === target.name.toLowerCase() &&
-            (m.size || "") === (target.size || "")
-        );
-        if (matched) {
-          await deleteMedicationAction(matched.id);
-        }
+  if (!isDbSyncDisabled()) {
+    if (!id.startsWith("med-")) {
+      try {
+        await deleteMedicationAction(id);
+      } catch (err) {
+        console.warn("deleteMedicationAction warning:", err);
       }
-    } catch (_) { }
+    } else if (target) {
+      try {
+        const res = await getMedicationsAction();
+        if (res.success && res.data) {
+          const matched = res.data.find(
+            (m) =>
+              m.name.toLowerCase() === target.name.toLowerCase() &&
+              (m.size || "") === (target.size || "")
+          );
+          if (matched) {
+            await deleteMedicationAction(matched.id);
+          }
+        }
+      } catch (_) { }
+    }
   }
 
   const updated = current.filter((m) => m.id !== id);
@@ -2093,21 +2105,23 @@ export async function saveClinicLog(
   let remoteRecord: ClinicWorkRecord | null = null;
 
   // 1. Supabase action FIRST (Server-First with unwrap)
-  if (isExistingInDb) {
-    const res = await updateClinicLogAction(log.id!, {
-      date: log.date,
-      presetShift: log.presetShift,
-      note: log.note,
-    });
-    remoteRecord = unwrap(res);
-  } else {
-    const res = await createClinicLogAction({
-      id: log.id,
-      date: log.date,
-      presetShift: log.presetShift,
-      note: log.note,
-    });
-    remoteRecord = unwrap(res);
+  if (!isDbSyncDisabled()) {
+    if (isExistingInDb) {
+      const res = await updateClinicLogAction(log.id!, {
+        date: log.date,
+        presetShift: log.presetShift,
+        note: log.note,
+      });
+      remoteRecord = unwrap(res);
+    } else {
+      const res = await createClinicLogAction({
+        id: log.id,
+        date: log.date,
+        presetShift: log.presetShift,
+        note: log.note,
+      });
+      remoteRecord = unwrap(res);
+    }
   }
 
   // 2. Only after server success, update local storage
@@ -2145,7 +2159,7 @@ export async function deleteClinicLog(id: string): Promise<void> {
   }
 
   // 1. Supabase action FIRST (Server-First with unwrap)
-  if (!id.startsWith("clinic-")) {
+  if (!isDbSyncDisabled() && !id.startsWith("clinic-")) {
     const res = await deleteClinicLogAction(id);
     unwrap(res);
   }
@@ -2179,22 +2193,24 @@ export async function savePersonalEvent(data: {
 }): Promise<PersonalEventRecord> {
   let createdRecord: PersonalEventRecord | null = null;
 
-  try {
-    const res = await createPersonalEventAction({
-      title: data.title,
-      eventDate: data.eventDate,
-      startTime: data.startTime,
-      endTime: data.endTime,
-      isAllDay: data.isAllDay,
-      relationshipTag: data.relationshipTag,
-      location: data.location,
-      notes: data.notes,
-    });
-    if (res.success && res.data?.event) {
-      createdRecord = res.data.event;
+  if (!isDbSyncDisabled()) {
+    try {
+      const res = await createPersonalEventAction({
+        title: data.title,
+        eventDate: data.eventDate,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        isAllDay: data.isAllDay,
+        relationshipTag: data.relationshipTag,
+        location: data.location,
+        notes: data.notes,
+      });
+      if (res.success && res.data?.event) {
+        createdRecord = res.data.event;
+      }
+    } catch (err) {
+      console.warn("createPersonalEventAction warning:", err);
     }
-  } catch (err) {
-    console.warn("createPersonalEventAction warning:", err);
   }
 
   if (!createdRecord) {
@@ -2231,7 +2247,7 @@ export async function savePersonalEvent(data: {
 }
 
 export async function deletePersonalEvent(id: string): Promise<void> {
-  if (!id.startsWith("pevent-")) {
+  if (!isDbSyncDisabled() && !id.startsWith("pevent-")) {
     const res = await deletePersonalEventAction(id);
     unwrap(res);
   }

@@ -4,7 +4,18 @@
  * (DOMAIN_RULES.md §4.2, PROJECT_RULES.md §1, BACKLOG_ISSUE.md §9.4)
  */
 
-export function getTodayDateStringBangkok(): string {
+/**
+ * Date and timezone utilities for VenDee
+ * Enforces Asia/Bangkok (UTC+7) timezone across client and server.
+ * (DOMAIN_RULES.md §4.2, PROJECT_RULES.md §1, BACKLOG_ISSUE.md §9.4, BACKLOG.md Phase 12)
+ */
+
+export function getBangkokDateParts(d: Date = new Date()): {
+  year: number;
+  month: number;
+  day: number;
+  dateStr: string;
+} {
   try {
     const formatter = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Bangkok",
@@ -12,16 +23,22 @@ export function getTodayDateStringBangkok(): string {
       month: "2-digit",
       day: "2-digit",
     });
-    return formatter.format(new Date()); // Formats as YYYY-MM-DD
+    const dateStr = formatter.format(d); // Formats as YYYY-MM-DD
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return { year, month, day, dateStr };
   } catch {
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const utc = d.getTime() + d.getTimezoneOffset() * 60000;
     const bkk = new Date(utc + 7 * 3600000);
-    const y = bkk.getFullYear();
-    const m = String(bkk.getMonth() + 1).padStart(2, "0");
-    const d = String(bkk.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+    const year = bkk.getFullYear();
+    const month = bkk.getMonth() + 1;
+    const day = bkk.getDate();
+    const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return { year, month, day, dateStr };
   }
+}
+
+export function getTodayDateStringBangkok(): string {
+  return getBangkokDateParts().dateStr;
 }
 
 /**
@@ -42,4 +59,84 @@ export function isDateInPast(dateStr: string): boolean {
  */
 export function isShiftInPast(dateStr: string): boolean {
   return isDateInPast(dateStr);
+}
+
+/**
+ * Check if a shift is a Refer shift (r1, r2, or category green)
+ * (DOMAIN_RULES.md §1 & §2.4)
+ */
+export function isReferShift(
+  shift: { shiftType?: string; category?: string } | null | undefined
+): boolean {
+  if (!shift) return false;
+  return (
+    shift.shiftType === "r1" ||
+    shift.shiftType === "r2" ||
+    shift.category === "green"
+  );
+}
+
+/**
+ * Grace Period Calculation for Refer Shifts (BACKLOG.md Phase 12.1 & DOMAIN_RULES.md §2.4)
+ * - Rule 1 (Current Month): Shift date in same month as current date (YYYY-MM) -> Allowed
+ * - Rule 2 (Previous Month Grace Window): If today is day 1-7, allow previous month (YYYY-MM) -> Allowed
+ * - Rule 3 (Expired Months & Non-Refer Shifts): Locked per Immutability rules
+ */
+export function isReferShiftWithinGracePeriod(shiftDate: string, today?: Date): boolean {
+  if (!shiftDate) return false;
+  const parts = shiftDate.split("-");
+  if (parts.length < 3) return false;
+  const shiftYear = Number(parts[0]);
+  const shiftMonth = Number(parts[1]);
+  if (isNaN(shiftYear) || isNaN(shiftMonth)) return false;
+
+  const { year: currentYear, month: currentMonth, day: currentDay } = getBangkokDateParts(today);
+
+  // Rule 1 (Current Month): Shift date is in the same month as current date (YYYY-MM)
+  if (shiftYear === currentYear && shiftMonth === currentMonth) {
+    return true;
+  }
+
+  // Rule 2 (Previous Month Grace Window): If today is day 1-7 of the month, allow previous month (YYYY-MM)
+  if (currentDay >= 1 && currentDay <= 7) {
+    const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+    if (shiftYear === prevYear && shiftMonth === prevMonth) {
+      return true;
+    }
+  }
+
+  // Rule 3 (Expired Months): Outside grace period
+  return false;
+}
+
+/**
+ * Unified check whether a shift is locked from editing, swapping, transferring, or deleting.
+ * Refer shifts within grace period are exempt from historical date locking.
+ */
+export function isShiftLocked(
+  shift: {
+    date: string;
+    shiftType?: string;
+    category?: string;
+    isLocked?: boolean;
+    swapMeta?: { isLocked?: boolean };
+  } | null | undefined,
+  today?: Date
+): boolean {
+  if (!shift) return false;
+
+  // Refer shift within grace period is unlocked for retroactive operations
+  if (isReferShift(shift) && isReferShiftWithinGracePeriod(shift.date, today)) {
+    return false;
+  }
+
+  // Non-refer shifts or refer shifts outside grace period:
+  if (shift.isLocked || shift.swapMeta?.isLocked) {
+    return true;
+  }
+  if (isShiftInPast(shift.date)) {
+    return true;
+  }
+  return false;
 }

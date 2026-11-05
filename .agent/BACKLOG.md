@@ -199,9 +199,128 @@
 
 ---
 
-## 📌 Task Status Summary
-- **Total Tasks**: 42
-- **Completed**: 40
-- **In Progress**: 0
-- **Pending**: 2
+### Phase 12: Retroactive Operations & Grace Period for Refer Shifts (แลก/ยก/แก้ไข/กู้คืนเวร Refer ย้อนหลัง)
+- [x] **12.1 Grace Period Logic & Core Domain Utilities (`dateUtils.ts` & `DOMAIN_RULES.md`)**
+  - **Context & Requirement**: แก้ปัญหาพยาบาลลืมบันทึกหรือทำรายการเวร Refer จนเลยวันที่ทำให้ระบบล็อกอัตโนมัติ โดยเวร Refer (`r1`, `r2`, `green`) เป็นเวรสแตนด์บาย 24 ชม. และไม่กระทบโควตา 14 เวรดำ จึงสามารถผ่อนปรนให้ทำรายการย้อนหลังได้ภายใต้เงื่อนไขความปลอดภัย
+  - **Grace Period Specification**:
+    - *Rule 1 (Current Month)*: วันที่ของเวร Refer อยู่ในเดือนเดียวกันกับเดือนปัจจุบัน (`YYYY-MM`) สามารถทำรายการย้อนหลังได้
+    - *Rule 2 (Previous Month Grace Window)*: หากวันปัจจุบันอยู่ในวันที่ 1–7 ของเดือน อนุญาตให้ทำรายการย้อนหลังของเดือนก่อนหน้า (`YYYY-MM`) ได้
+    - *Rule 3 (Expired Months & Non-Refer Shifts)*: หากเลยช่วงผ่อนปรน หรือเป็นเวรหมวดอื่น (เช่น เวรดำ) ยังคงถูกล็อกตามกฎ Immutability เดิม
+  - สร้าง helper function เช่น `isReferShiftWithinGracePeriod(shiftDate: string, today?: Date): boolean` ใน `lib/dateUtils.ts`
+  - อัปเดตเอกสารกฎธุรกิจ `.agent/DOMAIN_RULES.md` (§2.4 และ §2.5) เพื่อระบุข้อยกเว้น Grace Period สำหรับเวร Refer อย่างเป็นทางการ
 
+- [x] **12.2 Data Layer & Server Actions Refactoring (`shiftActions.ts`, `storage.ts`, `shiftTransfer.ts`)**
+  - **Shift Swap (`swapShiftAction` & `swapShift`)**:
+    - อนุญาตให้แลกเวร Refer ในอดีตได้หากอยู่ใน Grace Period
+    - ตรวจสอบวันที่ของเวรใหม่ที่ได้รับมา (`newDate`): ยอมรับได้ทั้งวันในอนาคตและวันในอดีต (ที่ยังอยู่ในกรอบ Grace Period)
+  - **One-Way Shift Transfer (`transferShiftAction` & `transferShift`)**:
+    - ปลดบล็อกการยกเวรให้คนอื่นย้อนหลังสำหรับเวร Refer ที่อยู่ใน Grace Period
+  - **Undo / Rollback (`undoShiftSwapAction`, `undoTransferShiftAction`, `undoShiftSwap`, `undoTransferShift`)**:
+    - อนุญาตให้กู้คืนเวร / ยกเลิกการแลก / ยกเลิกการยกเวรย้อนหลังได้สำหรับเวร Refer ภายใต้ Grace Period เดียวกัน เพื่อป้องกันความผิดพลาดจากการกรอกข้อมูลย้อนหลัง
+  - **Shift Editing (`updateShiftAction` & `saveShift`)**:
+    - อนุญาตให้แก้ไขรายละเอียดหรือหมายเหตุของเวร Refer ในอดีตที่อยู่ใน Grace Period
+
+- [x] **12.3 UI & Modal Retroactive Feedback Integration (`ActivityCard.tsx`, `ModalShiftSwap.tsx`, `ModalTransferShift.tsx`, `ScheduleOverview.tsx`)**
+  - **Card & Overview Action Controls (`ActivityCard.tsx` / `ScheduleOverview.tsx`)**:
+    - เปิดการทำงานของปุ่ม Action (แลกเวร, ยกให้คนอื่น, แก้ไข, กู้คืนเวร, ยกเลิกการยกเวร) สำหรับเวร Refer ในอดีตที่อยู่ใน Grace Period โดยไม่ติดสถานะ disable หรือไอคอนล็อก
+  - **Retroactive Warning Alert Banner (`ModalShiftSwap.tsx` & `ModalTransferShift.tsx`)**:
+    - แสดงกล่องข้อความเตือนสีส้ม (Warning Alert Banner) ใน Modal เมื่อผู้ใช้กำลังทำรายการย้อนหลังกับเวร Refer เช่น *"คุณกำลังทำรายการย้อนหลังสำหรับเวร Refer โปรดตรวจสอบวันที่และชื่อผู้รับเวรให้ถูกต้อง"* เพื่อเตือนให้ตรวจทานความถูกต้องก่อนกดยืนยัน
+
+- [x] **12.4 Comprehensive Unit & Integration Tests (`lib/__tests__/referRetroactive.test.ts`)**
+  - เขียนชุดการทดสอบครอบคลุม:
+    - การคำนวณ Grace Period (เดือนปัจจุบัน, วันที่ 1–7 ข้ามเดือน, และกรณีที่เกินกำหนด)
+    - การแลกเวร (Swap) ย้อนหลังของเวร Refer และการบล็อกเวรดำ
+    - การยกเวร (Transfer) ย้อนหลังของเวร Refer
+    - การกู้คืน (Undo) ย้อนหลังของเวร Refer
+    - ตรวจสอบความถูกต้องของการทำงานร่วมกับ LocalStorage และ Database Sync
+
+---
+
+### Phase 13: Emergency Room Specialization — Complete Removal of Department & Ward Information (ปลดข้อมูลแผนก/วอร์ด สำหรับพยาบาลห้องฉุกเฉิน)
+- [x] **13.1 UI Display Clean-up (`ActivityCard.tsx`, `ModalShiftSwap.tsx`, `ModalSwapTrail.tsx`)**
+  - **Context & Requirement**: เนื่องจากผู้ใช้งานเป็นพยาบาลห้องฉุกเฉิน (ER) ประจำจุดเดียว ไม่ได้ย้ายหรือไปปฏิบัติงานที่วอร์ด/แผนกอื่น จึงต้องการลบการแสดงผลชื่อแผนกและคำว่า "วอร์ดหลัก" ออกทั้งหมดเพื่อความคลีนและกระชับของหน้าจอ
+  - `ActivityCard.tsx`: ลบส่วนแสดงผลไอคอนหมุด `MapPin` พร้อมข้อความ `shift.department` ออกจากการ์ดเวร
+  - `ModalShiftSwap.tsx`: นำข้อความ `• {shift.department || "วอร์ดหลัก"}` ออกจากรายการเลือกเวร ให้แสดงเฉพาะชื่อเวรและช่วงเวลา
+  - `ModalSwapTrail.tsx`: นำข้อความ `• {shift.department || "วอร์ดหลัก"}` ออกจากบันทึกประวัติการแลกเวร
+- [x] **13.2 Calendar ICS Export Simplification (`lib/calendar/icsGenerator.ts`)**
+  - **Context & Requirement**: ปรับรูปแบบหัวข้อเวรที่ Export ไปยัง Google Calendar / Apple Calendar (.ics) ให้กระชับ ไม่มีคำว่า "รพ." หรือชื่อแผนกต่อท้าย
+  - ปรับชื่อเวรหลัก:
+    - `☀️ [เวรเช้า]` (เดิม: `☀️ [เวรเช้า] รพ.`)
+    - `🌤️ [เวรบ่าย]` (เดิม: `🌤️ [เวรบ่าย] รพ.`)
+    - `🌙 [เวรดึก]` (เดิม: `🌙 [เวรดึก] รพ.`)
+    - `🔴 [เวรแดง OT] เช้า`, `บ่าย`, `ดึก` (เดิม: `🔴 [เวรแดง OT] เช้า {dept}`)
+  - ปรับชื่อเวร CT Scan:
+    - `🩺 [เวร CT เช้า]` (เดิม: `🩺 [เวร CT เช้า] ห้อง CT`)
+    - `🩺 [เวร CT บ่าย]` (เดิม: `🩺 [เวร CT บ่าย] ห้อง CT`)
+- [x] **13.3 Types, Storage & Server Actions Clean-up (`types/vendee.ts`, `storage.ts`, `api.ts`, `shiftActions.ts`)**
+  - `types/vendee.ts`: ลบฟิลด์ `department?: string;` ออกจาก `ShiftRecord`
+  - `lib/storage.ts`: ลบการอ้างอิงฟิลด์ `department` ใน local shift records และฟังก์ชันที่เกี่ยวข้อง
+  - `lib/api.ts`: ลบ `department` ออกจาก update payload interface
+  - `app/actions/shiftActions.ts`: ลบฟิลด์ `department` ออกจาก payload interface, การ select ข้อมูล, insert/update mutations, และ fallback logic ของ RPC
+- [x] **13.4 Supabase Migration & RPC Update (`supabase/migrations/20261105_remove_department.sql`)**
+  - สร้าง migration script สำหรับลบคอลัมน์:
+    - `ALTER TABLE public.shifts DROP COLUMN IF EXISTS department;`
+  - ตรวจสอบและอัปเดต PostgreSQL RPC functions เช่น `execute_shift_swap` เพื่อไม่ให้อ้างอิงถึงคอลัมน์ `department`
+- [x] **13.5 Domain Rules & Documentation Update (`.agent/DOMAIN_RULES.md`)**
+  - อัปเดตข้อกำหนดเรื่องรูปแบบหัวข้อเวรและกฎการ Export ใน `.agent/DOMAIN_RULES.md` ให้สอดคล้องกับรูปแบบใหม่ที่ไม่มี department
+
+---
+
+### Phase 14: Medication Stock Management (ระบบจัดการสต็อกยา — details: `.agent/BACKLOG_STOCK.md`)
+- [ ] **14.1** Medication Restructure (แยกต้นทุน/ราคาขาย, `medication_promotions`, รวมตัวยาซ้ำ, ล้างต้นทุนเก่าเป็น 0, archive)
+- [ ] **14.2** Stock Schema (`stock_movements`, `stock_layers`, `stock_layer_consumptions`, คอลัมน์สต็อก)
+- [ ] **14.3** Transactional RPCs (FIFO receive / issue / adjust / consume / restore / reconsume / auto-complete / reverse)
+- [ ] **14.4** Service Integration (auto-complete ตอนเปิดแอป/ซิงค์, ตัด/คืนสต็อก, แก้ปริมาณยาในช่วงผ่อนผัน)
+- [ ] **14.5** Server Actions, `lib/stock.ts` & Client Storage
+- [ ] **14.6** UI (`/medications`, ฟอร์มตัวยา+โปรโมชั่น, Modal รับเข้า/ตัดออก/นับสต็อก/ประวัติ, แจ้งเตือนสต็อกต่ำ)
+- [ ] **14.7** Dashboard KPIs & Go-live
+- [ ] **14.8** Tests
+- [ ] **14.9** Documentation
+
+---
+
+### Phase 15: Customer Service Discount & Financial Integration (ระบบส่วนลดบริการลูกค้าและการคำนวณการเงิน)
+- [ ] **15.1 Data Model & Supabase Schema Support (`types/vendee.ts`, Migration SQL)**
+  - **Context & Requirement**: เพิ่มฟิลด์สำหรับจัดเก็บข้อมูลส่วนลดให้สอดคล้องกับมาตรฐานความแม่นยำทางการเงิน (Satang Standard: 1 THB = 100 Satang)
+  - `types/vendee.ts`: เพิ่มฟิลด์ `discount?: number;` (หน่วยบาท) และ `discountSatang?: number;` (หน่วยสตางค์) ใน `CustomerServiceRecord`
+  - สร้าง Supabase Migration (`supabase/migrations/20261105_customer_service_discount.sql`):
+    - เพิ่มคอลัมน์ `discount NUMERIC DEFAULT 0`
+    - เพิ่มคอลัมน์ `discount_satang BIGINT DEFAULT 0` ในตาราง `public.customer_services`
+- [ ] **15.2 Server Actions & Data Layer Integration (`serviceActions.ts`, `storage.ts`)**
+  - `app/actions/serviceActions.ts`:
+    - อัปเดต `createServiceAction` และ `updateServiceAction` ให้รองรับพารามิเตอร์ `discount`
+    - แปลงค่าเป็น `discount_satang` เพื่อบันทึกและส่งกลับใน response payload
+    - ปรับ mapping function ให้แปลงฟิลด์ `discount` และ `discount_satang` กลับมายังโมเดลฝั่ง Frontend
+  - `lib/storage.ts`:
+    - ปรับฟังก์ชัน `saveService` ให้จัดเก็บฟิลด์ `discount` และ `discountSatang` ลง LocalStorage
+    - รองรับการซิงค์ข้อมูลส่วนลดทั้งสองทิศทาง (Offline Cache <-> Supabase)
+- [ ] **15.3 UI Form Integration (`ModalAddTodo.tsx`, `ModalEditService.tsx`)**
+  - **New Service Booking Form (`ModalAddTodo.tsx`)**:
+    - เพิ่มช่อง Input "ส่วนลด (บาท)" ถัดจากช่อง "ค่าบริการ (บาท)" ในแท็บลงบริการลูกค้า
+    - แสดงข้อความพรีวิวสรุปยอดชำระสุทธิแบบ Real-time (เช่น *ยอดสุทธิ: ฿900 จากราคา ฿1,000 (ส่วนลด ฿100)*)
+    - ปรับการรีเซ็ตฟอร์มให้เคลียร์ค่าส่วนลดเป็นค่าว่างเมื่อบันทึกสำเร็จหรือปิด Modal ตาม Form State Clean-up Policy (§4.1)
+  - **Service Edit Modal (`ModalEditService.tsx`)**:
+    - เพิ่มช่อง Input "ส่วนลด (บาท)" พร้อมพรีวิวยอดสุทธิ
+    - โหลดค่าส่วนลดเดิมขึ้นมาแสดงเมื่อเปิด Modal แก้ไขบริการ
+- [ ] **15.4 Display & Financial Overview Updates (`ActivityCard.tsx`, `CustomerDetailPage`, `dashboard/page.tsx`)**
+  - `app/components/ActivityCard.tsx`:
+    - กรณีมีส่วนลด ให้แสดงยอดชำระสุทธิเป็นตัวหนา พร้อมระบุราคาเดิมและยอดส่วนลด (เช่น `฿900 (ลด ฿100)`)
+  - `app/customers/[id]/page.tsx`:
+    - ปรับการแสดงผลบัตรบริการในแท็บนัดหมายล่วงหน้า (Upcoming) และประวัติบริการ (History) ให้แสดงรายละเอียดส่วนลดชัดเจน
+  - `app/dashboard/page.tsx`:
+    - ปรับสูตรคำนวณรายรับ (Service Revenue): คิดจากยอดหลังหักส่วนลด $\text{Net Revenue} = \text{serviceFee} - \text{discount}$
+    - ปรับสูตรคำนวณกำไรสุทธิ (Net Profit): $\text{Net Profit} = \text{Net Revenue} - \text{Expenses}$
+- [ ] **15.5 Unit Tests & Domain Rules Update (`lib/__tests__/serviceDiscount.test.ts`, `.agent/DOMAIN_RULES.md`)**
+  - เขียน Unit Tests ครอบคลุม:
+    - การแปลงหน่วยบาทเป็นสตางค์สำหรับส่วนลด (`thbToSatang`)
+    - การบันทึกและแก้ไขข้อมูลส่วนลดผ่าน LocalStorage และ Server Actions
+    - การคำนวณรายรับและกำไรสุทธิหลังหักส่วนลด
+  - อัปเดตเอกสาร `.agent/DOMAIN_RULES.md` §3 (External Gig & Service Financial Ledger) บันทึกข้อกำหนดและสูตรการเงินที่รวมส่วนลด
+
+---
+
+## 📌 Task Status Summary
+- **Total Tasks**: 65
+- **Completed**: 49
+- **In Progress**: 0
+- **Pending**: 16

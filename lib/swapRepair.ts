@@ -1,6 +1,58 @@
 import type { ShiftRecord, ShiftSwapRecord } from "../types/vendee.ts";
 
 /**
+ * Helper to extract parent shift ID from a child shift
+ */
+function getParentShiftId(shift: ShiftRecord): string | undefined {
+  return shift.swap?.givenShiftId || shift.swapMeta?.parentShiftId;
+}
+
+/**
+ * Collect all parent shift IDs that are part of a valid swap chain (BACKLOG_ISSUE.md ISSUE-3).
+ * - Follows ancestor chains up from terminal shifts (status: active, sold_out, transferred)
+ * - Includes any parent directly referenced by an existing non-cancelled child (active, swapped_out, sold_out, transferred)
+ */
+export function getValidSwapParentIds(shifts: ShiftRecord[]): Set<string> {
+  const byId = new Map<string, ShiftRecord>();
+  shifts.forEach((s) => byId.set(s.id, s));
+
+  const validParentIds = new Set<string>();
+
+  // 1. Traverse up from living terminal shifts (active, sold_out, transferred)
+  const terminals = shifts.filter(
+    (s) => s.status === "active" || s.status === "sold_out" || s.status === "transferred"
+  );
+
+  for (const terminal of terminals) {
+    let current: ShiftRecord | undefined = terminal;
+    const visited = new Set<string>();
+
+    while (current) {
+      const parentId = getParentShiftId(current);
+      if (!parentId || visited.has(parentId)) {
+        break;
+      }
+      visited.add(parentId);
+      validParentIds.add(parentId);
+      current = byId.get(parentId);
+    }
+  }
+
+  // 2. Also include any parent directly referenced by an existing non-cancelled child
+  // (e.g. child is swapped_out in a cascading swap)
+  for (const shift of shifts) {
+    if (shift.status !== "cancelled") {
+      const parentId = getParentShiftId(shift);
+      if (parentId) {
+        validParentIds.add(parentId);
+      }
+    }
+  }
+
+  return validParentIds;
+}
+
+/**
  * Automatically clean up corrupted swap state in shift records (BACKLOG.md §9.5, BACKLOG_ISSUE.md §Data repair)
  * 1. Remove cancelled child shifts (from old incomplete undo swaps)
  * 2. Purge known corrupted Beam shift on 2026-11-03 afternoon
@@ -29,16 +81,12 @@ export function repairLocalSwapInconsistencies(shifts: ShiftRecord[]): { shifts:
     return true;
   });
 
-  // Active child parent IDs
-  const activeParentIds = new Set(
-    filtered
-      .filter((s) => s.status === "active" && (s.swap?.givenShiftId || s.swapMeta?.parentShiftId))
-      .map((s) => s.swap?.givenShiftId || s.swapMeta!.parentShiftId!)
-  );
+  // Valid child parent IDs in swap chains (including cascading swaps, ISSUE-3 fix)
+  const validParentIds = getValidSwapParentIds(filtered);
 
   // 2. Restore orphan swapped_out parents to active
   const repaired = filtered.map((s) => {
-    if (s.status === "swapped_out" && !activeParentIds.has(s.id)) {
+    if (s.status === "swapped_out" && !validParentIds.has(s.id)) {
       modified = true;
       return {
         ...s,
@@ -51,11 +99,11 @@ export function repairLocalSwapInconsistencies(shifts: ShiftRecord[]): { shifts:
     if (
       s.status === "active" &&
       (s.swapMeta || s.swap || s.swapId) &&
-      !activeParentIds.has(s.id) &&
+      !validParentIds.has(s.id) &&
       !s.swapMeta?.parentShiftId &&
       (!s.swap || s.swap.receivedShiftId !== s.id)
     ) {
-      // Lingering swap metadata on parent shift when no active child references it
+      // Lingering swap metadata on parent shift when no child references it
       modified = true;
       return {
         ...s,

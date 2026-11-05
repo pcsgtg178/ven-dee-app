@@ -25,6 +25,7 @@ import {
   canEditService,
   canEditClinicLog,
   isShiftInPast,
+  isShiftLocked,
   getShiftById,
 } from "../../lib/storage";
 import {
@@ -188,7 +189,7 @@ export default function ActivityCard({
     const shift = item as ShiftRecord;
     const shiftInfo = SHIFT_CONFIG[shift.shiftType];
     const isSwapped = Boolean(shift.swapMeta || shift.swap);
-    const isLocked = (shift.swapMeta?.isLocked ?? false) || isShiftInPast(shift.date);
+    const isLocked = isShiftLocked(shift);
     const isSwappedOut = shift.status === "swapped_out";
     const isSoldOut = shift.status === "sold_out" || shift.status === "transferred";
     const isGivenAway = isSwappedOut || isSoldOut;
@@ -322,14 +323,6 @@ export default function ActivityCard({
                 </div>
               </div>
             </div>
-
-            {/* Department / Ward */}
-            {shift.department && (
-              <div className={`flex items-center gap-1.5 text-xs text-text-muted dark:text-zinc-400 pl-1 ${isGivenAway ? "line-through" : ""}`}>
-                <MapPin className="h-3.5 w-3.5 text-text-muted shrink-0" />
-                <span>{shift.department}</span>
-              </div>
-            )}
 
             {/* Transferred Details Box */}
             {isSoldOut && (shift.transferMeta || shift.saleMeta) && (() => {

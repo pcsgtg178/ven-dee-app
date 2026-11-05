@@ -319,8 +319,45 @@
 
 ---
 
+### Phase 16: Unified Retroactive Shift Swap & Undo Swap for Normal Shifts (เปิดสิทธิ์แลกเวรและกู้คืนเวรปกติย้อนหลังภายใต้ Grace Period)
+- [x] **16.1 Core Domain & Grace Period Utilities (`lib/dateUtils.ts` & `.agent/DOMAIN_RULES.md`)**
+  - **Context & Requirement**: ปลดล็อกข้อจำกัดที่ไม่สามารถแลกเวรย้อนหลังสำหรับเวรปกติ (Test Case: เวรบ่าย วันที่ 2 แลกเป็นเช้า วันที่ 1) โดยขยายสิทธิ์ Grace Period ที่เดิมมีเฉพาะเวร Refer ให้ครอบคลุมเวรปกติทุกประเภท (เช้า, บ่าย, ดึก ทั้งหมวดดำและแดง) เฉพาะรายการ **"แลกเวร (Shift Swap)"** และ **"ยกเลิกการแลกเวร (Undo Swap)"**
+  - สร้าง helper functions ใน `lib/dateUtils.ts`:
+    - `isDateWithinGracePeriod(dateStr: string, today?: Date): boolean`
+    - `isShiftSwapEligible(shift: any, today?: Date): boolean`
+    - `isShiftUndoSwapEligible(shift: any, today?: Date): boolean`
+  - นโยบายความปลอดภัยคงเดิม: การแก้ไขเวรทั่วไป (Edit) และการลบเวร (Delete) ในอดีตยังคงถูกล็อกตามกฎ Immutability
+  - อัปเดต `.agent/DOMAIN_RULES.md` §2.3 และ §2.5 บันทึกกฎ Grace Period รวมสำหรับ Shift Swap
+- [x] **16.2 Business Logic & Storage Layer Refactoring (`lib/storage.ts`)**
+  - `swapShift`:
+    - ปรับเงื่อนไขการตรวจเวรเดิม `oldShift` ให้ใช้ `isShiftSwapEligible` (อนุญาตเวรในอดีตที่อยู่ใน Grace Period)
+    - ปรับเงื่อนไขการตรวจวันที่ของเวรใหม่ `params.newDate` ให้ใช้ `isDateWithinGracePeriod` สำหรับเวรทุกประเภท
+  - `undoSwapShift`:
+    - ปรับเงื่อนไขการกู้คืนเวรย้อนหลังให้ยอมรับ parent และ child shifts ที่อยู่ใน Grace Period
+- [x] **16.3 Server Actions & Database RPC Integration (`app/actions/shiftActions.ts`, Migration SQL)**
+  - `app/actions/shiftActions.ts`:
+    - `swapShiftAction`: ปรับ validation ขาเวรเดิมและขาเวรใหม่ให้ผ่อนปรนตาม `isDateWithinGracePeriod`
+    - `undoSwapShiftAction`: ปรับ validation ของ parent/child shifts ให้ยอมรับเวรในอดีตที่อยู่ใน Grace Period
+  - Supabase Migration (`supabase/migrations/20261106_allow_retroactive_shift_swaps.sql`):
+    - อัปเดต PostgreSQL RPC `perform_shift_swap` ให้รองรับการแลกเวรปกติย้อนหลังได้อย่างราบรื่น
+- [x] **16.4 UI / UX Enhancements (`ModalShiftSwap.tsx`, `ActivityCard.tsx`)**
+  - `app/components/ModalShiftSwap.tsx`:
+    - ปรับปรุง Banner เตือนการทำรายการย้อนหลัง (Warning Alert) ให้แสดงผลเมื่อมีการทำรายการย้อนหลังสำหรับเวรทุกประเภท
+    - เพิ่มคุณสมบัติ `min` บน Input Date ของ `newDate` ให้สอดคล้องกับขอบเขต Grace Period ป้องกันการเลือกเดือนที่หมดอายุ
+  - `app/components/ActivityCard.tsx`:
+    - ปลดล็อกปุ่ม Undo Swap ("กู้คืนเวร") สำหรับเวรที่ถูกแลกออกไปซึ่งยังอยู่ใน Grace Period
+    - ปรับปรุงปุ่มแลกเวรให้เชื่อมโยงกับ `isShiftSwapEligible`
+- [x] **16.5 Comprehensive Unit Tests (`lib/__tests__/shiftSwaps.test.ts`, `lib/__tests__/referRetroactive.test.ts`)**
+  - เขียนและรันชุดการทดสอบ:
+    - Test Case: เวรบ่าย วันที่ 2 แลกเป็นเช้า วันที่ 1 ในเดือนเดียวกัน $\rightarrow$ ผ่านสำเร็จ
+    - แลกเวรปกติข้ามเดือนในช่วงวันที่ 1–7 (เช่น 2 พ.ย. แลก 31 ต.ค.) $\rightarrow$ ผ่านสำเร็จ
+    - แลกเวรปกติที่อยู่นอก Grace Period (เช่น วันที่ของ 2 เดือนก่อน) $\rightarrow$ ถูกปฏิเสธ `SHIFT_IS_LOCKED`
+    - ยกเลิกการแลกเวร (Undo Swap) ย้อนหลังสำหรับเวรปกติใน Grace Period $\rightarrow$ ผ่านสำเร็จและคืนสถานะเวรเดิมถูกต้อง
+
+---
+
 ## 📌 Task Status Summary
-- **Total Tasks**: 65
-- **Completed**: 49
+- **Total Tasks**: 70
+- **Completed**: 54
 - **In Progress**: 0
 - **Pending**: 16

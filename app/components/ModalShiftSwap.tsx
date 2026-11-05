@@ -20,6 +20,7 @@ import {
   SHIFT_CATEGORY_CONFIG,
 } from "../../types/vendee";
 import { swapShift, getMonthlyBlackShiftStats, isShiftInPast } from "../../lib/storage";
+import { getEarliestGracePeriodDate } from "../../lib/dateUtils";
 import moment from "moment";
 import "moment/locale/th";
 import ModalConfirmAction from "./ModalConfirmAction";
@@ -200,11 +201,8 @@ export default function ModalShiftSwap({
 
   const shiftInfo = SHIFT_CONFIG[shift.shiftType];
   const catInfo = SHIFT_CATEGORY_CONFIG[shift.category];
-  const isRefer =
-    shift.shiftType === "r1" ||
-    shift.shiftType === "r2" ||
-    shift.category === "green";
-  const isRetroactiveRefer = isRefer && isShiftInPast(shift.date);
+  const isRetroactiveSwap = isShiftInPast(shift.date) || (Boolean(newDate) && isShiftInPast(newDate));
+  const earliestAllowedDate = getEarliestGracePeriodDate();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -251,11 +249,11 @@ export default function ModalShiftSwap({
             </div>
           )}
 
-          {/* Retroactive Warning Alert Banner (Phase 12.3) */}
-          {isRetroactiveRefer && (
+          {/* Retroactive Warning Alert Banner (Phase 12 & Phase 16) */}
+          {isRetroactiveSwap && (
             <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200 border border-amber-200 dark:border-amber-900/60">
               <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
-              <span>คุณกำลังทำรายการย้อนหลังสำหรับเวร Refer โปรดตรวจสอบวันที่และชื่อผู้รับเวรให้ถูกต้อง</span>
+              <span>คุณกำลังทำรายการแลกเวรย้อนหลัง โปรดตรวจสอบวันที่และข้อมูลเวรให้ถูกต้อง</span>
             </div>
           )}
 
@@ -347,6 +345,7 @@ export default function ModalShiftSwap({
                 <input
                   type="date"
                   required
+                  min={earliestAllowedDate}
                   value={newDate}
                   onChange={(e) => setNewDate(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:focus:bg-zinc-800 dark:focus:text-white dark:text-white"

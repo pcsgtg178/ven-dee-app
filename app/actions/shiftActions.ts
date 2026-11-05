@@ -8,6 +8,7 @@ import {
   getTodayDateStringBangkok,
   isReferShift,
   isReferShiftWithinGracePeriod,
+  isDateWithinGracePeriod,
 } from "../../lib/dateUtils";
 
 function mapRowToShiftRecord(row: any, swapRecord?: ShiftSwapRecord | number): ShiftRecord {
@@ -345,11 +346,7 @@ export async function swapShiftAction(data: {
     }
 
     if (oldShiftRow.is_locked || isShiftInPast(oldShiftRow.shift_date)) {
-      const isReferGrace =
-        isReferShift({ shiftType: oldShiftRow.shift_type, category: oldShiftRow.category }) &&
-        isReferShiftWithinGracePeriod(oldShiftRow.shift_date);
-
-      if (!isReferGrace) {
+      if (oldShiftRow.is_locked || !isDateWithinGracePeriod(oldShiftRow.shift_date)) {
         return {
           success: false,
           error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถแลกเวรในอดีตที่ถูกล็อกแล้วได้" },
@@ -358,12 +355,7 @@ export async function swapShiftAction(data: {
     }
 
     if (isShiftInPast(data.newDate)) {
-      const isNewRefer =
-        data.newShiftType === "r1" ||
-        data.newShiftType === "r2" ||
-        data.newCategory === "green";
-
-      if (!isNewRefer || !isReferShiftWithinGracePeriod(data.newDate)) {
+      if (!isDateWithinGracePeriod(data.newDate)) {
         return {
           success: false,
           error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถแลกมารับเวรในอดีตที่อยู่นอกช่วงเวลาผ่อนผันได้" },
@@ -668,11 +660,7 @@ export async function undoSwapShiftAction(
     }
 
     if (shift.is_locked || isShiftInPast(shift.shift_date)) {
-      const isReferGrace =
-        isReferShift({ shiftType: shift.shift_type, category: shift.category }) &&
-        isReferShiftWithinGracePeriod(shift.shift_date);
-
-      if (!isReferGrace) {
+      if (shift.is_locked || !isDateWithinGracePeriod(shift.shift_date)) {
         return {
           success: false,
           error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)" },
@@ -702,11 +690,7 @@ export async function undoSwapShiftAction(
       }
 
       if (parentShift.is_locked || isShiftInPast(parentShift.shift_date)) {
-        const isParentReferGrace =
-          isReferShift({ shiftType: parentShift.shift_type, category: parentShift.category }) &&
-          isReferShiftWithinGracePeriod(parentShift.shift_date);
-
-        if (!isParentReferGrace) {
+        if (parentShift.is_locked || !isDateWithinGracePeriod(parentShift.shift_date)) {
           return {
             success: false,
             error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกได้เนื่องจากเวรเดิมผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)" },
@@ -730,11 +714,7 @@ export async function undoSwapShiftAction(
       const activeChild = (children || []).find((c) => c.status === "active") || (children || [])[0];
       if (activeChild) {
         if (activeChild.is_locked || isShiftInPast(activeChild.shift_date)) {
-          const isChildReferGrace =
-            isReferShift({ shiftType: activeChild.shift_type, category: activeChild.category }) &&
-            isReferShiftWithinGracePeriod(activeChild.shift_date);
-
-          if (!isChildReferGrace) {
+          if (activeChild.is_locked || !isDateWithinGracePeriod(activeChild.shift_date)) {
             return {
               success: false,
               error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถยกเลิกได้เนื่องจากเวรที่ได้รับมาผ่านเวลาไปแล้ว" },

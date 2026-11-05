@@ -53,6 +53,9 @@ import {
   getTodayDateStringBangkok,
   isReferShift,
   isReferShiftWithinGracePeriod,
+  isDateWithinGracePeriod,
+  isShiftSwapEligible,
+  isShiftUndoSwapEligible,
   isShiftLocked,
 } from "./dateUtils";
 import { repairLocalSwapInconsistencies, upgradeShiftsToV3 } from "./swapRepair";
@@ -67,7 +70,13 @@ export {
   isDbSyncDisabled,
   isReferShift,
   isReferShiftWithinGracePeriod,
+  isDateWithinGracePeriod,
+  isShiftSwapEligible,
+  isShiftUndoSwapEligible,
   isShiftLocked,
+  isShiftInPast,
+  isDateInPast,
+  getTodayDateStringBangkok,
 };
 
 import {
@@ -199,9 +208,6 @@ export const initialCustomers: Customer[] = [
     createdAt: "2026-09-18T12:00:00Z",
   },
 ];
-
-// Re-export dynamic Bangkok timezone date utilities (DOMAIN_RULES.md §4.2, PROJECT_RULES.md §1, BACKLOG.md Phase 12)
-export { isShiftInPast, isDateInPast, getTodayDateStringBangkok };
 
 /**
  * Conditional Visibility Rule for Shift Editing (DOMAIN_RULES.md §2.5 & Phase 12 Grace Period):
@@ -1077,7 +1083,7 @@ export async function swapShift(params: {
   if (oldShift.status === "swapped_out" || oldShift.status === "sold_out") {
     throw new Error("เวรนี้ถูกแลกหรือส่งต่อออกไปแล้ว");
   }
-  if (isShiftLocked(oldShift)) {
+  if (!isShiftSwapEligible(oldShift)) {
     throw new Error("ไม่สามารถแลกเวรในอดีตที่ถูกล็อกแล้วได้");
   }
 
@@ -1087,11 +1093,7 @@ export async function swapShift(params: {
       : params.newCategory;
 
   if (isShiftInPast(params.newDate)) {
-    const isNewRefer =
-      params.newShiftType === "r1" ||
-      params.newShiftType === "r2" ||
-      targetCategory === "green";
-    if (!isNewRefer || !isReferShiftWithinGracePeriod(params.newDate)) {
+    if (!isDateWithinGracePeriod(params.newDate)) {
       throw new Error("ไม่สามารถแลกมารับเวรในอดีตที่อยู่นอกช่วงเวลาผ่อนผันได้");
     }
   }
@@ -1266,7 +1268,7 @@ export async function undoSwapShift(shiftId: string): Promise<boolean> {
     return false;
   }
 
-  if (isShiftLocked(targetShift)) {
+  if (!isShiftUndoSwapEligible(targetShift)) {
     throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)");
   }
 
@@ -1291,10 +1293,10 @@ export async function undoSwapShift(shiftId: string): Promise<boolean> {
     }
   }
 
-  if (parentShift && isShiftLocked(parentShift)) {
+  if (parentShift && !isShiftUndoSwapEligible(parentShift)) {
     throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรเดิมผ่านเวลาไปแล้ว (เวรถูกล็อกอยู่)");
   }
-  if (childShift && isShiftLocked(childShift)) {
+  if (childShift && !isShiftUndoSwapEligible(childShift)) {
     throw new Error("ไม่สามารถยกเลิกได้เนื่องจากเวรที่ได้รับมาผ่านเวลาไปแล้ว");
   }
 

@@ -26,6 +26,8 @@ import {
   canEditClinicLog,
   isShiftInPast,
   isShiftLocked,
+  isShiftSwapEligible,
+  isShiftUndoSwapEligible,
   getShiftById,
 } from "../../lib/storage";
 import {
@@ -190,6 +192,8 @@ export default function ActivityCard({
     const shiftInfo = SHIFT_CONFIG[shift.shiftType];
     const isSwapped = Boolean(shift.swapMeta || shift.swap);
     const isLocked = isShiftLocked(shift);
+    const isUndoLocked = !isShiftUndoSwapEligible(shift);
+    const isSwapLocked = !isShiftSwapEligible(shift);
     const isSwappedOut = shift.status === "swapped_out";
     const isSoldOut = shift.status === "sold_out" || shift.status === "transferred";
     const isGivenAway = isSwappedOut || isSoldOut;
@@ -537,9 +541,9 @@ export default function ActivityCard({
                       {(onUndoSwap || onRestoreShift) && (
                         <button
                           type="button"
-                          disabled={isLocked}
+                          disabled={isUndoLocked}
                           onClick={() => {
-                            if (isLocked) return;
+                            if (isUndoLocked) return;
                             if (onUndoSwap) {
                               onUndoSwap(shift);
                             } else if (onRestoreShift) {
@@ -547,18 +551,18 @@ export default function ActivityCard({
                             }
                           }}
                           className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all shadow-2xs ${
-                            isLocked
+                            isUndoLocked
                               ? "cursor-not-allowed bg-slate-300 text-slate-500 dark:bg-zinc-800 dark:text-zinc-500 opacity-60"
                               : "cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95"
                           }`}
                           title={
-                            isLocked
-                              ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว"
+                            isUndoLocked
+                              ? "ไม่สามารถยกเลิกได้เนื่องจากเวรผ่านเวลาไปแล้ว (อยู่นอกช่วงเวลาผ่อนผัน)"
                               : "กู้คืนเวรนี้และยกเลิกเวรที่ได้รับจากการแลก"
                           }
                         >
-                          {isLocked ? <Lock className="h-3 w-3" /> : <RotateCcw className="h-3 w-3" />}
-                          <span>{isLocked ? "เวรล็อกอยู่" : "กู้คืนเวร (ยกเลิกการแลก)"}</span>
+                          {isUndoLocked ? <Lock className="h-3 w-3" /> : <RotateCcw className="h-3 w-3" />}
+                          <span>{isUndoLocked ? "เวรล็อกอยู่" : "กู้คืนเวร (ยกเลิกการแลก)"}</span>
                         </button>
                       )}
                     </div>
@@ -600,9 +604,14 @@ export default function ActivityCard({
             {!isGivenAway && onSwapShift && (
               <button
                 type="button"
-                onClick={() => onSwapShift(shift)}
-                className="rounded-lg p-1.5 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 transition-all dark:hover:bg-zinc-800 cursor-pointer"
-                title="แลกเวรนี้"
+                disabled={isSwapLocked}
+                onClick={() => !isSwapLocked && onSwapShift(shift)}
+                className={`rounded-lg p-1.5 transition-all dark:hover:bg-zinc-800 ${
+                  isSwapLocked
+                    ? "cursor-not-allowed text-slate-300 dark:text-zinc-600 opacity-40"
+                    : "text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 cursor-pointer"
+                }`}
+                title={isSwapLocked ? "ไม่สามารถแลกเวรได้เนื่องจากเวรอยู่นอกช่วงเวลาผ่อนผัน" : "แลกเวรนี้"}
               >
                 <ArrowLeftRight className="h-4 w-4" />
               </button>

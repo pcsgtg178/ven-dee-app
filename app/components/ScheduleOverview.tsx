@@ -55,7 +55,7 @@ import BottomNav from "./BottomNav";
 import ModalConfirmAction, { ConfirmVariant } from "./ModalConfirmAction";
 import ModalExportCalendar from "./ModalExportCalendar";
 import { compareEventsByStartTime } from "../../lib/sortEvents";
-import { isShiftInPast, isShiftLocked } from "../../lib/dateUtils";
+import { isShiftInPast, isShiftLocked, isShiftUndoSwapEligible } from "../../lib/dateUtils";
 
 type ConfirmModalState =
   | {
@@ -531,7 +531,7 @@ export default function ScheduleOverview() {
 
   // 1. Request Undo Swap -> Show modal
   const handleRequestUndoSwap = (shift: ShiftRecord) => {
-    if (isShiftLocked(shift)) return;
+    if (!isShiftUndoSwapEligible(shift)) return;
     setConfirmActionState({ type: "undoSwap", shift });
   };
 

@@ -33,6 +33,7 @@ import {
   canEditShift,
   canEditService,
   canEditClinicLog,
+  isShiftSwapEligible,
 } from "../../lib/storage";
 import MonthlyQuotaWidget from "./MonthlyQuotaWidget";
 import { compareEventsByStartTime } from "../../lib/sortEvents";
@@ -242,19 +243,27 @@ function TimelineRow({
                 )}
               </button>
             )}
-          {!isGivenAway && onSwapShift && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSwapShift(shift);
-              }}
-              className="ml-auto rounded-lg p-1 text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-sky-300 transition-all"
-              title="แลกเวรนี้"
-            >
-              <ArrowLeftRight className="h-3.5 w-3.5" />
-            </button>
-          )}
+          {!isGivenAway && onSwapShift && (() => {
+            const isSwapLocked = !isShiftSwapEligible(shift);
+            return (
+              <button
+                type="button"
+                disabled={isSwapLocked}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isSwapLocked) onSwapShift(shift);
+                }}
+                className={`ml-auto rounded-lg p-1 transition-all ${
+                  isSwapLocked
+                    ? "cursor-not-allowed text-slate-300 dark:text-zinc-600 opacity-40"
+                    : "text-text-muted hover:bg-sky-50 hover:text-secondary active:scale-95 dark:hover:bg-zinc-800 dark:hover:text-sky-300 cursor-pointer"
+                }`}
+                title={isSwapLocked ? "ไม่สามารถแลกเวรได้เนื่องจากเวรอยู่นอกช่วงเวลาผ่อนผัน" : "แลกเวรนี้"}
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+              </button>
+            );
+          })()}
           {canEditShift(shift) && !isGivenAway && onEditShift && (
             <button
               type="button"

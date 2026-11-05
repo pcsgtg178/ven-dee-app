@@ -77,14 +77,14 @@ export function isReferShift(
 }
 
 /**
- * Grace Period Calculation for Refer Shifts (BACKLOG.md Phase 12.1 & DOMAIN_RULES.md §2.4)
- * - Rule 1 (Current Month): Shift date in same month as current date (YYYY-MM) -> Allowed
+ * Grace Period Calculation (BACKLOG.md Phase 12 & Phase 16)
+ * - Rule 1 (Current Month): Date in same month as current date (YYYY-MM) -> Allowed
  * - Rule 2 (Previous Month Grace Window): If today is day 1-7, allow previous month (YYYY-MM) -> Allowed
- * - Rule 3 (Expired Months & Non-Refer Shifts): Locked per Immutability rules
+ * - Rule 3 (Expired Months): Outside grace period
  */
-export function isReferShiftWithinGracePeriod(shiftDate: string, today?: Date): boolean {
-  if (!shiftDate) return false;
-  const parts = shiftDate.split("-");
+export function isDateWithinGracePeriod(dateStr: string, today?: Date): boolean {
+  if (!dateStr) return false;
+  const parts = dateStr.split("-");
   if (parts.length < 3) return false;
   const shiftYear = Number(parts[0]);
   const shiftMonth = Number(parts[1]);
@@ -92,7 +92,7 @@ export function isReferShiftWithinGracePeriod(shiftDate: string, today?: Date): 
 
   const { year: currentYear, month: currentMonth, day: currentDay } = getBangkokDateParts(today);
 
-  // Rule 1 (Current Month): Shift date is in the same month as current date (YYYY-MM)
+  // Rule 1 (Current Month): Date is in the same month as current date (YYYY-MM)
   if (shiftYear === currentYear && shiftMonth === currentMonth) {
     return true;
   }
@@ -111,7 +111,62 @@ export function isReferShiftWithinGracePeriod(shiftDate: string, today?: Date): 
 }
 
 /**
- * Unified check whether a shift is locked from editing, swapping, transferring, or deleting.
+ * Backward-compatible alias for Refer shifts (Phase 12)
+ */
+export const isReferShiftWithinGracePeriod = isDateWithinGracePeriod;
+
+/**
+ * Get the earliest selectable date (YYYY-MM-01) permitted under Grace Period rules.
+ * Used for setting min on date pickers.
+ */
+export function getEarliestGracePeriodDate(today?: Date): string {
+  const { year: currentYear, month: currentMonth, day: currentDay } = getBangkokDateParts(today);
+  if (currentDay >= 1 && currentDay <= 7) {
+    const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+    return `${prevYear}-${String(prevMonth).padStart(2, "0")}-01`;
+  }
+  return `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+}
+
+/**
+ * Check if a shift is eligible to be swapped (Phase 16).
+ * Any shift (normal or refer) within the Grace Period is eligible to be swapped.
+ */
+export function isShiftSwapEligible(
+  shift: {
+    date: string;
+    isLocked?: boolean;
+    swapMeta?: { isLocked?: boolean };
+  } | null | undefined,
+  today?: Date
+): boolean {
+  if (!shift) return false;
+  if (shift.isLocked || shift.swapMeta?.isLocked) {
+    return false;
+  }
+  if (!isShiftInPast(shift.date)) {
+    return true;
+  }
+  return isDateWithinGracePeriod(shift.date, today);
+}
+
+/**
+ * Check if a swap on this shift is eligible to be undone/restored (Phase 16).
+ */
+export function isShiftUndoSwapEligible(
+  shift: {
+    date: string;
+    isLocked?: boolean;
+    swapMeta?: { isLocked?: boolean };
+  } | null | undefined,
+  today?: Date
+): boolean {
+  return isShiftSwapEligible(shift, today);
+}
+
+/**
+ * Unified check whether a shift is locked from editing, transferring, or deleting.
  * Refer shifts within grace period are exempt from historical date locking.
  */
 export function isShiftLocked(
@@ -126,7 +181,7 @@ export function isShiftLocked(
 ): boolean {
   if (!shift) return false;
 
-  // Refer shift within grace period is unlocked for retroactive operations
+  // Refer shift within grace period is unlocked for retroactive operations (editing, transferring)
   if (isReferShift(shift) && isReferShiftWithinGracePeriod(shift.date, today)) {
     return false;
   }

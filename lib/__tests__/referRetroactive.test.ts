@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {
   isReferShift,
   isReferShiftWithinGracePeriod,
+  isDateWithinGracePeriod,
+  isShiftSwapEligible,
+  isShiftUndoSwapEligible,
   isShiftLocked,
   isShiftInPast,
 } from "../dateUtils.ts";
@@ -237,4 +240,70 @@ test("5.1 Phase 13 ICS generation produces clean ER shift titles without departm
   assert.ok(!ics.includes("☀️ [เวรเช้า] รพ."));
   assert.ok(!ics.includes("SUMMARY:🩺 [เวร CT เช้า] ห้อง CT"));
   assert.ok(!ics.includes("SUMMARY:🩺 [เวร CT บ่าย] ห้อง CT"));
+});
+
+test("6.1 Phase 16: isShiftSwapEligible allows normal shifts (morning/afternoon/night) in Grace Period", () => {
+  const midNov = new Date("2026-11-15T10:00:00+07:00");
+
+  const afternoonNov2 = createMockShift({
+    date: "2026-11-02",
+    shiftType: "afternoon",
+    category: "black",
+  });
+  // Normal shift in current month: eligible to swap!
+  assert.equal(isShiftSwapEligible(afternoonNov2, midNov), true);
+
+  const morningNov1 = createMockShift({
+    date: "2026-11-01",
+    shiftType: "morning",
+    category: "black",
+  });
+  // Normal shift in current month: eligible to swap!
+  assert.equal(isShiftSwapEligible(morningNov1, midNov), true);
+
+  // Expired normal shift (from 2 months ago) -> rejected
+  const oldShiftSep = createMockShift({
+    date: "2026-09-20",
+    shiftType: "morning",
+    category: "black",
+  });
+  assert.equal(isShiftSwapEligible(oldShiftSep, midNov), false);
+});
+
+test("6.2 Phase 16 Test Case: เวรบ่าย วันที่ 2 แลกเป็นเช้าวันที่ 1 (User Test Case validation)", () => {
+  // Current time is Nov 5, 2026
+  const today = new Date("2026-11-05T22:52:45+07:00");
+
+  const givenShift = createMockShift({
+    date: "2026-11-02",
+    shiftType: "afternoon",
+    category: "black",
+  });
+  const targetDate = "2026-11-01";
+
+  // Given shift (บ่าย 2 พ.ย.) is eligible to be swapped
+  assert.equal(isShiftSwapEligible(givenShift, today), true);
+
+  // Target shift date (1 พ.ย.) is within Grace Period
+  assert.equal(isDateWithinGracePeriod(targetDate, today), true);
+});
+
+test("6.3 Phase 16: isShiftUndoSwapEligible allows undoing swaps on normal shifts in Grace Period", () => {
+  const midNov = new Date("2026-11-15T10:00:00+07:00");
+
+  const swappedAfternoon = createMockShift({
+    date: "2026-11-02",
+    shiftType: "afternoon",
+    category: "black",
+    status: "swapped_out",
+  });
+  assert.equal(isShiftUndoSwapEligible(swappedAfternoon, midNov), true);
+
+  const expiredSwapped = createMockShift({
+    date: "2026-08-15",
+    shiftType: "afternoon",
+    category: "black",
+    status: "swapped_out",
+  });
+  assert.equal(isShiftUndoSwapEligible(expiredSwapped, midNov), false);
 });

@@ -227,7 +227,7 @@ export default function ScheduleCalendarView({
 
     if (isPersonalEvent) {
       return (
-        <div className="truncate text-[9px] sm:text-[10px] font-bold leading-tight px-0.5 py-0.5 text-white flex items-center gap-0.5 w-full">
+        <div className="truncate text-[7px] sm:text-[8px] font-bold leading-tight px-0.5 py-0.5 text-white flex items-center gap-0.5 w-full">
           <span className="truncate">{title}</span>
         </div>
       );
@@ -242,7 +242,7 @@ export default function ScheduleCalendarView({
     }
 
     return (
-      <div className="truncate text-xs font-semibold px-1 py-0.5 text-slate-700 dark:text-slate-200">
+      <div className="truncate text-[7px] sm:text-[8px] font-bold px-1 py-0.5 text-slate-700 dark:text-slate-200">
         {title}
       </div>
     );

@@ -44,10 +44,10 @@ export function getTodayDateStringBangkok(): string {
 /**
  * Checks whether a given YYYY-MM-DD date is strictly in the past relative to Asia/Bangkok current date.
  */
-export function isDateInPast(dateStr: string): boolean {
+export function isDateInPast(dateStr: string, today?: Date): boolean {
   if (!dateStr) return false;
   try {
-    const todayStr = getTodayDateStringBangkok();
+    const todayStr = getBangkokDateParts(today).dateStr;
     return dateStr < todayStr;
   } catch {
     return false;
@@ -57,8 +57,8 @@ export function isDateInPast(dateStr: string): boolean {
 /**
  * Same as isDateInPast, used for shifts.
  */
-export function isShiftInPast(dateStr: string): boolean {
-  return isDateInPast(dateStr);
+export function isShiftInPast(dateStr: string, today?: Date): boolean {
+  return isDateInPast(dateStr, today);
 }
 
 /**
@@ -190,8 +190,91 @@ export function isShiftLocked(
   if (shift.isLocked || shift.swapMeta?.isLocked) {
     return true;
   }
-  if (isShiftInPast(shift.date)) {
+  if (isShiftInPast(shift.date, today)) {
     return true;
   }
   return false;
+}
+
+/**
+ * Customer Service Retroactive Grace Period (Phase 17 / DOMAIN_RULES.md §3.6)
+ * Separate from Hospital Shift 1-7 day cutoff:
+ * - Current Calendar Month (YYYY-MM) -> Allowed
+ * - Full Previous Calendar Month (YYYY-MM) regardless of day-of-month -> Allowed
+ * - Older months -> Expired
+ */
+export function isServiceDateWithinGracePeriod(dateStr: string, today?: Date): boolean {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const [yearStr, monthStr, dayStr] = dateStr.split("-");
+  const serviceYear = Number(yearStr);
+  const serviceMonth = Number(monthStr);
+  const serviceDay = Number(dayStr);
+  if (
+    isNaN(serviceYear) ||
+    isNaN(serviceMonth) ||
+    isNaN(serviceDay) ||
+    serviceMonth < 1 ||
+    serviceMonth > 12 ||
+    serviceDay < 1 ||
+    serviceDay > 31
+  ) {
+    return false;
+  }
+
+  const { year: currentYear, month: currentMonth } = getBangkokDateParts(today);
+
+  // Current calendar month
+  if (serviceYear === currentYear && serviceMonth === currentMonth) {
+    return true;
+  }
+
+  // Full previous calendar month (handles Jan -> Dec year boundary)
+  const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+  const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+  if (serviceYear === prevYear && serviceMonth === prevMonth) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Earliest selectable date (YYYY-MM-01) permitted when editing Customer Services
+ * under the 1-calendar-month retroactive grace period.
+ */
+export function getEarliestServiceGracePeriodDate(today?: Date): string {
+  const { year: currentYear, month: currentMonth } = getBangkokDateParts(today);
+  const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+  const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+  return `${prevYear}-${String(prevMonth).padStart(2, "0")}-01`;
+}
+
+/**
+ * Check whether a Customer Service record can be edited:
+ * - Cancelled records remain locked.
+ * - Today/future records are editable.
+ * - Past records (both 'upcoming' and 'completed') are editable within the 1-month calendar grace period.
+ */
+export function isServiceEditable(
+  service: { date?: string; status?: string } | null | undefined,
+  today?: Date
+): boolean {
+  if (!service || !service.date) return false;
+  if (service.status === "cancelled") return false;
+  if (!isDateInPast(service.date, today)) return true;
+  return isServiceDateWithinGracePeriod(service.date, today);
+}
+
+/**
+ * Check whether a Customer Service record can be deleted:
+ * - Today/future records are deletable.
+ * - Past records are deletable within the 1-month calendar grace period.
+ */
+export function isServiceDeletable(
+  service: { date?: string; status?: string } | null | undefined,
+  today?: Date
+): boolean {
+  if (!service || !service.date) return false;
+  if (!isDateInPast(service.date, today)) return true;
+  return isServiceDateWithinGracePeriod(service.date, today);
 }

@@ -221,6 +221,18 @@
 2. ห้ามเรียงตามเวลาที่สร้างล่าสุด (`createdAt`) — ใช้ `createdAt` เป็น tie-breaker เท่านั้น เมื่อเวลาเริ่มเท่ากัน
 3. รายการไม่มีเวลา (all-day) แสดงก่อน; ใช้ comparator กลางตัวเดียว (`lib/sortEvents.ts`) ทุกหน้าจอ
 
+### 3.6 Customer Service Retroactive Editing & Deletion Rules (กฎการแก้ไขและลบบริการลูกค้าย้อนหลัง - Phase 17)
+1. **1-Calendar-Month Retroactive Grace Period (`Asia/Bangkok`)**:
+   - **Rule 1 (Current Month)**: รายการบริการลูกค้า (`CustomerServiceRecord`) ที่มีวันที่ให้บริการอยู่ในเดือนปัจจุบัน (`YYYY-MM`) สามารถ **แก้ไข** และ **ลบ** ย้อนหลังได้
+   - **Rule 2 (Full Previous Calendar Month)**: รายการที่มีวันที่ให้บริการอยู่ในเดือนก่อนหน้าเต็มเดือน (ตั้งแต่วันที่ 1 ของเดือนก่อนหน้า เช่น หากวันนี้คือ `2026-11-11` จะแก้ไข/ลบรายการตั้งแต่ `2026-10-01` เป็นต้นมาได้ตลอดทั้งเดือน ไม่ตัดวันที่ 7 แบบเวรโรงพยาบาล)
+   - **Rule 3 (Expired Months)**: รายการที่มีวันที่เก่ากว่า 1 เดือนปฏิทิน (เช่น เดือน `2026-09` ในกรณีข้างต้น) จะถูกล็อกถาวร (`SERVICE_IS_LOCKED`) ทั้งฝั่ง Client และ Server เพื่อรักษาความถูกต้องของงบการเงินย้อนหลัง
+   - *(การสร้างบริการใหม่ `createServiceAction` ยังคงไม่จำกัดวันที่ตามเดิม)*
+2. **Status Scope**:
+   - อนุญาตให้แก้ไขรายการทั้งสถานะ **`upcoming`** และ **`completed`** (ทั้งในหน้ารายการตารางงานและหน้ารายละเอียดลูกค้า `/customers/[id]`) รวมถึงการสลับสถานะ `upcoming` ↔ `completed` ภายในกรอบ 1 เดือนปฏิทิน
+   - รายการสถานะ **`cancelled`** ยังคงถูกล็อกไม่ให้แก้ไขทุกกรณี
+3. **Shift Overlap & Financial Consistency**:
+   - การแก้ไขวัน/เวลาบริการย้อนหลังยังคงต้องตรวจ `checkServiceShiftOverlap` ไม่ให้ชนช่วงเวลาเวรโรงพยาบาลที่ active และใช้รูปแบบ Server-First (`unwrap`) ในการบันทึก/ลบเพื่อให้ยอดสรุปรายรับ-ต้นทุนบน `/dashboard` สอดคล้องกับฐานข้อมูลเสมอ
+
 ---
 
 ## 4. iPhone / Apple Calendar Export & Synchronization Domain Invariants (ระบบส่งออกปฏิทิน iPhone / Apple Calendar)

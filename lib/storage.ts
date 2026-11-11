@@ -57,6 +57,10 @@ import {
   isShiftSwapEligible,
   isShiftUndoSwapEligible,
   isShiftLocked,
+  isServiceDateWithinGracePeriod,
+  getEarliestServiceGracePeriodDate,
+  isServiceEditable,
+  isServiceDeletable,
 } from "./dateUtils";
 import { repairLocalSwapInconsistencies, upgradeShiftsToV3 } from "./swapRepair";
 import { isShiftTransferrable, validateShiftTransferrable, isShiftSellable, validateShiftSellable } from "./shiftTransfer";
@@ -77,6 +81,10 @@ export {
   isShiftInPast,
   isDateInPast,
   getTodayDateStringBangkok,
+  isServiceDateWithinGracePeriod,
+  getEarliestServiceGracePeriodDate,
+  isServiceEditable,
+  isServiceDeletable,
 };
 
 import {
@@ -225,14 +233,20 @@ export function canEditShift(shift: ShiftRecord): boolean {
 }
 
 /**
- * Conditional Visibility Rule for Customer Service / Appointment Editing:
- * - Hide the edit button if service record is already completed or locked in the past.
- * - Show edit button for pending/upcoming appointments and editable today's service entries.
+ * Conditional Visibility Rule for Customer Service / Appointment Editing (DOMAIN_RULES.md §3.6):
+ * - Cancelled service records remain locked.
+ * - Upcoming & completed service records can be edited when today/future or within the 1-calendar-month grace period.
  */
 export function canEditService(service: CustomerServiceRecord): boolean {
-  if (service.status === "completed" || service.status === "cancelled") return false;
-  if (isDateInPast(service.date)) return false;
-  return true;
+  return isServiceEditable(service);
+}
+
+/**
+ * Deletion eligibility rule for Customer Service records (DOMAIN_RULES.md §3.6):
+ * - Today/future service records and past records within the 1-calendar-month grace period can be deleted.
+ */
+export function canDeleteService(service: CustomerServiceRecord): boolean {
+  return isServiceDeletable(service);
 }
 
 export const initialShifts: ShiftRecord[] = [
@@ -1639,6 +1653,26 @@ export async function saveService(
     createdAt?: string;
   }
 ): Promise<CustomerServiceRecord> {
+  const current = getServices();
+  const isUpdate = Boolean(service.id && current.some((s) => s.id === service.id));
+  const id = service.id || `srv-${Date.now()}`;
+  const existingIdx = current.findIndex((s) => s.id === id);
+  const existingService = existingIdx >= 0 ? current[existingIdx] : undefined;
+
+  // Enforce status & 1-calendar-month retroactive lock on edits (DOMAIN_RULES.md §3.6)
+  if (isUpdate && existingService) {
+    if (!canEditService(existingService)) {
+      throw new Error(
+        existingService.status === "cancelled"
+          ? "ไม่สามารถแก้ไขบริการที่ถูกยกเลิกแล้วได้"
+          : "ไม่สามารถแก้ไขบริการย้อนหลังที่เกินระยะเวลา 1 เดือนปฏิทินได้"
+      );
+    }
+    if (isDateInPast(service.date) && !isServiceDateWithinGracePeriod(service.date)) {
+      throw new Error("ไม่สามารถย้ายวันที่บริการไปเกินระยะเวลาย้อนหลัง 1 เดือนปฏิทินได้");
+    }
+  }
+
   // Prevent booking service during an active shift's working hours
   const conflictingShift = findConflictingShift(service.date, service.time);
   if (conflictingShift) {
@@ -1647,12 +1681,6 @@ export async function saveService(
       `เวลา ${service.time} น. ตรงกับช่วงเวลา${shiftInfo.label} (${shiftInfo.period}) ที่ขึ้นเวรอยู่ ไม่สามารถนัดหมายทับเวลาเวรได้`
     );
   }
-
-  const current = getServices();
-  const isUpdate = Boolean(service.id && current.some((s) => s.id === service.id));
-  const id = service.id || `srv-${Date.now()}`;
-  const existingIdx = current.findIndex((s) => s.id === id);
-  const existingService = existingIdx >= 0 ? current[existingIdx] : undefined;
   const normalizedTime = (service.time || "09:00").slice(0, 5);
   const cleanMeds = (service.medications || []).map((m) => m.trim()).filter(Boolean);
   // Medication usage lines: auto-calc line cost; total cost = Σ line cost (DOMAIN_RULES §3.1.3)
@@ -1666,83 +1694,96 @@ export async function saveService(
       ? (existingService?.medicationCostSatang ?? service.medicationCostSatang ?? 0) / 100
       : 0;
 
+  const resolvedStatus = service.status ?? existingService?.status ?? "upcoming";
+  const resolvedDurationHours =
+    service.durationHours !== undefined ? service.durationHours : existingService?.durationHours;
+  const resolvedTravelExpenseSatang =
+    service.travelExpenseSatang !== undefined
+      ? service.travelExpenseSatang
+      : existingService?.travelExpenseSatang;
+  const resolvedOtherExpensesSatang =
+    service.otherExpensesSatang !== undefined
+      ? service.otherExpensesSatang
+      : existingService?.otherExpensesSatang;
+
   let remoteService: CustomerServiceRecord | null = null;
 
+  // 1. Sync with Supabase via Server Action FIRST (Server-First pattern with unwrap)
   if (!isDbSyncDisabled()) {
     if (isUpdate) {
       // If updating a record that exists in Supabase (UUID), use updateServiceAction
       if (!id.startsWith("srv-")) {
-        try {
-          const res = await updateServiceAction(id, {
-            customerId: service.customerId,
-            customerName: service.customerName,
-            date: service.date,
-            time: normalizedTime,
-            services: service.services || existingService?.services || ["injection"],
-            otherServiceText:
-              service.otherServiceText !== undefined
-                ? service.otherServiceText
-                : existingService?.otherServiceText,
-            medications: cleanMeds,
-            medicationUsages: usages,
-            medicationCost: legacyMedicationCostThb,
-            note: service.note,
-            price: service.price,
-          });
-          if (res.success && res.data) {
-            remoteService = res.data;
-          }
-        } catch (e) {
-          console.warn("updateServiceAction warning:", e);
-        }
-      } else {
-        // Local record updating online, push to Supabase as new record
-        try {
-          const res = await createServiceAction({
-            customerId: service.customerId,
-            customerName: service.customerName,
-            date: service.date,
-            time: normalizedTime,
-            services: service.services || existingService?.services || ["injection"],
-            otherServiceText:
-              service.otherServiceText !== undefined
-                ? service.otherServiceText
-                : existingService?.otherServiceText,
-            medications: cleanMeds,
-            medicationUsages: usages,
-            medicationCost: legacyMedicationCostThb,
-            note: service.note,
-            price: service.price,
-          });
-          if (res.success && res.data) {
-            remoteService = res.data;
-          }
-        } catch (e) {
-          console.warn("createServiceAction for local service warning:", e);
-        }
-      }
-    } else {
-      // Creating a brand new service record
-      try {
-        const res = await createServiceAction({
+        const res = await updateServiceAction(id, {
           customerId: service.customerId,
           customerName: service.customerName,
           date: service.date,
           time: normalizedTime,
-          services: service.services || ["injection"],
-          otherServiceText: service.otherServiceText,
+          services: service.services || existingService?.services || ["injection"],
+          otherServiceText:
+            service.otherServiceText !== undefined
+              ? service.otherServiceText
+              : existingService?.otherServiceText,
           medications: cleanMeds,
           medicationUsages: usages,
           medicationCost: legacyMedicationCostThb,
           note: service.note,
           price: service.price,
+          status: resolvedStatus,
+          durationHours: resolvedDurationHours,
+          travelExpense:
+            resolvedTravelExpenseSatang !== undefined ? resolvedTravelExpenseSatang / 100 : undefined,
+          otherExpenses:
+            resolvedOtherExpensesSatang !== undefined ? resolvedOtherExpensesSatang / 100 : undefined,
         });
-        if (res.success && res.data) {
-          remoteService = res.data;
-        }
-      } catch (e) {
-        console.warn("createServiceAction warning:", e);
+        remoteService = unwrap(res);
+      } else {
+        // Local record updating online, push to Supabase as new record
+        const res = await createServiceAction({
+          customerId: service.customerId,
+          customerName: service.customerName,
+          date: service.date,
+          time: normalizedTime,
+          services: service.services || existingService?.services || ["injection"],
+          otherServiceText:
+            service.otherServiceText !== undefined
+              ? service.otherServiceText
+              : existingService?.otherServiceText,
+          medications: cleanMeds,
+          medicationUsages: usages,
+          medicationCost: legacyMedicationCostThb,
+          note: service.note,
+          price: service.price,
+          status: resolvedStatus,
+          durationHours: resolvedDurationHours,
+          travelExpense:
+            resolvedTravelExpenseSatang !== undefined ? resolvedTravelExpenseSatang / 100 : undefined,
+          otherExpenses:
+            resolvedOtherExpensesSatang !== undefined ? resolvedOtherExpensesSatang / 100 : undefined,
+        });
+        remoteService = unwrap(res);
       }
+    } else {
+      // Creating a brand new service record
+      const res = await createServiceAction({
+        customerId: service.customerId,
+        customerName: service.customerName,
+        date: service.date,
+        time: normalizedTime,
+        services: service.services || ["injection"],
+        otherServiceText: service.otherServiceText,
+        medications: cleanMeds,
+        medicationUsages: usages,
+        medicationCost: legacyMedicationCostThb,
+        note: service.note,
+        price: service.price,
+        status: resolvedStatus,
+        durationHours: resolvedDurationHours,
+        travelExpense:
+          resolvedTravelExpenseSatang !== undefined ? resolvedTravelExpenseSatang / 100 : undefined,
+        otherExpenses:
+          resolvedOtherExpensesSatang !== undefined ? resolvedOtherExpensesSatang / 100 : undefined,
+      });
+      remoteService = unwrap(res);
     }
   }
 
@@ -1753,6 +1794,10 @@ export async function saveService(
     id: finalId,
     type: "service",
     time: normalizedTime,
+    status: resolvedStatus,
+    durationHours: resolvedDurationHours,
+    travelExpenseSatang: resolvedTravelExpenseSatang,
+    otherExpensesSatang: resolvedOtherExpensesSatang,
     medications: cleanMeds,
     medicationUsages: usages,
     medicationCostSatang: usageCostSatang ?? Math.round(legacyMedicationCostThb * 100),
@@ -1780,18 +1825,15 @@ export async function deleteService(id: string): Promise<void> {
   const current = getServices();
   const target = current.find((s) => s.id === id);
 
-  // 1. Check if service date is in the past
-  if (target && isDateInPast(target.date)) {
-    throw new Error("ไม่สามารถลบบริการย้อนหลังหรือที่ผ่านเวลาไปแล้วได้ (Overtime / Past service)");
+  // 1. Check if service is outside the 1-calendar-month retroactive grace period
+  if (target && !canDeleteService(target)) {
+    throw new Error("ไม่สามารถลบบริการย้อนหลังที่เกินระยะเวลา 1 เดือนปฏิทินได้");
   }
 
-  // 2. Call Supabase delete action
+  // 2. Call Supabase delete action FIRST (Server-First pattern with unwrap)
   if (!isDbSyncDisabled() && !id.startsWith("srv-")) {
-    try {
-      await deleteServiceAction(id);
-    } catch (err: any) {
-      console.warn("deleteServiceAction warning:", err);
-    }
+    const res = await deleteServiceAction(id);
+    unwrap(res);
   }
 
   // 3. Perform local delete

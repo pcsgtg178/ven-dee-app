@@ -23,6 +23,7 @@ import {
 import {
   canEditShift,
   canEditService,
+  canDeleteService,
   canEditClinicLog,
   isShiftInPast,
   isShiftLocked,
@@ -647,6 +648,7 @@ export default function ActivityCard({
   // ─── CUSTOMER SERVICE CARD ───
   const service = item as CustomerServiceRecord;
   const canEdit = canEditService(service);
+  const canDelete = canDeleteService(service);
 
   return (
     <div className="relative overflow-hidden rounded-2xl border p-3.5 shadow-xs transition-all hover:shadow-md border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900">
@@ -721,9 +723,20 @@ export default function ActivityCard({
           )}
           <button
             type="button"
-            onClick={onDelete}
-            className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red transition-colors dark:hover:bg-zinc-800"
-            title="ลบ"
+            disabled={!canDelete}
+            onClick={() => {
+              if (canDelete) onDelete();
+            }}
+            className={`rounded-lg p-1.5 transition-colors ${
+              canDelete
+                ? "text-text-muted hover:bg-rose-50 hover:text-shift-red dark:hover:bg-zinc-800 cursor-pointer"
+                : "text-slate-300 dark:text-zinc-600 opacity-40 cursor-not-allowed"
+            }`}
+            title={
+              canDelete
+                ? "ลบ"
+                : "ไม่สามารถลบได้เนื่องจากเกินระยะเวลาย้อนหลัง 1 เดือน"
+            }
           >
             <Trash2 className="h-4 w-4" />
           </button>

@@ -31,6 +31,7 @@ import { Customer, CustomerServiceRecord, SERVICE_CONFIG } from "../../../types/
 import {
   getCustomerById,
   canEditService,
+  canDeleteService,
   getServices,
   saveService,
   deleteService,
@@ -122,12 +123,17 @@ export default function CustomerDetailPage() {
 
   // Toggle status between upcoming and completed
   const handleToggleStatus = async (srv: CustomerServiceRecord) => {
-    const nextStatus = srv.status === "completed" ? "upcoming" : "completed";
-    await saveService({
-      ...srv,
-      status: nextStatus,
-    });
-    loadLocalData();
+    try {
+      const nextStatus = srv.status === "completed" ? "upcoming" : "completed";
+      await saveService({
+        ...srv,
+        status: nextStatus,
+      });
+      loadLocalData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเปลี่ยนสถานะบริการ";
+      alert(msg);
+    }
   };
 
   if (!customer) {
@@ -384,6 +390,7 @@ function ServiceDetailCard({
 }: ServiceDetailCardProps) {
   const isCompleted = service.status === "completed";
   const canEdit = canEditService(service);
+  const canDelete = canDeleteService(service);
 
   return (
     <div
@@ -409,12 +416,24 @@ function ServiceDetailCard({
             </span>
             <button
               type="button"
-              onClick={onToggleStatus}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold cursor-pointer transition-colors ${
+              disabled={!canEdit}
+              onClick={() => {
+                if (canEdit) onToggleStatus();
+              }}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold transition-colors ${
+                canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-70"
+              } ${
                 isCompleted
                   ? "bg-primary-light text-primary-dark dark:bg-emerald-950/80 dark:text-emerald-300"
                   : "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
               }`}
+              title={
+                canEdit
+                  ? isCompleted
+                    ? "เปลี่ยนกลับเป็นรอดำเนินการ"
+                    : "บันทึกเป็นบริการเสร็จสิ้น"
+                  : "ไม่สามารถเปลี่ยนสถานะได้เนื่องจากเกินระยะเวลาย้อนหลัง 1 เดือน"
+              }
             >
               <CheckCircle2 className="h-3 w-3" />
               {isCompleted ? "บริการเสร็จสิ้น" : "รอดำเนินการ"}
@@ -486,9 +505,20 @@ function ServiceDetailCard({
           )}
           <button
             type="button"
-            onClick={onDelete}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-950/40 transition-colors"
-            title="ลบรายการนี้"
+            disabled={!canDelete}
+            onClick={() => {
+              if (canDelete) onDelete();
+            }}
+            className={`rounded-lg p-1.5 transition-colors ${
+              canDelete
+                ? "text-slate-400 hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-950/40 cursor-pointer"
+                : "text-slate-300 dark:text-zinc-600 opacity-40 cursor-not-allowed"
+            }`}
+            title={
+              canDelete
+                ? "ลบรายการนี้"
+                : "ไม่สามารถลบได้เนื่องจากเกินระยะเวลาย้อนหลัง 1 เดือน"
+            }
           >
             <Trash2 className="h-4 w-4" />
           </button>

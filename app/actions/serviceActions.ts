@@ -8,6 +8,12 @@ import {
   calculateMedicationLineCostSatang,
   thbToSatang,
 } from "../../lib/conflictEngine";
+import {
+  isDateInPast,
+  isServiceDateWithinGracePeriod,
+  isServiceEditable,
+  isServiceDeletable,
+} from "../../lib/dateUtils";
 import { getShiftsAction } from "./shiftActions";
 
 /** Sanitize usage lines and recompute line cost server-side (never trust client totals). */
@@ -108,6 +114,7 @@ export async function createServiceAction(data: {
   durationHours?: number;
   travelExpense?: number; // In THB from UI
   otherExpenses?: number; // In THB from UI
+  status?: "upcoming" | "completed" | "cancelled";
 }): Promise<ActionResult<CustomerServiceRecord>> {
   try {
     const supabase = await createClient();
@@ -156,7 +163,7 @@ export async function createServiceAction(data: {
         travel_expense_satang: travelExpenseSatang,
         other_expenses_satang: otherExpensesSatang,
         ...(usages.length > 0 ? { medication_usages: usages } : {}),
-        status: "upcoming",
+        status: data.status || "upcoming",
       })
       .select()
       .single();
@@ -216,10 +223,64 @@ export async function updateServiceAction(
     durationHours?: number;
     travelExpense?: number;
     otherExpenses?: number;
+    status?: "upcoming" | "completed" | "cancelled";
   }
 ): Promise<ActionResult<CustomerServiceRecord>> {
   try {
     const supabase = await createClient();
+
+    // Fetch existing record to enforce status & 1-calendar-month retroactive lock (DOMAIN_RULES.md §3.6)
+    const { data: existingRow, error: fetchError } = await supabase
+      .from("customer_services")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !existingRow) {
+      return {
+        success: false,
+        error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลบริการที่ต้องการแก้ไข" },
+      };
+    }
+
+    if (!isServiceEditable({ date: existingRow.service_date, status: existingRow.status })) {
+      return {
+        success: false,
+        error: {
+          code: "SERVICE_IS_LOCKED",
+          message:
+            existingRow.status === "cancelled"
+              ? "ไม่สามารถแก้ไขบริการที่ถูกยกเลิกแล้วได้"
+              : "ไม่สามารถแก้ไขบริการย้อนหลังที่เกินระยะเวลา 1 เดือนปฏิทินได้",
+        },
+      };
+    }
+
+    if (isDateInPast(data.date) && !isServiceDateWithinGracePeriod(data.date)) {
+      return {
+        success: false,
+        error: {
+          code: "SERVICE_IS_LOCKED",
+          message: "ไม่สามารถย้ายวันที่บริการไปเกินระยะเวลาย้อนหลัง 1 เดือนปฏิทินได้",
+        },
+      };
+    }
+
+    const formattedTime = (data.time || "09:00").slice(0, 5);
+
+    // Validate blocking windows against active shifts on target date
+    const shiftsRes = await getShiftsAction({ startDate: data.date, endDate: data.date });
+    const existingShifts = shiftsRes.success ? shiftsRes.data : [];
+    const overlapCheck = checkServiceShiftOverlap(data.date, formattedTime, existingShifts);
+    if (overlapCheck.hasConflict) {
+      return {
+        success: false,
+        error: {
+          code: overlapCheck.code!,
+          message: overlapCheck.message!,
+        },
+      };
+    }
 
     const serviceFeeSatang = thbToSatang(data.price || 0);
     // Medication usage lines (when provided) are the source of truth for medicationCost.
@@ -233,24 +294,34 @@ export async function updateServiceAction(
           : usages !== undefined
             ? 0
             : undefined;
-    const travelExpenseSatang = thbToSatang(data.travelExpense || 0);
-    const otherExpensesSatang = thbToSatang(data.otherExpenses || 0);
-    const formattedTime = (data.time || "09:00").slice(0, 5);
 
     const updatePayload: Record<string, any> = {
-      customer_id: data.customerId || null,
+      customer_id: data.customerId !== undefined ? data.customerId || null : existingRow.customer_id,
       customer_name: data.customerName,
       service_date: data.date,
       service_time: `${formattedTime}:00`,
-      other_service_text: data.otherServiceText || "",
-      medications: (data.medications || []).map((m) => m.trim()).filter(Boolean),
+      other_service_text:
+        data.otherServiceText !== undefined ? data.otherServiceText || "" : existingRow.other_service_text || "",
+      medications:
+        data.medications !== undefined
+          ? (data.medications || []).map((m) => m.trim()).filter(Boolean)
+          : existingRow.medications,
       note: data.note || "",
       price: data.price || 0,
       service_fee_satang: serviceFeeSatang,
-      duration_hours: data.durationHours || null,
-      travel_expense_satang: travelExpenseSatang,
-      other_expenses_satang: otherExpensesSatang,
     };
+    if (data.durationHours !== undefined) {
+      updatePayload.duration_hours = data.durationHours || null;
+    }
+    if (data.travelExpense !== undefined) {
+      updatePayload.travel_expense_satang = thbToSatang(data.travelExpense);
+    }
+    if (data.otherExpenses !== undefined) {
+      updatePayload.other_expenses_satang = thbToSatang(data.otherExpenses);
+    }
+    if (data.status !== undefined) {
+      updatePayload.status = data.status;
+    }
     if (medicationCostSatang !== undefined) {
       updatePayload.medication_cost_satang = medicationCostSatang;
     }
@@ -324,6 +395,27 @@ export async function updateServiceStatusAction(
 ): Promise<ActionResult<{ updatedId: string; status: string }>> {
   try {
     const supabase = await createClient();
+
+    const { data: existingRow, error: fetchError } = await supabase
+      .from("customer_services")
+      .select("id, service_date")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !existingRow) {
+      return { success: false, error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลบริการที่ต้องการอัปเดตสถานะ" } };
+    }
+
+    if (isDateInPast(existingRow.service_date) && !isServiceDateWithinGracePeriod(existingRow.service_date)) {
+      return {
+        success: false,
+        error: {
+          code: "SERVICE_IS_LOCKED",
+          message: "ไม่สามารถเปลี่ยนสถานะบริการย้อนหลังที่เกินระยะเวลา 1 เดือนปฏิทินได้",
+        },
+      };
+    }
+
     const { error } = await supabase
       .from("customer_services")
       .update({ status })
@@ -334,10 +426,11 @@ export async function updateServiceStatusAction(
     }
 
     return { success: true, data: { updatedId: id, status }, message: "อัปเดตสถานะบริการเรียบร้อยแล้ว" };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to update service status";
     return {
       success: false,
-      error: { code: "SERVER_ERROR", message: err.message || "Failed to update service status" },
+      error: { code: "SERVER_ERROR", message },
     };
   }
 }
@@ -348,6 +441,27 @@ export async function updateServiceStatusAction(
 export async function deleteServiceAction(id: string): Promise<ActionResult<{ deletedId: string }>> {
   try {
     const supabase = await createClient();
+
+    const { data: existingRow, error: fetchError } = await supabase
+      .from("customer_services")
+      .select("id, service_date")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !existingRow) {
+      return { success: false, error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลบริการที่ต้องการลบ" } };
+    }
+
+    if (!isServiceDeletable({ date: existingRow.service_date })) {
+      return {
+        success: false,
+        error: {
+          code: "SERVICE_IS_LOCKED",
+          message: "ไม่สามารถลบบริการย้อนหลังที่เกินระยะเวลา 1 เดือนปฏิทินได้",
+        },
+      };
+    }
+
     const { error } = await supabase.from("customer_services").delete().eq("id", id);
 
     if (error) {
@@ -355,10 +469,11 @@ export async function deleteServiceAction(id: string): Promise<ActionResult<{ de
     }
 
     return { success: true, data: { deletedId: id }, message: "ลบนัดหมายบริการเรียบร้อยแล้ว" };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete service";
     return {
       success: false,
-      error: { code: "SERVER_ERROR", message: err.message || "Failed to delete service" },
+      error: { code: "SERVER_ERROR", message },
     };
   }
 }

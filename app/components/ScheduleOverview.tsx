@@ -381,7 +381,7 @@ export default function ScheduleOverview() {
       if (item.type === "clinic") {
         const clinicLog = item as ClinicWorkRecord;
         const startTime = (clinicLog.presetShift.split(" - ")[0] || "12:30").slice(0, 5);
-        const clinicTitle = `🏥 ${clinicLog.presetShift}`;
+        const clinicTitle = `${clinicLog.presetShift}`;
         eventsResult.push({
           id: item.id,
           title: clinicTitle,
@@ -398,7 +398,7 @@ export default function ScheduleOverview() {
         const pEvent = item as PersonalEventRecord;
         const cleanStartTime = (pEvent.startTime || "18:00").slice(0, 5);
         const timeDisplay = pEvent.isAllDay ? "ทั้งวัน" : cleanStartTime;
-        const eventTitle = `🎈 ${timeDisplay} ${pEvent.title}`;
+        const eventTitle = `${timeDisplay} ${pEvent.title}`;
         const eventDate = pEvent.eventDate || pEvent.date;
         eventsResult.push({
           id: item.id,
@@ -406,6 +406,7 @@ export default function ScheduleOverview() {
           date: eventDate,
           start: `${eventDate}T${cleanStartTime}:00`,
           allDay: Boolean(pEvent.isAllDay),
+          display: "block",
           color: "#f43f5e",
           textColor: "#ffffff",
           contrastColor: "#ffffff",

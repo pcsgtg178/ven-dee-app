@@ -356,8 +356,28 @@
 
 ---
 
+### Phase 17: Retroactive Customer Service Editing & Deletion (แก้ไขและลบบริการลูกค้าย้อนหลังภายใน 1 เดือนปฏิทิน)
+- [x] **17.1 Core Domain & 1-Month Grace Utilities (`lib/dateUtils.ts`, `.agent/DOMAIN_RULES.md`)**
+  - เพิ่ม `isServiceDateWithinGracePeriod`, `getEarliestServiceGracePeriodDate`, `isServiceEditable`, `isServiceDeletable` และรองรับ `today?: Date` บน `isDateInPast`/`isShiftInPast` ใน `lib/dateUtils.ts`
+  - แยกกติกา **1 เดือนปฏิทินเต็ม** (เดือนปัจจุบัน + เดือนก่อนหน้าเต็มเดือน ใน `Asia/Bangkok`) ของบริการลูกค้าออกจากกติกาวันที่ 1–7 ของระบบเวรโรงพยาบาลอย่างชัดเจน
+  - อัปเดตเอกสาร `.agent/DOMAIN_RULES.md` §3.6 บันทึกกติกาการแก้ไข/ลบย้อนหลังสำหรับสถานะ `upcoming`/`completed` vs `cancelled`
+- [x] **17.2 Client Storage & Server-First Enforcement (`lib/storage.ts`)**
+  - อัปเดต `canEditService` และเพิ่ม `canDeleteService` ตามกติกา 1 เดือนปฏิทิน
+  - ปรับ `saveService` ให้ตรวจ `canEditService` และวันที่ปลายทางเมื่อแก้ไข พร้อมคงค่าฟิลด์เดิม (`status`, `durationHours`, `travelExpenseSatang`, `otherExpensesSatang`, ค่ายา legacy) และใช้ `unwrap()` แบบ Server-First
+  - ปรับ `deleteService` ให้ใช้ `canDeleteService` (ลบได้ภายใน 1 เดือนปฏิทิน) และใช้ `unwrap()` กับ `deleteServiceAction`
+- [x] **17.3 Server Actions Validation & Data Integrity (`app/actions/serviceActions.ts`)**
+  - `updateServiceAction`: ตรวจสิทธิ์แก้ไขของแถวเดิมและวันที่ปลายทาง (`SERVICE_IS_LOCKED`), ตรวจ `checkServiceShiftOverlap` บน Server, รองรับการอัปเดต `status`, และไม่เขียนทับฟิลด์ทางเลือกเดิมเมื่อไม่ได้ส่งมา
+  - `updateServiceStatusAction` & `deleteServiceAction`: ตรวจกรอบเวลา 1 เดือนปฏิทิน (`SERVICE_IS_LOCKED`) ฝั่ง Server ก่อนบันทึกหรือลบ
+- [x] **17.4 UI / UX & Modals Integration (`ModalEditService.tsx`, `ActivityCard.tsx`, `/customers/[id]`, `ScheduleTodoListView.tsx`)**
+  - `ModalEditService.tsx`: แสดงกล่องเตือนสีส้ม (Retroactive Warning Alert Banner) เมื่อแก้ไขย้อนหลัง, ตั้ง `min={getEarliestServiceGracePeriodDate()}` บน Date Picker, และส่งต่อฟิลด์สถานะ/ค่าใช้จ่ายเดิมครบถ้วน
+  - `ActivityCard.tsx` & `app/customers/[id]/page.tsx`: เปิดปุ่มแก้ไข (`canEditService`) สำหรับทั้ง Upcoming & History ภายใน 1 เดือน, แสดงสถานะ disabled + tooltip บนปุ่มลบ/สลับสถานะเมื่อเกิน 1 เดือนปฏิทิน, และจัดการ error ใน `handleToggleStatus`
+- [x] **17.5 Unit Tests & Verification (`lib/__tests__/serviceRetroactive.test.ts`)**
+  - เพิ่มชุดทดสอบ Unit Test ครอบคลุมการคำนวณ 1 เดือนปฏิทิน (เดือนเดียวกัน, เดือนก่อนหน้าตลอดทั้งเดือนถึงวันสิ้นเดือน, ข้ามปี ม.ค. → ธ.ค., เกินกำหนด 1 เดือน), เงื่อนไขสถานะ `upcoming`/`completed`/`cancelled`, การลบ `isServiceDeletable`, และความเป็นอิสระจากกติกาเวร 1–7
+
+---
+
 ## 📌 Task Status Summary
-- **Total Tasks**: 70
-- **Completed**: 54
+- **Total Tasks**: 75
+- **Completed**: 59
 - **In Progress**: 0
 - **Pending**: 16

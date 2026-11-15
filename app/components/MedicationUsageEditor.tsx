@@ -13,6 +13,8 @@ import {
   calculateMedicationLineCostSatang,
   calculateUnitCostSatang,
 } from "../../lib/conflictEngine";
+import { estimateFifoCost } from "../../lib/stock";
+import { getStockLayers } from "../../lib/storage";
 
 /** Editable row (string quantity for free typing). `snapshot` keeps historical unit cost when editing. */
 export interface MedicationUsageRow {
@@ -74,7 +76,9 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
   const totalSatang = calculateMedicationCostSatang(lines);
 
   const sortedMasterMeds = useMemo(() => {
-    return [...masterMeds].sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
+    return [...masterMeds]
+      .filter((m) => !m.isArchived)
+      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
   }, [masterMeds]);
 
   const update = (idx: number, patch: Partial<MedicationUsageRow>) => {
@@ -128,10 +132,16 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
           const snap = row.snapshot && row.snapshot.medicationId === row.medicationId ? row.snapshot : undefined;
           const unit = snap?.unit ?? med?.unit ?? "";
           const qty = parseFloat(row.quantity);
-          const unitCost = snap?.unitCostSatang ?? calculateUnitCostSatang(med?.price, med?.size);
-          const lineCost = calculateMedicationLineCostSatang(qty, unitCost);
-          const category = med ? resolveMedicationCategory(med.name, med.category) : snap?.category;
-          const hasMedOption = masterMeds.some((m) => m.id === row.medicationId);
+          const refUnitCost = calculateUnitCostSatang(med?.price, med?.packSize ?? med?.size, med?.refCostPerPackSatang);
+          const fifoPreview =
+            med && Number.isFinite(qty) && qty > 0 && !snap
+              ? estimateFifoCost(getStockLayers(med.id), qty, refUnitCost)
+              : null;
+          const unitCost = snap?.unitCostSatang ?? fifoPreview?.unitCostSatang ?? refUnitCost;
+          const lineCost = fifoPreview ? fifoPreview.costSatang : calculateMedicationLineCostSatang(qty, unitCost);
+          const onHand = med ? Number(med.stockOnHand ?? 0) : null;
+          const isOverStock = onHand !== null && Number.isFinite(qty) && qty > onHand;
+          const hasMedOption = sortedMasterMeds.some((m) => m.id === row.medicationId);
 
           return (
             <div
@@ -146,10 +156,13 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
                 >
                   <option value="">-- เลือกจากคลังยา --</option>
                   {!hasMedOption && snap && <option value={snap.medicationId}>{snap.name} (เดิม)</option>}
+                  {!hasMedOption && !snap && med && (
+                    <option value={med.id}>{med.name} (เก็บถาวร)</option>
+                  )}
                   {sortedMasterMeds.map((m) => (
                     <option key={m.id} value={m.id}>
                       [{MEDICATION_CATEGORY_CONFIG[resolveMedicationCategory(m.name, m.category)].label}] {m.name}
-                      {m.size ? ` ${m.size}${m.unit || ""}` : ""} {m.price ? `(฿${m.price})` : ""}
+                      {` (คงเหลือ ${(m.stockOnHand ?? 0).toLocaleString()} ${m.unit || ""})`}
                     </option>
                   ))}
                 </select>
@@ -176,8 +189,16 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
                 <span className="text-xs font-semibold text-text-muted dark:text-zinc-300">{unit || "หน่วย"}</span>
                 <span className="ml-auto text-xs font-bold text-emerald-700 dark:text-emerald-300">
                   {lineCost > 0 ? fmtBaht(lineCost) : "—"}
+                  {fifoPreview?.isEstimated && lineCost > 0 && (
+                    <span className="ml-1 text-[10px] font-normal text-amber-600">(ประมาณ)</span>
+                  )}
                 </span>
               </div>
+              {isOverStock && (
+                <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  ⚠️ ใช้เกินสต็อกคงเหลือ ({onHand?.toLocaleString()} {unit}) — บันทึกได้แต่สต็อกจะติดลบ
+                </p>
+              )}
             </div>
           );
         })}

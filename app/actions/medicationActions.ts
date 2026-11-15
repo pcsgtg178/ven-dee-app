@@ -20,6 +20,14 @@ function mapRowToMedication(row: any): Medications {
       row.ref_cost_per_pack_satang !== undefined && row.ref_cost_per_pack_satang !== null
         ? Number(row.ref_cost_per_pack_satang)
         : undefined,
+    stockOnHand:
+      row.stock_on_hand !== undefined && row.stock_on_hand !== null
+        ? Number(row.stock_on_hand)
+        : 0,
+    reorderPointPacks:
+      row.reorder_point_packs !== undefined && row.reorder_point_packs !== null
+        ? Number(row.reorder_point_packs)
+        : 1,
     isArchived: Boolean(row.is_archived),
     description: row.description || undefined,
     note: row.description || undefined,
@@ -154,6 +162,7 @@ export async function updateMedicationAction(
     packSize?: number;
     packUnit?: string;
     refCostPerPackSatang?: number;
+    reorderPointPacks?: number;
     isArchived?: boolean;
     description?: string;
   }
@@ -172,6 +181,8 @@ export async function updateMedicationAction(
     if (data.packSize !== undefined) updatePayload.pack_size = data.packSize;
     if (data.packUnit !== undefined) updatePayload.pack_unit = data.packUnit.trim() || "ขวด";
     if (data.refCostPerPackSatang !== undefined) updatePayload.ref_cost_per_pack_satang = data.refCostPerPackSatang;
+    if (data.refCostPerPackSatang !== undefined) updatePayload.ref_cost_per_pack_satang = Number(data.refCostPerPackSatang) || 0;
+    if (data.reorderPointPacks !== undefined) updatePayload.reorder_point_packs = Math.max(0, Number(data.reorderPointPacks) || 0);
     if (data.isArchived !== undefined) updatePayload.is_archived = Boolean(data.isArchived);
     if (data.description !== undefined) updatePayload.description = data.description.trim() || null;
 
@@ -226,14 +237,48 @@ export async function updateMedicationAction(
 }
 
 /**
- * Delete a medication record from Supabase
+ * Archive or unarchive a medication record
+ */
+export async function archiveMedicationAction(
+  id: string,
+  isArchived = true
+): Promise<ActionResult<Medications>> {
+  return updateMedicationAction(id, { isArchived });
+}
+
+/**
+ * Delete a medication record from Supabase (only allowed if no stock movements exist)
  */
 export async function deleteMedicationAction(id: string): Promise<ActionResult<{ id: string }>> {
   try {
     const supabase = await createClient();
+    const { count, error: countErr } = await supabase
+      .from("stock_movements")
+      .select("id", { count: "exact", head: true })
+      .eq("medication_id", id);
+
+    if (!countErr && (count ?? 0) > 0) {
+      return {
+        success: false,
+        error: {
+          code: "MEDICATION_HAS_MOVEMENTS",
+          message: "ไม่สามารถลบรายการยาที่มีประวัติเคลื่อนไหวสต็อกได้ กรุณาใช้การเก็บถาวร (Archive) แทน",
+        },
+      };
+    }
+
     const { error } = await supabase.from("medications").delete().eq("id", id);
 
     if (error) {
+      if (error.code === "23503") {
+        return {
+          success: false,
+          error: {
+            code: "MEDICATION_HAS_MOVEMENTS",
+            message: "ไม่สามารถลบรายการยาที่มีประวัติเคลื่อนไหวสต็อกได้ กรุณาใช้การเก็บถาวร (Archive) แทน",
+          },
+        };
+      }
       return {
         success: false,
         error: { code: "DATABASE_ERROR", message: error.message },

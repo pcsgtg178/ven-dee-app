@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "../../lib/supabase/server";
-import { CustomerServiceRecord, ServiceType, ActionResult, MedicationUsageLine } from "../../types/vendee";
+import { CustomerServiceRecord, ServiceType, ActionResult, MedicationUsageLine, StockWarning } from "../../types/vendee";
 import {
   checkServiceShiftOverlap,
   calculateMedicationCostSatang,
@@ -67,10 +67,16 @@ function mapRowToServiceRecord(row: any, fallbackTime = "09:00"): CustomerServic
     discount: discountThb,
     discountSatang,
     medicationCostSatang: row.medication_cost_satang || 0,
+    medicationCostSatangLegacy:
+      row.medication_cost_satang_legacy !== undefined && row.medication_cost_satang_legacy !== null
+        ? Number(row.medication_cost_satang_legacy)
+        : undefined,
     durationHours: row.duration_hours,
     travelExpenseSatang: row.travel_expense_satang || 0,
     otherExpensesSatang: row.other_expenses_satang || 0,
     status: row.status || "upcoming",
+    stockConsumed: Boolean(row.stock_consumed),
+    autoCompleteOptOut: Boolean(row.auto_complete_opt_out),
     createdAt: row.created_at,
   };
 }
@@ -217,9 +223,32 @@ export async function createServiceAction(data: {
       return { success: false, error: { code: "DATABASE_ERROR", message: error.message } };
     }
 
-    const serviceRecord = mapRowToServiceRecord(inserted, formattedTime);
+    let serviceRecord = mapRowToServiceRecord(inserted, formattedTime);
+    let warnings: StockWarning[] = [];
 
-    return { success: true, data: serviceRecord, message: "บันทึกการให้บริการเรียบร้อยแล้ว" };
+    if (serviceRecord.status === "completed") {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc("consume_stock_for_service", {
+        p_service_id: serviceRecord.id,
+      });
+      if (!rpcErr && rpcData) {
+        warnings = (rpcData.warnings as StockWarning[]) || [];
+        const { data: refreshed } = await supabase
+          .from("customer_services")
+          .select("*")
+          .eq("id", serviceRecord.id)
+          .single();
+        if (refreshed) {
+          serviceRecord = mapRowToServiceRecord(refreshed, formattedTime);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      data: serviceRecord,
+      warnings,
+      message: "บันทึกการให้บริการเรียบร้อยแล้ว",
+    };
   } catch (err: any) {
     return {
       success: false,
@@ -393,9 +422,61 @@ export async function updateServiceAction(
       return { success: false, error: { code: "DATABASE_ERROR", message: error.message } };
     }
 
-    const serviceRecord = mapRowToServiceRecord(updated, formattedTime);
+    let serviceRecord = mapRowToServiceRecord(updated, formattedTime);
+    let warnings: StockWarning[] = [];
 
-    return { success: true, data: serviceRecord, message: "อัปเดตข้อมูลบริการเรียบร้อยแล้ว" };
+    const nextStatus = data.status ?? existingRow.status ?? "upcoming";
+    const wasConsumed = Boolean(existingRow.stock_consumed);
+
+    if (wasConsumed && (nextStatus === "upcoming" || nextStatus === "cancelled")) {
+      await supabase.rpc("restore_stock_for_service", { p_service_id: id });
+      if (nextStatus === "upcoming") {
+        await supabase
+          .from("customer_services")
+          .update({ auto_complete_opt_out: true })
+          .eq("id", id);
+      }
+      const { data: refreshed } = await supabase
+        .from("customer_services")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (refreshed) serviceRecord = mapRowToServiceRecord(refreshed, formattedTime);
+    } else if (wasConsumed && nextStatus === "completed" && usages !== undefined) {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc("reconsume_stock_for_service", {
+        p_service_id: id,
+        p_new_usages: usages,
+      });
+      if (!rpcErr && rpcData) {
+        warnings = (rpcData.warnings as StockWarning[]) || [];
+        const { data: refreshed } = await supabase
+          .from("customer_services")
+          .select("*")
+          .eq("id", id)
+          .single();
+        if (refreshed) serviceRecord = mapRowToServiceRecord(refreshed, formattedTime);
+      }
+    } else if (!wasConsumed && nextStatus === "completed") {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc("consume_stock_for_service", {
+        p_service_id: id,
+      });
+      if (!rpcErr && rpcData) {
+        warnings = (rpcData.warnings as StockWarning[]) || [];
+        const { data: refreshed } = await supabase
+          .from("customer_services")
+          .select("*")
+          .eq("id", id)
+          .single();
+        if (refreshed) serviceRecord = mapRowToServiceRecord(refreshed, formattedTime);
+      }
+    }
+
+    return {
+      success: true,
+      data: serviceRecord,
+      warnings,
+      message: "อัปเดตข้อมูลบริการเรียบร้อยแล้ว",
+    };
   } catch (err: any) {
     return {
       success: false,
@@ -416,7 +497,7 @@ export async function updateServiceStatusAction(
 
     const { data: existingRow, error: fetchError } = await supabase
       .from("customer_services")
-      .select("id, service_date")
+      .select("id, service_date, status, stock_consumed")
       .eq("id", id)
       .single();
 
@@ -434,16 +515,49 @@ export async function updateServiceStatusAction(
       };
     }
 
+    const wasConsumed = Boolean(existingRow.stock_consumed);
+    let warnings: StockWarning[] = [];
+
+    if (wasConsumed && (status === "upcoming" || status === "cancelled")) {
+      const { error: restoreErr } = await supabase.rpc("restore_stock_for_service", {
+        p_service_id: id,
+      });
+      if (restoreErr) {
+        return { success: false, error: { code: "STOCK_RPC_ERROR", message: restoreErr.message } };
+      }
+    }
+
+    const updateFields: Record<string, any> = { status };
+    if (status === "upcoming" && existingRow.status === "completed") {
+      updateFields.auto_complete_opt_out = true;
+    } else if (status === "completed") {
+      updateFields.auto_complete_opt_out = false;
+    }
+
     const { error } = await supabase
       .from("customer_services")
-      .update({ status })
+      .update(updateFields)
       .eq("id", id);
 
     if (error) {
       return { success: false, error: { code: "DATABASE_ERROR", message: error.message } };
     }
 
-    return { success: true, data: { updatedId: id, status }, message: "อัปเดตสถานะบริการเรียบร้อยแล้ว" };
+    if (status === "completed" && !wasConsumed) {
+      const { data: rpcData, error: consumeErr } = await supabase.rpc("consume_stock_for_service", {
+        p_service_id: id,
+      });
+      if (!consumeErr && rpcData) {
+        warnings = (rpcData.warnings as StockWarning[]) || [];
+      }
+    }
+
+    return {
+      success: true,
+      data: { updatedId: id, status },
+      warnings,
+      message: "อัปเดตสถานะบริการเรียบร้อยแล้ว",
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to update service status";
     return {
@@ -462,7 +576,7 @@ export async function deleteServiceAction(id: string): Promise<ActionResult<{ de
 
     const { data: existingRow, error: fetchError } = await supabase
       .from("customer_services")
-      .select("id, service_date")
+      .select("id, service_date, stock_consumed")
       .eq("id", id)
       .single();
 
@@ -478,6 +592,15 @@ export async function deleteServiceAction(id: string): Promise<ActionResult<{ de
           message: "ไม่สามารถลบบริการย้อนหลังที่เกินระยะเวลา 1 เดือนปฏิทินได้",
         },
       };
+    }
+
+    if (existingRow.stock_consumed) {
+      const { error: restoreErr } = await supabase.rpc("restore_stock_for_service", {
+        p_service_id: id,
+      });
+      if (restoreErr) {
+        return { success: false, error: { code: "STOCK_RPC_ERROR", message: restoreErr.message } };
+      }
     }
 
     const { error } = await supabase.from("customer_services").delete().eq("id", id);
@@ -504,6 +627,17 @@ export async function deleteServicesByCustomerIdAction(
 ): Promise<ActionResult<{ deletedCount: number }>> {
   try {
     const supabase = await createClient();
+
+    const { data: consumedRows } = await supabase
+      .from("customer_services")
+      .select("id")
+      .eq("customer_id", customerId)
+      .eq("stock_consumed", true);
+
+    for (const row of consumedRows || []) {
+      await supabase.rpc("restore_stock_for_service", { p_service_id: row.id });
+    }
+
     const { data, error } = await supabase
       .from("customer_services")
       .delete()
@@ -523,6 +657,36 @@ export async function deleteServicesByCustomerIdAction(
     return {
       success: false,
       error: { code: "SERVER_ERROR", message: err.message || "Failed to delete customer services" },
+    };
+  }
+}
+
+/**
+ * Auto-complete all due upcoming services (Asia/Bangkok) and consume FIFO stock
+ */
+export async function autoCompleteDueServicesAction(
+  nowIso?: string
+): Promise<ActionResult<{ completedCount: number; completedIds: string[] }>> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("complete_due_services", {
+      p_now: nowIso || new Date().toISOString(),
+    });
+    if (error) {
+      return { success: false, error: { code: "STOCK_RPC_ERROR", message: error.message } };
+    }
+    return {
+      success: true,
+      data: {
+        completedCount: Number(data?.completed_count) || 0,
+        completedIds: Array.isArray(data?.completed_ids) ? data.completed_ids : [],
+      },
+      warnings: (data?.warnings as StockWarning[]) || [],
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: { code: "SERVER_ERROR", message: err.message || "Failed to auto-complete due services" },
     };
   }
 }

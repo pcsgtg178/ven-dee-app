@@ -107,6 +107,8 @@ export interface Medications {
   packSize?: number; // จำนวนหน่วยต่อขวด/กล่อง เช่น 200 (ยูนิต/ขวด)
   packUnit?: string; // หน่วยบรรจุภัณฑ์ เช่น ขวด, กล่อง, แผง
   refCostPerPackSatang?: number; // ต้นทุนอ้างอิงต่อขวด (หน่วยสตางค์: 1 THB = 100 Satang)
+  stockOnHand?: number; // ยอดคงเหลือปัจจุบัน (หน่วยที่ใช้จริง; cache ที่ RPC อัปเดต)
+  reorderPointPacks?: number; // จุดสั่งซื้อใหม่ (แพ็ค/ขวด; 0 = ไม่แจ้งเตือน)
   isArchived?: boolean; // ซ่อน/archive เมื่อไม่ต้องการแสดง
   description?: string; // รายละเอียด เช่น นาบูตะ *นำเข้า
   note?: string; // หมายเหตุเพิ่มเติม / รายละเอียด
@@ -166,6 +168,47 @@ export interface CustomerServiceRecord {
   travelExpenseSatang?: number;
   otherExpensesSatang?: number;
   status?: "upcoming" | "completed" | "cancelled";
+  stockConsumed?: boolean;
+  autoCompleteOptOut?: boolean;
+  createdAt: string;
+}
+
+export type StockMovementType = "receive" | "use" | "waste" | "giveaway" | "adjust" | "reversal";
+export type StockIssueReason = "expired" | "damaged" | "personal" | "free" | "sample" | "other";
+
+export interface StockWarning {
+  code: "STOCK_NEGATIVE";
+  medicationId: string;
+  onHand: number;
+}
+
+export interface StockLayer {
+  id: string;
+  medicationId: string;
+  receiveMovementId?: string | null;
+  receivedAt: string;
+  qtyReceived: number;
+  qtyRemaining: number;
+  unitCostSatang: number;
+  createdAt?: string;
+}
+
+export interface StockMovement {
+  id: string;
+  medicationId: string;
+  type: StockMovementType;
+  quantity: number;
+  costSatang: number;
+  isEstimatedCost: boolean;
+  packs?: number | null;
+  packCostSatang?: number | null;
+  supplier?: string | null;
+  reason?: StockIssueReason | null;
+  serviceId?: string | null;
+  reversesMovementId?: string | null;
+  reversed: boolean;
+  occurredAt: string;
+  note?: string | null;
   createdAt: string;
 }
 
@@ -209,7 +252,7 @@ export interface ClinicWorkRecord {
 export type ActivityItem = ShiftRecord | CustomerServiceRecord | ClinicWorkRecord | PersonalEventRecord;
 
 export type ActionResult<T = any> =
-  | { success: true; data: T; message?: string }
+  | { success: true; data: T; message?: string; warnings?: StockWarning[] }
   | { success: false; error: { code: string; message: string; details?: any[] } };
 
 // โควต้าเวรดำประจำเดือน: คำนวณจาก (จำนวนวันทำการ จ-ศ x 8 ชม.) / 8 ชม.

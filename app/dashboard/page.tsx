@@ -29,11 +29,18 @@ import {
   MEDICATION_CATEGORY_CONFIG,
   resolveMedicationCategory,
 } from "../../types/vendee";
-import { calculateMedicationCostSatang, getServicePricingBreakdown } from "../../lib/conflictEngine";
+import {
+  calculateMedicationCostSatang,
+  calculateUnitCostSatang,
+  getServicePricingBreakdown,
+} from "../../lib/conflictEngine";
+import { getStockSummaryAction, type StockSummaryData } from "../actions/stockActions";
+import { estimateFifoCost, formatOnHand } from "../../lib/stock";
 import {
   getServices,
   getMedications,
   getShifts,
+  getStockLayers,
   syncAllDataFromApi,
   subscribeToStorage,
   getTodayDateStringBangkok,
@@ -56,6 +63,7 @@ export default function DashboardPage() {
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [stockSummary, setStockSummary] = useState<StockSummaryData | null>(null);
 
   const loadData = useCallback(() => {
     setServices(getServices());
@@ -166,21 +174,80 @@ export default function DashboardPage() {
     });
   }, [services, startDateStr, endDateStr]);
 
+  // Fetch stock summary KPIs for selected period (falls back to local cache when offline/DB sync disabled)
+  useEffect(() => {
+    const buildLocalFallback = (): StockSummaryData => {
+      const layers = getStockLayers();
+      const inventoryValueSatang = layers.reduce(
+        (sum, l) => sum + Math.round((Number(l.qtyRemaining) || 0) * (Number(l.unitCostSatang) || 0)),
+        0
+      );
+      let lowStockCount = 0;
+      let negativeStockCount = 0;
+      for (const m of masterMedications) {
+        if (m.isArchived) continue;
+        const onHand = Number(m.stockOnHand ?? 0);
+        const packSize = Math.max(1, Number(m.packSize ?? 1));
+        const reorder = Number(m.reorderPointPacks ?? 1);
+        if (onHand < 0) negativeStockCount++;
+        else if (reorder > 0 && onHand < reorder * packSize) lowStockCount++;
+      }
+      return {
+        inventoryValueSatang,
+        lowStockCount,
+        negativeStockCount,
+        receivedCostSatang: 0,
+        usedCostSatang: 0,
+        wasteCostSatang: 0,
+        giveawayCostSatang: 0,
+      };
+    };
+
+    if (isDbSyncDisabled()) {
+      setStockSummary(buildLocalFallback());
+      return;
+    }
+    let cancelled = false;
+    getStockSummaryAction({
+      from: `${startDateStr}T00:00:00+07:00`,
+      to: `${endDateStr}T23:59:59+07:00`,
+    }).then((res) => {
+      if (!cancelled) {
+        setStockSummary(res.success ? res.data : buildLocalFallback());
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [startDateStr, endDateStr, services.length, masterMedications]);
 
 
-  // Financial calculations
+
+  // Financial calculations (Phase 14.7: completed uses FIFO cost, upcoming uses D17 estimate; Period Net deducts waste & giveaway)
   const financialSummary = useMemo(() => {
     let serviceRevenue = 0;
     let totalCost = 0;
+    const stockLayers = getStockLayers();
 
     periodServices.forEach((s) => {
       // 1. Revenue (Net Revenue after discount: Net Revenue = serviceFee - discount)
       const pricing = getServicePricingBreakdown(s);
       serviceRevenue += pricing.netRevenue;
 
-      // 2. Cost calculation: either explicit medicationCostSatang, calculated from medicationUsages, or legacy fallback
+      // 2. Cost calculation
       let caseCost = 0;
-      if (s.medicationCostSatang && s.medicationCostSatang > 0) {
+      if (s.status === "upcoming" && s.medicationUsages && s.medicationUsages.length > 0) {
+        // D17: Upcoming service estimates FIFO cost from current remaining layers
+        const satang = s.medicationUsages.reduce((sum, u) => {
+          const med = masterMedications.find((m) => m.id === u.medicationId);
+          const refUnitCost = med
+            ? calculateUnitCostSatang(med.price, med.packSize ?? med.size, med.refCostPerPackSatang)
+            : u.unitCostSatang || 0;
+          const layersForMed = stockLayers.filter((l) => l.medicationId === u.medicationId);
+          return sum + estimateFifoCost(layersForMed, u.quantity, refUnitCost).costSatang;
+        }, 0);
+        caseCost = satang / 100;
+      } else if (s.medicationCostSatang && s.medicationCostSatang > 0) {
         caseCost = s.medicationCostSatang / 100;
       } else if (s.medicationUsages && s.medicationUsages.length > 0) {
         const satang = calculateMedicationCostSatang(
@@ -204,18 +271,24 @@ export default function DashboardPage() {
     });
 
     const totalRevenue = serviceRevenue;
-    const netProfit = totalRevenue - totalCost;
+    const serviceNetProfit = totalRevenue - totalCost;
+    const wasteCost = (stockSummary?.wasteCostSatang || 0) / 100;
+    const giveawayCost = (stockSummary?.giveawayCostSatang || 0) / 100;
+    const netProfit = serviceNetProfit - wasteCost - giveawayCost;
     const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
     return {
       serviceRevenue,
       totalRevenue,
       totalCost,
+      serviceNetProfit,
+      wasteCost,
+      giveawayCost,
       netProfit,
       profitMargin,
       totalCases: periodServices.length,
     };
-  }, [periodServices, medCostMap]);
+  }, [periodServices, medCostMap, masterMedications, stockSummary]);
 
   // Product / Medication breakdown (uses medicationUsages with fallback to legacy medications)
   const productBreakdown = useMemo(() => {
@@ -468,6 +541,64 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Phase 14.7 Stock & Inventory KPI Card */}
+        {stockSummary && (
+          <div className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                  <Package className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-text-main dark:text-white">
+                    สรุปสต็อกยาและเวชภัณฑ์
+                  </h3>
+                  <p className="text-[11px] text-text-muted dark:text-zinc-400">
+                    ยอดซื้อและมูลค่าคงเหลือไม่นับเป็นค่าใช้จ่ายในกำไรสุทธิ
+                  </p>
+                </div>
+              </div>
+              {(stockSummary.lowStockCount > 0 || stockSummary.negativeStockCount > 0) && (
+                <Link
+                  href="/medications"
+                  className="rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
+                >
+                  {stockSummary.negativeStockCount > 0
+                    ? `ติดลบ ${stockSummary.negativeStockCount}`
+                    : `สต็อกต่ำ ${stockSummary.lowStockCount}`}
+                </Link>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
+              <div className="rounded-2xl bg-slate-50 p-3 dark:bg-zinc-800/60">
+                <span className="text-[11px] text-text-muted dark:text-zinc-400">มูลค่าสต็อกคงเหลือ</span>
+                <div className="mt-0.5 text-base font-extrabold text-slate-900 dark:text-white">
+                  ฿{(stockSummary.inventoryValueSatang / 100).toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3 dark:bg-zinc-800/60">
+                <span className="text-[11px] text-text-muted dark:text-zinc-400">ยอดซื้อยารับเข้า (ช่วงนี้)</span>
+                <div className="mt-0.5 text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                  ฿{(stockSummary.receivedCostSatang / 100).toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-2xl bg-rose-50/70 p-3 dark:bg-rose-950/20">
+                <span className="text-[11px] text-rose-700/80 dark:text-rose-300/80">ยาสูญเสีย (Waste)</span>
+                <div className="mt-0.5 text-base font-extrabold text-rose-700 dark:text-rose-300">
+                  -฿{(stockSummary.wasteCostSatang / 100).toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-2xl bg-amber-50/70 p-3 dark:bg-amber-950/20">
+                <span className="text-[11px] text-amber-700/80 dark:text-amber-300/80">แจกฟรี / ใช้ส่วนตัว</span>
+                <div className="mt-0.5 text-base font-extrabold text-amber-700 dark:text-amber-300">
+                  -฿{(stockSummary.giveawayCostSatang / 100).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Product / Medication Breakdown Section */}
         <div className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-3.5">
           <div className="flex items-center justify-between">
@@ -533,6 +664,9 @@ export default function DashboardPage() {
             <div className="space-y-2.5">
               {productBreakdown.map((item, idx) => {
                 const catCfg = MEDICATION_CATEGORY_CONFIG[item.category] || MEDICATION_CATEGORY_CONFIG.other;
+                const matchedMed = masterMedications.find(
+                  (m) => !m.isArchived && m.name.trim().toLowerCase() === item.name.trim().toLowerCase()
+                );
                 return (
                   <div
                     key={idx}
@@ -576,6 +710,17 @@ export default function DashboardPage() {
                         ต้นทุนรวม: ฿{Math.round(item.totalCost).toLocaleString()}
                       </span>
                     </div>
+                    {matchedMed && (
+                      <div className="mt-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                        คงเหลือในคลัง:{" "}
+                        {formatOnHand(
+                          matchedMed.stockOnHand ?? 0,
+                          matchedMed.unit || "ยูนิต",
+                          matchedMed.packSize ?? 1,
+                          matchedMed.packUnit || "ขวด"
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

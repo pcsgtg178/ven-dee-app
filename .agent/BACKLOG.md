@@ -268,14 +268,14 @@
 
 ### Phase 14: Medication Stock Management (ระบบจัดการสต็อกยา — details: `.agent/BACKLOG_STOCK.md`)
 - [x] **14.1** Medication Restructure (แยกต้นทุน/ราคาขาย, `medication_promotions`, รวมตัวยาซ้ำ, ล้างต้นทุนเก่าเป็น 0, archive)
-- [ ] **14.2** Stock Schema (`stock_movements`, `stock_layers`, `stock_layer_consumptions`, คอลัมน์สต็อก)
-- [ ] **14.3** Transactional RPCs (FIFO receive / issue / adjust / consume / restore / reconsume / auto-complete / reverse)
-- [ ] **14.4** Service Integration (auto-complete ตอนเปิดแอป/ซิงค์, ตัด/คืนสต็อก, แก้ปริมาณยาในช่วงผ่อนผัน)
-- [ ] **14.5** Server Actions, `lib/stock.ts` & Client Storage
-- [ ] **14.6** UI (`/medications`, ฟอร์มตัวยา+โปรโมชั่น, Modal รับเข้า/ตัดออก/นับสต็อก/ประวัติ, แจ้งเตือนสต็อกต่ำ)
-- [ ] **14.7** Dashboard KPIs & Go-live
-- [ ] **14.8** Tests
-- [ ] **14.9** Documentation
+- [x] **14.2** Stock Schema (`stock_movements`, `stock_layers`, `stock_layer_consumptions`, คอลัมน์สต็อก)
+- [x] **14.3** Transactional RPCs (FIFO receive / issue / adjust / consume / restore / reconsume / auto-complete / reverse)
+- [x] **14.4** Service Integration (auto-complete ตอนเปิดแอป/ซิงค์, ตัด/คืนสต็อก, แก้ปริมาณยาในช่วงผ่อนผัน)
+- [x] **14.5** Server Actions, `lib/stock.ts` & Client Storage
+- [x] **14.6** UI (`/medications`, ฟอร์มตัวยา+โปรโมชั่น, Modal รับเข้า/ตัดออก/นับสต็อก/ประวัติ, แจ้งเตือนสต็อกต่ำ)
+- [x] **14.7** Dashboard KPIs & Go-live
+- [x] **14.8** Tests
+- [x] **14.9** Documentation
 
 ---
 

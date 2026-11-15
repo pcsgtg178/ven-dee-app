@@ -21,7 +21,9 @@ import {
   updateServiceAction,
   deleteServiceAction,
   deleteServicesByCustomerIdAction,
+  autoCompleteDueServicesAction,
 } from "../app/actions/serviceActions";
+import { getStockLayersAction } from "../app/actions/stockActions";
 import { calculateMedicationCostSatang, calculateMedicationLineCostSatang } from "./conflictEngine";
 import {
   getPersonalEventsAction,
@@ -107,6 +109,8 @@ import {
   PersonalEventRecord,
   ActivityItem,
   CalendarFeedConfig,
+  StockLayer,
+  StockWarning,
 } from "../types/vendee";
 import { generateSecureFeedToken, DEFAULT_FEED_TOKEN } from "./calendar/feedToken";
 import { countMonthlyShifts, calculateMonthlyBlackShiftQuota } from "./quota";
@@ -121,6 +125,7 @@ const STORAGE_KEYS = {
   CLINIC_LOGS: "vendee_clinic_logs_v1",
   PERSONAL_EVENTS: "vendee_personal_events_v1",
   CALENDAR_FEED: "vendee_calendar_feed_v1",
+  STOCK_LAYERS: "vendee_stock_layers_v1",
 };
 
 const SYNC_EVENT = "vendee_storage_updated";
@@ -238,6 +243,10 @@ export function canEditShift(shift: ShiftRecord): boolean {
  * - Upcoming & completed service records can be edited when today/future or within the 1-calendar-month grace period.
  */
 export function canEditService(service: CustomerServiceRecord): boolean {
+  return isServiceEditable(service);
+}
+
+export function canEditMedicationUsage(service: CustomerServiceRecord): boolean {
   return isServiceEditable(service);
 }
 
@@ -398,6 +407,32 @@ export const initialServices: CustomerServiceRecord[] = [
 /**
  * Synchronize local storage with Supabase database via Next.js Server Actions
  */
+export function getStockLayers(medId?: string): StockLayer[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.STOCK_LAYERS);
+    const parsed: StockLayer[] = raw ? JSON.parse(raw) : [];
+    return medId ? parsed.filter((l) => l.medicationId === medId) : parsed;
+  } catch {
+    return [];
+  }
+}
+
+export function updateLocalMedicationStock(medId: string, stockOnHand: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    const meds = getMedications();
+    const idx = meds.findIndex((m) => m.id === medId);
+    if (idx >= 0) {
+      meds[idx] = { ...meds[idx], stockOnHand };
+      localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(meds));
+      triggerSync();
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export async function syncAllDataFromApi(): Promise<{
   shifts: ShiftRecord[];
   customers: Customer[];
@@ -405,6 +440,9 @@ export async function syncAllDataFromApi(): Promise<{
   personalEvents: PersonalEventRecord[];
   medications: Medications[];
   clinicLogs: ClinicWorkRecord[];
+  stockLayers?: StockLayer[];
+  autoCompletedCount?: number;
+  stockWarnings?: StockWarning[];
   isOnline: boolean;
 }> {
   if (typeof window === "undefined" || isDbSyncDisabled()) {
@@ -415,20 +453,42 @@ export async function syncAllDataFromApi(): Promise<{
       personalEvents: getPersonalEvents(),
       medications: getMedications(),
       clinicLogs: getClinicLogs(),
+      stockLayers: getStockLayers(),
       isOnline: false,
     };
   }
 
   let isOnline = false;
+  let autoCompletedCount = 0;
+  let stockWarnings: StockWarning[] = [];
   notifySyncStart();
   try {
-    const [shiftsRes, customersRes, servicesRes, personalEventsRes, medicationsRes, clinicLogsRes] = await Promise.allSettled([
+    // Auto-complete due upcoming services (Asia/Bangkok) and consume FIFO stock before fetching state
+    try {
+      const autoRes = await autoCompleteDueServicesAction();
+      if (autoRes.success) {
+        autoCompletedCount = autoRes.data.completedCount;
+        stockWarnings = autoRes.warnings || [];
+        if (autoCompletedCount > 0) {
+          window.dispatchEvent(
+            new CustomEvent("vendee_auto_completed", {
+              detail: { count: autoCompletedCount, warnings: stockWarnings },
+            })
+          );
+        }
+      }
+    } catch (_) {
+      // Ignore offline/RPC errors during auto-complete; regular sync continues
+    }
+
+    const [shiftsRes, customersRes, servicesRes, personalEventsRes, medicationsRes, clinicLogsRes, layersRes] = await Promise.allSettled([
       getShiftsAction(),
       getCustomersAction(),
       getServicesAction(),
       getPersonalEventsAction(),
       getMedicationsAction(),
       getClinicLogsAction(),
+      getStockLayersAction(),
     ]);
 
     let shifts = getShifts();
@@ -595,6 +655,12 @@ export async function syncAllDataFromApi(): Promise<{
       isOnline = true;
     }
 
+    let stockLayers = getStockLayers();
+    if (layersRes.status === "fulfilled" && layersRes.value.success && Array.isArray(layersRes.value.data)) {
+      stockLayers = layersRes.value.data;
+      localStorage.setItem(STORAGE_KEYS.STOCK_LAYERS, JSON.stringify(stockLayers));
+    }
+
     triggerSync();
     return {
       shifts,
@@ -603,6 +669,9 @@ export async function syncAllDataFromApi(): Promise<{
       personalEvents,
       medications,
       clinicLogs,
+      stockLayers,
+      autoCompletedCount,
+      stockWarnings,
       isOnline,
     };
   } catch (err) {

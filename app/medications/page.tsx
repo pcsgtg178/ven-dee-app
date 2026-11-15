@@ -11,9 +11,22 @@ import {
   Check,
   AlertCircle,
   RotateCw,
+  PackagePlus,
+  PackageMinus,
+  ClipboardCheck,
+  History,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import AppBar from "../components/AppBar";
 import BottomNav from "../components/BottomNav";
+import ModalStockReceive from "../components/ModalStockReceive";
+import ModalStockIssue from "../components/ModalStockIssue";
+import ModalStockCount from "../components/ModalStockCount";
+import ModalStockHistory from "../components/ModalStockHistory";
+import { formatOnHand, isLowStock, isNegativeStock } from "../../lib/stock";
+import { archiveMedicationAction } from "../actions/medicationActions";
+import { unwrap } from "../../lib/actionHelper";
 import {
   Medications,
   MedicationCategory,
@@ -41,12 +54,21 @@ export default function MedicationsPage() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState<MedicationCategory>("other");
   const [categoryFilter, setCategoryFilter] = useState<"all" | MedicationCategory>("all");
+  const [stockFilter, setStockFilter] = useState<"all" | "low" | "negative" | "archived">("all");
   const [size, setSize] = useState("");
   const [price, setPrice] = useState("");
   const [unit, setUnit] = useState("ยูนิต");
+  const [packSize, setPackSize] = useState("1");
+  const [packUnit, setPackUnit] = useState("ขวด");
+  const [refCostPerPackThb, setRefCostPerPackThb] = useState("");
+  const [reorderPointPacks, setReorderPointPacks] = useState("1");
   const [description, setDescription] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [stockModal, setStockModal] = useState<{
+    type: "receive" | "issue" | "count" | "history";
+    med: Medications;
+  } | null>(null);
 
   const loadData = useCallback(async (syncFromDb = true) => {
     // 1. Instant load from local storage cache
@@ -85,6 +107,10 @@ export default function MedicationsPage() {
     setSize("");
     setPrice("");
     setUnit("ยูนิต");
+    setPackSize("1");
+    setPackUnit("ขวด");
+    setRefCostPerPackThb("");
+    setReorderPointPacks("1");
     setDescription("");
     setErrorMsg("");
     setIsModalOpen(true);
@@ -97,6 +123,16 @@ export default function MedicationsPage() {
     setSize(med.size || "");
     setPrice(med.price !== undefined ? String(med.price) : "");
     setUnit(med.unit || "ยูนิต");
+    setPackSize(med.packSize !== undefined ? String(med.packSize) : med.size || "1");
+    setPackUnit(med.packUnit || "ขวด");
+    setRefCostPerPackThb(
+      med.refCostPerPackSatang !== undefined && med.refCostPerPackSatang > 0
+        ? String(med.refCostPerPackSatang / 100)
+        : ""
+    );
+    setReorderPointPacks(
+      med.reorderPointPacks !== undefined ? String(med.reorderPointPacks) : "1"
+    );
     setDescription(med.description || med.note || "");
     setErrorMsg("");
     setIsModalOpen(true);
@@ -113,13 +149,21 @@ export default function MedicationsPage() {
     setErrorMsg("");
 
     try {
+      const parsedPackSize = Math.max(1, Number(packSize) || Number(size) || 1);
+      const parsedRefCostSatang = refCostPerPackThb !== "" ? Math.round(Math.max(0, Number(refCostPerPackThb) || 0) * 100) : 0;
+      const parsedReorder = Math.max(0, Number(reorderPointPacks) || 0);
+
       await saveMedication({
         id: editingMed ? editingMed.id : undefined,
         name: name.trim(),
         category,
-        size: size.trim() || undefined,
+        size: size.trim() || String(parsedPackSize),
         price: price.trim() || undefined,
         unit: unit.trim() || undefined,
+        packSize: parsedPackSize,
+        packUnit: packUnit.trim() || "ขวด",
+        refCostPerPackSatang: parsedRefCostSatang,
+        reorderPointPacks: parsedReorder,
         description: description.trim() || undefined,
         note: description.trim() || undefined,
       });
@@ -131,6 +175,17 @@ export default function MedicationsPage() {
       setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูลตัวยา");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleToggleArchive = async (med: Medications) => {
+    try {
+      const nextArchived = !med.isArchived;
+      unwrap(await archiveMedicationAction(med.id, nextArchived));
+      await loadData(true);
+      showToast(nextArchived ? `เก็บถาวร "${med.name}" แล้ว` : `นำ "${med.name}" กลับมาใช้งานแล้ว`);
+    } catch (err: any) {
+      showToast(`เกิดข้อผิดพลาด: ${err.message || err}`);
     }
   };
 
@@ -146,11 +201,18 @@ export default function MedicationsPage() {
     }
   };
 
-  // Filtered medications by search
+  // Filtered medications by search, category, and stock status
   const filteredMeds = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return medications
       .filter((m) => {
+        if (stockFilter === "archived") {
+          if (!m.isArchived) return false;
+        } else {
+          if (m.isArchived) return false;
+          if (stockFilter === "low" && !isLowStock(m)) return false;
+          if (stockFilter === "negative" && !isNegativeStock(m)) return false;
+        }
         if (categoryFilter !== "all" && resolveMedicationCategory(m.name, m.category) !== categoryFilter) return false;
         if (!q) return true;
         return (
@@ -162,7 +224,7 @@ export default function MedicationsPage() {
         );
       })
       .sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
-  }, [medications, searchQuery, categoryFilter]);
+  }, [medications, searchQuery, categoryFilter, stockFilter]);
 
   return (
     <div className="min-h-screen bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
@@ -239,6 +301,33 @@ export default function MedicationsPage() {
           )}
         </div>
 
+        {/* Stock Status Filter */}
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            { id: "all", label: "ใช้งานอยู่" },
+            { id: "low", label: "สต็อกต่ำ" },
+            { id: "negative", label: "ติดลบ" },
+            { id: "archived", label: "เก็บถาวร" },
+          ] as const).map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setStockFilter(f.id)}
+              className={`rounded-full px-3 py-1 text-[11px] font-bold transition-all cursor-pointer ${
+                stockFilter === f.id
+                  ? f.id === "negative"
+                    ? "bg-rose-600 text-white"
+                    : f.id === "low"
+                      ? "bg-amber-500 text-white"
+                      : "bg-slate-800 text-white dark:bg-zinc-200 dark:text-zinc-900"
+                  : "bg-white text-text-muted border border-surface-subtle hover:bg-slate-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-300"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         {/* Category Filter */}
         <div className="flex flex-wrap gap-1.5">
           {(["all", ...MEDICATION_CATEGORIES] as const).map((c) => (
@@ -273,74 +362,138 @@ export default function MedicationsPage() {
             </div>
           ) : (
             filteredMeds.map((med) => {
-              const numericCost = Number(med.price || 0);
+              const refCostThb = (Number(med.refCostPerPackSatang || 0)) / 100;
+              const low = isLowStock(med);
+              const neg = isNegativeStock(med);
+              const onHandText = formatOnHand(
+                med.stockOnHand ?? 0,
+                med.unit || "ยูนิต",
+                med.packSize ?? (Number(med.size) || 1),
+                med.packUnit || "ขวด"
+              );
 
               return (
                 <div
                   key={med.id}
-                  className="group relative flex items-center justify-between gap-3 rounded-2xl border border-purple-100 bg-white p-3.5 shadow-2xs transition-all hover:border-purple-300 hover:shadow-xs dark:border-zinc-800 dark:bg-zinc-900"
+                  className="group relative flex flex-col gap-2.5 rounded-2xl border border-purple-100 bg-white p-3.5 shadow-2xs transition-all hover:border-purple-300 hover:shadow-xs dark:border-zinc-800 dark:bg-zinc-900"
                 >
-                  {/* Left Pill Icon & Details */}
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-300">
-                      <Pill className="h-5 w-5" />
+                  <div className="flex items-start justify-between gap-2">
+                    {/* Left Pill Icon & Details */}
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-300">
+                        <Pill className="h-5 w-5" />
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-sm text-text-main dark:text-white truncate">
+                            {med.name}
+                          </span>
+                          {(med.packSize || med.size || med.unit) && (
+                            <span className="shrink-0 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60">
+                              {med.packSize ?? med.size} {med.unit || ""}/{med.packUnit || "ขวด"}
+                            </span>
+                          )}
+                          {(() => {
+                            const cat = resolveMedicationCategory(med.name, med.category);
+                            return (
+                              <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${MEDICATION_CATEGORY_CONFIG[cat].badge}`}>
+                                {MEDICATION_CATEGORY_CONFIG[cat].label}
+                              </span>
+                            );
+                          })()}
+                          {neg && (
+                            <span className="shrink-0 rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                              ติดลบ
+                            </span>
+                          )}
+                          {!neg && low && (
+                            <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                              สต็อกต่ำ
+                            </span>
+                          )}
+                          {med.isArchived && (
+                            <span className="shrink-0 rounded-md bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-zinc-700 dark:text-zinc-300">
+                              เก็บถาวร
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                          <span className={`font-bold ${neg ? "text-rose-600" : low ? "text-amber-600" : "text-emerald-600 dark:text-emerald-400"}`}>
+                            คงเหลือ: {onHandText}
+                          </span>
+                          {refCostThb > 0 && (
+                            <span className="text-[11px] text-text-muted dark:text-zinc-400">
+                              ต้นทุนอ้างอิง ฿{refCostThb.toLocaleString()}/{med.packUnit || "ขวด"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-text-main dark:text-white truncate">
-                          {med.name}
-                        </span>
-                        {(med.size || med.unit) && (
-                          <span className="shrink-0 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60">
-                            {med.size ? `${med.size} ` : ""}{med.unit || ""}
-                          </span>
-                        )}
-                        {(() => {
-                          const cat = resolveMedicationCategory(med.name, med.category);
-                          return (
-                            <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${MEDICATION_CATEGORY_CONFIG[cat].badge}`}>
-                              {MEDICATION_CATEGORY_CONFIG[cat].label}
-                            </span>
-                          );
-                        })()}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-text-muted dark:text-zinc-400 mt-0.5">
-                        <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                          <span>ราคา:</span>
-                          <span className="font-bold">
-                            {numericCost > 0 ? `฿${numericCost.toLocaleString()}` : "ไม่ระบุ"}
-                          </span>
-                          {med.unit && <span className="text-[10px] text-text-muted">/{med.unit}</span>}
-                        </span>
-
-                        {(med.description || med.note) && (
-                          <span className="truncate max-w-[220px] text-[11px] text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
-                            {med.description || med.note}
-                          </span>
-                        )}
-                      </div>
+                    {/* Edit / Archive / Delete Actions */}
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(med)}
+                        className="rounded-lg p-1.5 text-text-muted hover:bg-purple-50 hover:text-purple-600 dark:hover:bg-purple-950/40 dark:hover:text-purple-300 cursor-pointer"
+                        title="แก้ไขข้อมูลตัวยา"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleArchive(med)}
+                        className="rounded-lg p-1.5 text-text-muted hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-zinc-800 cursor-pointer"
+                        title={med.isArchived ? "นำกลับมาใช้งาน" : "เก็บถาวร (Archive)"}
+                      >
+                        {med.isArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(med)}
+                        className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red dark:hover:bg-rose-950/40 cursor-pointer"
+                        title="ลบตัวยานี้"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
+                  {/* Stock Action Buttons */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-slate-100 dark:border-zinc-800">
                     <button
                       type="button"
-                      onClick={() => handleOpenEdit(med)}
-                      className="rounded-lg p-2 text-text-muted hover:bg-purple-50 hover:text-purple-600 active:scale-95 transition-all dark:hover:bg-purple-950/40 dark:hover:text-purple-300 cursor-pointer"
-                      title="แก้ไขข้อมูลตัวยา"
+                      onClick={() => setStockModal({ type: "receive", med })}
+                      className="flex items-center justify-center gap-1 rounded-xl bg-emerald-50 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 cursor-pointer"
                     >
-                      <Pencil className="h-4 w-4" />
+                      <PackagePlus className="h-3.5 w-3.5" />
+                      <span>รับเข้า</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(med)}
-                      className="rounded-lg p-2 text-text-muted hover:bg-rose-50 hover:text-shift-red active:scale-95 transition-all dark:hover:bg-rose-950/40 cursor-pointer"
-                      title="ลบตัวยานี้"
+                      onClick={() => setStockModal({ type: "issue", med })}
+                      className="flex items-center justify-center gap-1 rounded-xl bg-amber-50 py-1.5 text-[11px] font-bold text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 cursor-pointer"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <PackageMinus className="h-3.5 w-3.5" />
+                      <span>ตัดออก</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStockModal({ type: "count", med })}
+                      className="flex items-center justify-center gap-1 rounded-xl bg-sky-50 py-1.5 text-[11px] font-bold text-sky-700 hover:bg-sky-100 dark:bg-sky-950/40 dark:text-sky-300 cursor-pointer"
+                    >
+                      <ClipboardCheck className="h-3.5 w-3.5" />
+                      <span>นับสต็อก</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStockModal({ type: "history", med })}
+                      className="flex items-center justify-center gap-1 rounded-xl bg-purple-50 py-1.5 text-[11px] font-bold text-purple-700 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 cursor-pointer"
+                    >
+                      <History className="h-3.5 w-3.5" />
+                      <span>ประวัติ</span>
                     </button>
                   </div>
                 </div>
@@ -489,6 +642,63 @@ export default function MedicationsPage() {
                 </div>
               </div>
 
+              {/* Stock Pack Settings */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                    ขนาดต่อแพ็ค/ขวด
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input
+                      type="number"
+                      step="any"
+                      min="1"
+                      value={packSize}
+                      onChange={(e) => setPackSize(e.target.value)}
+                      placeholder="200"
+                      className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-2.5 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
+                    />
+                    <input
+                      type="text"
+                      value={packUnit}
+                      onChange={(e) => setPackUnit(e.target.value)}
+                      placeholder="ขวด"
+                      className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-2.5 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                    ต้นทุนอ้างอิง/แพ็ค (บ.)
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={refCostPerPackThb}
+                    onChange={(e) => setRefCostPerPackThb(e.target.value)}
+                    placeholder="เช่น 2500"
+                    className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                  แจ้งเตือนเมื่อเหลือต่ำกว่า ({packUnit || "ขวด"}) — 0 = ไม่เตือน
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={reorderPointPacks}
+                  onChange={(e) => setReorderPointPacks(e.target.value)}
+                  placeholder="1"
+                  className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
+                />
+              </div>
+
               {/* Description */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-text-main dark:text-zinc-200">
@@ -526,6 +736,44 @@ export default function MedicationsPage() {
           </div>
         </div>
       )}
+
+      {/* Stock Modals */}
+      <ModalStockReceive
+        isOpen={stockModal?.type === "receive"}
+        medication={stockModal?.med ?? null}
+        onClose={() => setStockModal(null)}
+        onSuccess={async (msg) => {
+          showToast(msg);
+          await loadData(true);
+        }}
+      />
+      <ModalStockIssue
+        isOpen={stockModal?.type === "issue"}
+        medication={stockModal?.med ?? null}
+        onClose={() => setStockModal(null)}
+        onSuccess={async (msg) => {
+          showToast(msg);
+          await loadData(true);
+        }}
+      />
+      <ModalStockCount
+        isOpen={stockModal?.type === "count"}
+        medication={stockModal?.med ?? null}
+        onClose={() => setStockModal(null)}
+        onSuccess={async (msg) => {
+          showToast(msg);
+          await loadData(true);
+        }}
+      />
+      <ModalStockHistory
+        isOpen={stockModal?.type === "history"}
+        medication={stockModal?.med ?? null}
+        onClose={() => setStockModal(null)}
+        onSuccess={async (msg) => {
+          showToast(msg);
+          await loadData(true);
+        }}
+      />
 
       {/* Bottom Navigation */}
       <BottomNav />

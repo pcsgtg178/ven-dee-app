@@ -1,8 +1,11 @@
 "use client";
 
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarDays, BarChart3, Plus, Pill, Users } from "lucide-react";
+import { getMedications, subscribeToStorage } from "../../lib/storage";
+import { isLowStock, isNegativeStock } from "../../lib/stock";
 
 export function BottomNavSpacer({ className = "" }: { className?: string }) {
   return (
@@ -23,6 +26,17 @@ interface BottomNavProps {
 
 export default function BottomNav({ onOpenAdd, hideSpacer = false }: BottomNavProps) {
   const pathname = usePathname();
+  const [lowStockBadgeCount, setLowStockBadgeCount] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => {
+      const meds = getMedications();
+      const count = meds.filter((m) => !m.isArchived && (isNegativeStock(m) || isLowStock(m))).length;
+      setLowStockBadgeCount(count);
+    };
+    refresh();
+    return subscribeToStorage(refresh);
+  }, []);
 
   const isHomeActive = pathname === "/";
   const isDashboardActive = pathname.startsWith("/dashboard");
@@ -110,13 +124,18 @@ export default function BottomNav({ onOpenAdd, hideSpacer = false }: BottomNavPr
           }`}
         >
           <div
-            className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-xl transition-all ${
+            className={`relative flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-xl transition-all ${
               isMedicationsActive
                 ? "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 shadow-2xs"
                 : ""
             }`}
           >
             <Pill className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+            {lowStockBadgeCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-extrabold text-white shadow-xs">
+                {lowStockBadgeCount > 9 ? "9+" : lowStockBadgeCount}
+              </span>
+            )}
           </div>
           <span>ตัวยา</span>
         </Link>

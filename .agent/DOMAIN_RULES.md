@@ -181,7 +181,7 @@
    - แต่ละรายการเก็บ: `medicationId`, `quantity` (number > 0, รองรับทศนิยม เช่น 0.5 cc / 20 ยูนิต), `unit` (snapshot จากตัวยา), `unitCostSatang` (snapshot ราคาต่อหน่วย ณ เวลาบันทึก เพื่อไม่ให้ประวัติเปลี่ยนเมื่อแก้ราคายา)
    - **Line Cost** = round(quantity × unitCostSatang) (Integer Satang)
    - **`medicationCost` = ผลรวม Line Cost** ของยาทุกรายการ (คำนวณอัตโนมัติ; ห้ามกรอกทับถ้ามีรายการยา)
-   - unit cost = price_satang / size (ราคาต่อ 1 หน่วยของขนาดบรรจุ)
+   - unit cost สำหรับ preview = `standard_cost_satang / size` (หรือประมาณการจาก FIFO layers หากมีสต็อก); ต้นทุนจริงเมื่อตัดสต็อกคำนวณจาก **FIFO layers** (`consume_stock_for_service` / `reconsume_stock_for_service` ตาม §3.7)
    - ฟอร์มสร้างบริการต้องเริ่มว่างและ reset หลังบันทึก (ตาม §2.6)
 
 ### 3.2 Financial Calculation Formulas
@@ -194,6 +194,7 @@
 
 3. **Net Profit (กำไรสุทธิ)**:
    $$\text{Net Profit} = \text{Net Revenue} - \text{Total Expenses}$$
+   *(สำหรับภาพรวมช่วงเวลาบน Dashboard: $\text{Period Net} = \sum \text{Net Profit (งานบริการ)} - \text{Waste Cost} - \text{Giveaway Cost}$ โดยยอดซื้อยารับเข้าและมูลค่าสต็อกคงเหลือไม่นับเป็นค่าใช้จ่าย)*
 
 4. **Effective Hourly Rate (อัตราค่าจ้างสุทธิต่อชั่วโมง - คำนวณแบบยืดหยุ่น)**:
    - หากผู้ใช้ไม่ได้ระบุ `durationHours` หรือระบุเป็น $0$ ให้ข้ามการคำนวณนี้ (คืนค่า `null` หรือ `undefined` เพื่อไม่แสดงผลบน UI)
@@ -235,6 +236,20 @@
    - รายการสถานะ **`cancelled`** ยังคงถูกล็อกไม่ให้แก้ไขทุกกรณี
 3. **Shift Overlap & Financial Consistency**:
    - การแก้ไขวัน/เวลาบริการย้อนหลังยังคงต้องตรวจ `checkServiceShiftOverlap` ไม่ให้ชนช่วงเวลาเวรโรงพยาบาลที่ active และใช้รูปแบบ Server-First (`unwrap`) ในการบันทึก/ลบเพื่อให้ยอดสรุปรายรับ-ต้นทุนบน `/dashboard` สอดคล้องกับฐานข้อมูลเสมอ
+
+### 3.7 Medication Stock Invariants (กติกาคลังตัวยาและ FIFO - Phase 14)
+1. **Append-Only Ledger & Atomic RPCs**:
+   - ตาราง `stock_movements` เป็นแหล่งข้อมูลจริงแบบ append-only (ห้ามแก้ไขหรือลบย้อนหลัง ใช้การสร้างรายการ `reversal` แทน)
+   - ทุกการรับเข้า (`receive_stock`), ตัดออก (`issue_stock`), นับปรับยอด (`adjust_stock_to_count`), ตัดใช้/คืนสต็อกบริการ (`consume_stock_for_service`, `restore_stock_for_service`, `reconsume_stock_for_service`) และ `reverse_stock_movement` ต้องทำผ่าน PostgreSQL RPC แบบ atomic
+2. **FIFO Costing & Negative Stock**:
+   - ตัดสต็อกแบบ FIFO จาก `stock_layers` ที่ `received_at` เก่าที่สุดก่อน หากไม่พอให้คิดส่วนที่ขาดด้วย `ref_cost_per_pack_satang / pack_size` (`is_estimated_cost = true`) และปล่อยให้สต็อกติดลบพร้อมส่งคำเตือน `STOCK_NEGATIVE` (ไม่ block)
+   - เมื่อรับเข้าภายหลัง (`receive_stock`) ให้นำปริมาณที่รับเข้าไปหักยอดติดลบค้างก่อนสร้าง `qty_remaining` ของ layer ใหม่ โดยไม่ย้อนแก้ต้นทุนของงานเก่า (D9)
+3. **Consumption Timing & Auto-Complete**:
+   - งาน `upcoming` ไม่ตัดสต็อกจริง (แสดงต้นทุนประมาณ); จะตัดสต็อกเมื่องานเปลี่ยนเป็น `completed` หรือถูก `complete_due_services` ปิดอัตโนมัติเมื่อถึงเวลา (`Asia/Bangkok`)
+   - หากผู้ใช้กดย้อนงาน `completed` กลับเป็น `upcoming` ระบบจะคืนสต็อก (`restore_stock_for_service`) และตั้ง `auto_complete_opt_out = true` เพื่อไม่ให้ auto-complete ปิดงานซ้ำ
+   - การยกเลิก (`cancelled`), ลบงาน, หรือลบลูกค้าแบบ cascade ต้องคืนสต็อกก่อนเสมอ
+4. **Archive vs Delete**:
+   - ตัวยาที่มีประวัติ `stock_movements` แล้วห้ามลบจริง (`MEDICATION_HAS_MOVEMENTS`) ให้ใช้ `is_archived = true` เพื่อซ่อนจากตัวเลือกแทน
 
 ---
 

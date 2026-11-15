@@ -266,6 +266,26 @@ export function isServiceEditable(
 }
 
 /**
+ * Alias for unified grace period helper (BACKLOG_STOCK.md §14.4).
+ */
+export function isWithinGracePeriod(dateStr: string, today?: Date): boolean {
+  return isDateWithinGracePeriod(dateStr, today);
+}
+
+/**
+ * Check whether a Customer Service's medication usage can be edited:
+ * - Cancelled records remain locked.
+ * - Upcoming editable records can edit medication usage.
+ * - Completed records can edit medication usage when today/future or within the 1-month calendar grace period (D6).
+ */
+export function canEditMedicationUsage(
+  service: { date?: string; status?: string } | null | undefined,
+  today?: Date
+): boolean {
+  return isServiceEditable(service, today);
+}
+
+/**
  * Check whether a Customer Service record can be deleted:
  * - Today/future records are deletable.
  * - Past records are deletable within the 1-month calendar grace period.

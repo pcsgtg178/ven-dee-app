@@ -80,10 +80,10 @@ flowchart LR
 
 ## 14.2 Schema สต็อก (`supabase/migrations/20261106_medication_stock.sql`)
 
-- [ ] **ตาราง `medications`** (เพิ่มคอลัมน์)
+- [x] **ตาราง `medications`** (เพิ่มคอลัมน์)
   - `stock_on_hand NUMERIC NOT NULL DEFAULT 0` เป็น cache ที่ RPC อัปเดตเท่านั้น
   - `reorder_point_packs NUMERIC NOT NULL DEFAULT 1` (D18) ถ้าเป็น 0 จะไม่แจ้งเตือน
-- [ ] **ตาราง `stock_movements`**
+- [x] **ตาราง `stock_movements`**
   - `id`, `medication_id` (FK), `type` CHECK IN (`receive`, `use`, `waste`, `giveaway`, `adjust`, `reversal`)
   - `quantity NUMERIC`: มีเครื่องหมาย (+ เข้า / − ออก) หน่วยเป็นหน่วยที่ใช้จริง
   - `cost_satang NUMERIC`, `is_estimated_cost BOOLEAN DEFAULT false`
@@ -91,14 +91,16 @@ flowchart LR
   - `reason`: `expired` | `damaged` | `personal` | `free` | `sample` | `other`
   - `service_id UUID NULL` (FK, `ON DELETE SET NULL`), `reverses_movement_id`, `reversed BOOLEAN DEFAULT false`
   - `occurred_at TIMESTAMPTZ`, `note`, `created_at`
-- [ ] **ตาราง `stock_layers`**: `id`, `medication_id`, `receive_movement_id`, `received_at`, `qty_received`, `qty_remaining`, `unit_cost_satang`
-- [ ] **ตาราง `stock_layer_consumptions`**: `movement_id`, `layer_id`, `quantity`, `unit_cost_satang`
-- [ ] **ตาราง `customer_services`** (เพิ่มคอลัมน์)
+- [x] **ตาราง `stock_layers`**: `id`, `medication_id`, `receive_movement_id`, `received_at`, `qty_received`, `qty_remaining`, `unit_cost_satang`
+- [x] **ตาราง `stock_layer_consumptions`**: `movement_id`, `layer_id`, `quantity`, `unit_cost_satang`
+- [x] **ตาราง `customer_services`** (เพิ่มคอลัมน์)
   - `stock_consumed BOOLEAN DEFAULT false`: flag กันการตัดซ้ำ
   - `auto_complete_opt_out BOOLEAN DEFAULT false`: จะเป็น `true` เมื่อผู้ใช้กดย้อนงานเป็น `upcoming` เอง เพื่อไม่ให้ auto-complete ปิดงานซ้ำ (ดู 14.4)
-- [ ] เพิ่ม Index และ RLS แบบเดียวกับตารางอื่น
+- [x] เพิ่ม Index และ RLS แบบเดียวกับตารางอื่น
 
-## 14.3 RPC Functions (Transactional)
+## 14.3 RPC Functions (Transactional) — `supabase/migrations/20261115_phase14_3_stock_rpcs.sql` (เสร็จแล้ว)
+
+- [x] `_fifo_consume`, `receive_stock`, `issue_stock`, `adjust_stock_to_count`, `consume_stock_for_service`, `restore_stock_for_service`, `reconsume_stock_for_service`, `complete_due_services`, `reverse_stock_movement`
 
 | RPC | ทำอะไร |
 |---|---|
@@ -124,52 +126,52 @@ flowchart LR
 | `completed` → `cancelled` / ลบงาน / ลบลูกค้า (cascade) | restore ก่อน แล้วค่อยเปลี่ยนสถานะหรือลบ |
 | แก้ปริมาณยาของงานที่ `completed` แล้ว และยังอยู่ในช่วงผ่อนผัน | `reconsume_stock_for_service` (D6) |
 
-- [ ] สร้าง `autoCompleteDueServicesAction()` และเรียกใน `syncAllDataFromApi()` / ตอนเปิดแอป แล้วแสดง toast เช่น "ปิดงานอัตโนมัติ 2 งาน" พร้อมคำเตือนสต็อกติดลบถ้ามี
-- [ ] ย้ายฟังก์ชันช่วงผ่อนผันไปไว้ที่ `lib/dateUtils.ts` เป็น `isWithinGracePeriod(date, today)` เพื่อให้ใช้ร่วมกับ `isReferShiftWithinGracePeriod` ของ Phase 12
-- [ ] ปรับ `canEditService` ให้แยกเป็น `canEditService` (แก้ทั้งงาน เหมือนเดิม) กับ `canEditMedicationUsage` (งาน `completed` ที่อยู่ในช่วงผ่อนผัน) และ UI ต้องเปิดให้แก้ได้เฉพาะ `MedicationUsageEditor`
-- [ ] อัปเดต `updateServiceStatusAction`, `updateServiceAction`, `deleteServiceAction`, `deleteServicesByCustomerIdAction` ให้เรียก RPC
-- [ ] ส่งคำเตือน `warnings: [{ code: "STOCK_NEGATIVE", medicationId, onHand }]` กลับไปใน JSON envelope โดยไม่ block และใช้ `unwrap()` ทุกจุด
+- [x] สร้าง `autoCompleteDueServicesAction()` และเรียกใน `syncAllDataFromApi()` / ตอนเปิดแอป แล้วแสดง toast เช่น "ปิดงานอัตโนมัติ 2 งาน" พร้อมคำเตือนสต็อกติดลบถ้ามี
+- [x] ย้ายฟังก์ชันช่วงผ่อนผันไปไว้ที่ `lib/dateUtils.ts` เป็น `isWithinGracePeriod(date, today)` เพื่อให้ใช้ร่วมกับ `isReferShiftWithinGracePeriod` ของ Phase 12
+- [x] ปรับ `canEditService` ให้แยกเป็น `canEditService` (แก้ทั้งงาน เหมือนเดิม) กับ `canEditMedicationUsage` (งาน `completed` ที่อยู่ในช่วงผ่อนผัน) และ UI ต้องเปิดให้แก้ได้เฉพาะ `MedicationUsageEditor`
+- [x] อัปเดต `updateServiceStatusAction`, `updateServiceAction`, `deleteServiceAction`, `deleteServicesByCustomerIdAction` ให้เรียก RPC
+- [x] ส่งคำเตือน `warnings: [{ code: "STOCK_NEGATIVE", medicationId, onHand }]` กลับไปใน JSON envelope โดยไม่ block และใช้ `unwrap()` ทุกจุด
 
 ## 14.5 Server Actions, Pure Logic และ Client Storage
 
-- [ ] `app/actions/stockActions.ts`: `receiveStockAction`, `issueStockAction`, `adjustStockToCountAction`, `reverseStockMovementAction`, `getStockMovementsAction(medId, range)`, `getStockSummaryAction(range)` (ข้อมูลสำหรับ KPI ใน 14.7)
-- [ ] `app/actions/medicationActions.ts`: เพิ่ม CRUD ของโปรโมชั่น, archive/unarchive และกติกาว่าลบจริงได้เฉพาะตัวที่ไม่เคยมีการเคลื่อนไหว (`MEDICATION_HAS_MOVEMENTS`)
-- [ ] `lib/stock.ts` (pure functions):
+- [x] `app/actions/stockActions.ts`: `receiveStockAction`, `issueStockAction`, `adjustStockToCountAction`, `reverseStockMovementAction`, `getStockMovementsAction(medId, range)`, `getStockSummaryAction(range)` (ข้อมูลสำหรับ KPI ใน 14.7)
+- [x] `app/actions/medicationActions.ts`: เพิ่ม CRUD ของโปรโมชั่น, archive/unarchive และกติกาว่าลบจริงได้เฉพาะตัวที่ไม่เคยมีการเคลื่อนไหว (`MEDICATION_HAS_MOVEMENTS`)
+- [x] `lib/stock.ts` (pure functions):
   - `packsToUnits`
   - `formatOnHand` (เช่น `230 ยูนิต ≈ 2.3 ขวด`)
   - `isLowStock` (`on_hand < reorder_point_packs × pack_size` และ reorder > 0)
   - `estimateFifoCost(layers, qty, refUnitCost)` ใช้กับ D17 และ preview
-- [ ] `lib/conflictEngine.ts`: เลิกใช้ `price / size` เป็นต้นทุน
-- [ ] `types/vendee.ts`: เพิ่มฟิลด์ใหม่ของ `Medications`, type `MedicationPromotion`, `StockMovement`, `StockMovementType` และฟิลด์ใหม่ของ `CustomerServiceRecord`
-- [ ] `syncAllDataFromApi()`: ซิงค์ยอดคงเหลือ, layers ที่ยังเหลือ (ใช้ประมาณต้นทุนฝั่ง client) และโปรโมชั่น ส่วน ledger เต็มให้โหลดเฉพาะตอนเปิดดูประวัติ
+- [x] `lib/conflictEngine.ts`: เลิกใช้ `price / size` เป็นต้นทุน
+- [x] `types/vendee.ts`: เพิ่มฟิลด์ใหม่ของ `Medications`, type `MedicationPromotion`, `StockMovement`, `StockMovementType` และฟิลด์ใหม่ของ `CustomerServiceRecord`
+- [x] `syncAllDataFromApi()`: ซิงค์ยอดคงเหลือ, layers ที่ยังเหลือ (ใช้ประมาณต้นทุนฝั่ง client) และโปรโมชั่น ส่วน ledger เต็มให้โหลดเฉพาะตอนเปิดดูประวัติ
 
 ## 14.6 UI
 
-- [ ] **`/medications`**
+- [x] **`/medications`**
   - การ์ดแสดงยอดคงเหลือ, Badge `สต็อกต่ำ` (สีส้ม) / `ติดลบ` (สีแดง) และรายการโปรโมชั่น (เช่น `100u · 2,500 บ.`)
   - ตัวกรอง: ทั้งหมด / สต็อกต่ำ / ติดลบ / เก็บถาวร
   - ปุ่ม: **รับเข้า · ตัดออก · นับสต็อก · ประวัติ**
-- [ ] **ฟอร์มตัวยา** (`/medications`, `ModalMedicationManager`): แยกช่อง "ขนาดต่อขวด + หน่วย", "ต้นทุนอ้างอิงต่อขวด", "แจ้งเตือนเมื่อเหลือ (ขวด)" และส่วน "โปรโมชั่น" ที่เพิ่มหรือลบได้หลายรายการ
-- [ ] **`ModalStockReceive`**: กรอกจำนวนขวด, ราคาต่อขวด, ร้านที่ซื้อ, วันที่ (ค่าเริ่มต้นคือวันนี้), หมายเหตุ และมี preview `= 300 ยูนิต · 25 บ./ยูนิต`
-- [ ] **`ModalStockIssue`**: เลือกประเภท (ทิ้ง/เสีย/หมดอายุ หรือ ใช้ส่วนตัว/แจกฟรี/ตัวอย่าง), จำนวน, เหตุผล, หมายเหตุ
-- [ ] **`ModalStockCount`**: แสดงยอดในระบบ กรอกยอดที่นับได้ แล้วแสดงส่วนต่างให้เห็นก่อนกดยืนยัน
-- [ ] **`ModalStockHistory`**: ledger มีลิงก์ไปงานบริการ, ป้าย "ต้นทุนประมาณ" และปุ่มกลับรายการ
-- [ ] **`MedicationUsageEditor`**: แสดงยอดคงเหลือข้างชื่อยา, เตือนสีส้มเมื่อใช้เกินยอด (ไม่ block), แสดงต้นทุนประมาณจาก FIFO และซ่อนตัวยาที่ archive แล้ว
+- [x] **ฟอร์มตัวยา** (`/medications`, `ModalMedicationManager`): แยกช่อง "ขนาดต่อขวด + หน่วย", "ต้นทุนอ้างอิงต่อขวด", "แจ้งเตือนเมื่อเหลือ (ขวด)" และส่วน "โปรโมชั่น" ที่เพิ่มหรือลบได้หลายรายการ
+- [x] **`ModalStockReceive`**: กรอกจำนวนขวด, ราคาต่อขวด, ร้านที่ซื้อ, วันที่ (ค่าเริ่มต้นคือวันนี้), หมายเหตุ และมี preview `= 300 ยูนิต · 25 บ./ยูนิต`
+- [x] **`ModalStockIssue`**: เลือกประเภท (ทิ้ง/เสีย/หมดอายุ หรือ ใช้ส่วนตัว/แจกฟรี/ตัวอย่าง), จำนวน, เหตุผล, หมายเหตุ
+- [x] **`ModalStockCount`**: แสดงยอดในระบบ กรอกยอดที่นับได้ แล้วแสดงส่วนต่างให้เห็นก่อนกดยืนยัน
+- [x] **`ModalStockHistory`**: ledger มีลิงก์ไปงานบริการ, ป้าย "ต้นทุนประมาณ" และปุ่มกลับรายการ
+- [x] **`MedicationUsageEditor`**: แสดงยอดคงเหลือข้างชื่อยา, เตือนสีส้มเมื่อใช้เกินยอด (ไม่ block), แสดงต้นทุนประมาณจาก FIFO และซ่อนตัวยาที่ archive แล้ว
 - [ ] **หน้ารายละเอียดลูกค้า**: แสดงป้าย "ต้นทุนประมาณ" บนงานที่ใช้ต้นทุนประมาณ และเปิดให้แก้ปริมาณยาของงานที่เสร็จแล้วถ้ายังอยู่ในช่วงผ่อนผัน
-- [ ] **แจ้งเตือนสต็อกต่ำ**: จุดตัวเลขบนแท็บ "ตัวยา" ใน `BottomNav` และการ์ดสรุปบนแดชบอร์ด
-- [ ] ฟอร์มต้องเริ่มจากค่าว่างและ reset หลังกดบันทึก (`DOMAIN_RULES.md` §2.6) และใช้ข้อความบนหน้าจอให้น้อยตามแนวทาง Phase 11.3
+- [x] **แจ้งเตือนสต็อกต่ำ**: จุดตัวเลขบนแท็บ "ตัวยา" ใน `BottomNav` และการ์ดสรุปบนแดชบอร์ด
+- [x] ฟอร์มต้องเริ่มจากค่าว่างและ reset หลังกดบันทึก (`DOMAIN_RULES.md` §2.6) และใช้ข้อความบนหน้าจอให้น้อยตามแนวทาง Phase 11.3
 
 ## 14.7 แดชบอร์ดและการ Go-live
 
-- [ ] **ต้นทุนยารายงาน**: งานที่ `completed` ใช้ `medication_cost_satang` (ต้นทุน FIFO จริง) ส่วนงานที่ยังเป็น `upcoming` ใช้ต้นทุนประมาณที่คำนวณตอนแสดงผล (D17)
-- [ ] **KPI ใหม่** ตามช่วงเวลาที่เลือก:
+- [x] **ต้นทุนยารายงาน**: งานที่ `completed` ใช้ `medication_cost_satang` (ต้นทุน FIFO จริง) ส่วนงานที่ยังเป็น `upcoming` ใช้ต้นทุนประมาณที่คำนวณตอนแสดงผล (D17)
+- [x] **KPI ใหม่** ตามช่วงเวลาที่เลือก:
   - มูลค่ายาสูญเสีย (waste) และมูลค่าแจกฟรี/ใช้ส่วนตัว (giveaway) แสดงแยก
   - ยอดซื้อยา (receive) และมูลค่าสต็อกคงเหลือ (Σ qty_remaining × unit_cost ณ ปัจจุบัน) ไม่นับเป็นค่าใช้จ่าย (D11)
-- [ ] **สูตรกำไรสุทธิรวมของช่วงเวลา**:
+- [x] **สูตรกำไรสุทธิรวมของช่วงเวลา**:
 
   $$\text{Period Net} = \sum \text{Net Profit (งานบริการ)} - \text{Waste Cost} - \text{Giveaway Cost}$$
 
-- [ ] Product Breakdown แสดงยอดคงเหลือคู่กับยอดใช้
+- [x] Product Breakdown แสดงยอดคงเหลือคู่กับยอดใช้
 - [ ] **ขั้นตอน Go-live**
   1. สำรองข้อมูล แล้วรัน migration 14.1 (ผู้ใช้ยืนยัน mapping การรวมรายการซ้ำ) และ 14.2
   2. ตั้ง `pack_size`, ต้นทุนอ้างอิง และ reorder ให้แต่ละตัวยา
@@ -178,23 +180,21 @@ flowchart LR
 
 ## 14.8 Tests
 
-- [ ] `lib/__tests__/stock.test.ts`: `packsToUnits`, `formatOnHand`, `isLowStock` (รวม reorder = 0), `estimateFifoCost`
-- [ ] FIFO ข้ามหลาย layer (รับ 100u@20 + 100u@25 แล้วใช้ 150u → 3,250 บ.)
-- [ ] ตัดเกินสต็อก → ยอดติดลบ + `is_estimated_cost` แล้วรับเข้าภายหลัง → ยอดถูกหัก แต่ต้นทุนของงานเก่าไม่เปลี่ยน
-- [ ] เสร็จสิ้น → ยกเลิก → เสร็จสิ้นอีกครั้ง ยอดและ layer ต้องกลับมาถูกต้อง และการ consume ต้อง idempotent
-- [ ] auto-complete: ปิดเฉพาะงานที่ถึงเวลา, ข้ามงานที่ `auto_complete_opt_out` และงานที่ย้อนเป็น `upcoming` แล้วต้องไม่ถูกปิดซ้ำ
-- [ ] แก้ปริมาณยาของงานที่เสร็จแล้ว: ทำได้เมื่ออยู่ในช่วงผ่อนผัน (รวมกรณีวันที่ 1–7 ข้ามเดือน) และถูกปฏิเสธเมื่อเลยช่วง
-- [ ] ลบงาน, ลบลูกค้าแบบ cascade, นับสต็อก (ส่วนต่าง ±), กลับรายการรับเข้าที่ถูกใช้แล้วต้องได้ `LAYER_ALREADY_CONSUMED`
-- [ ] Migration รวมรายการซ้ำ: usages ถูก remap, แถวที่ถูกรวมถูก archive, โปรโมชั่นถูกสร้าง และต้นทุนเก่าถูกย้ายไป legacy แล้วเป็น 0
-- [ ] archive ทำงานถูกต้อง และการลบตัวยาที่มีการเคลื่อนไหวต้องถูกปฏิเสธ
-- [ ] ต้องผ่าน `npm run build`
+- [x] `lib/__tests__/stock.test.ts`: `packsToUnits`, `formatOnHand`, `isLowStock` (รวม reorder = 0), `estimateFifoCost`, `isWithinGracePeriod`, `canEditMedicationUsage`
+- [x] FIFO ข้ามหลาย layer (รับ 100u@20 + 100u@25 แล้วใช้ 150u → 3,250 บ.)
+- [x] ตัดเกินสต็อก → ยอดติดลบ + `is_estimated_cost` แล้วรับเข้าภายหลัง → ยอดถูกหัก แต่ต้นทุนของงานเก่าไม่เปลี่ยน (ทดสอบผ่าน DB RPC)
+- [x] เสร็จสิ้น → ยกเลิก → เสร็จสิ้นอีกครั้ง ยอดและ layer ต้องกลับมาถูกต้อง และการ consume ต้อง idempotent (ทดสอบผ่าน DB RPC)
+- [x] auto-complete: ปิดเฉพาะงานที่ถึงเวลา, ข้ามงานที่ `auto_complete_opt_out` และงานที่ย้อนเป็น `upcoming` แล้วต้องไม่ถูกปิดซ้ำ (ทดสอบผ่าน DB RPC)
+- [x] แก้ปริมาณยาของงานที่เสร็จแล้ว: ทำได้เมื่ออยู่ในช่วงผ่อนผัน (รวมกรณีวันที่ 1–7 ข้ามเดือน) และถูกปฏิเสธเมื่อเลยช่วง
+- [x] ลบงาน, ลบลูกค้าแบบ cascade, นับสต็อก (ส่วนต่าง ±), กลับรายการรับเข้าที่ถูกใช้แล้วต้องได้ `LAYER_ALREADY_CONSUMED`
+- [x] Migration รวมรายการซ้ำ: Botox ถูกรวมเป็น 200u, แถวซ้ำถูก archive, และต้นทุนเก่าถูกย้ายไป legacy แล้วเป็น 0
+- [x] archive ทำงานถูกต้อง และการลบตัวยาที่มีการเคลื่อนไหวต้องถูกปฏิเสธ (`MEDICATION_HAS_MOVEMENTS`)
+- [x] Playwright E2E tests (`/medications` receive/issue/count/history lifecycle, `MedicationUsageEditor`, `/dashboard` Stock KPIs) และ `npm run build` ผ่าน
 
 ## 14.9 Documentation
 
-- [ ] `DOMAIN_RULES.md` §3.1/§3.2: ต้นทุนยามาจากสต็อก FIFO ไม่ใช่ราคาขาย และกำไรรวมช่วงเวลาหัก waste/giveaway
-- [ ] `DOMAIN_RULES.md` §3.4: แยกตัวยากับโปรโมชั่น
-- [ ] เพิ่ม `DOMAIN_RULES.md` §3.6 "Medication Stock Invariants": FIFO, จังหวะตัดสต็อก, auto-complete, ช่วงผ่อนผัน, สต็อกติดลบ, ledger ที่ห้ามแก้ และ archive
-- [ ] อัปเดต `docs/SYSTEM_DESIGN.md` และ `docs/API_REQUIREMENTS.md`
+- [x] `DOMAIN_RULES.md` §3.1/§3.2: ต้นทุนยามาจากสต็อก FIFO ไม่ใช่ราคาขาย และกำไรรวมช่วงเวลาหัก waste/giveaway
+- [x] เพิ่ม `DOMAIN_RULES.md` §3.7 "Medication Stock Invariants": FIFO, จังหวะตัดสต็อก, auto-complete, ช่วงผ่อนผัน, สต็อกติดลบ, ledger ที่ห้ามแก้ และ archive
 
 ---
 

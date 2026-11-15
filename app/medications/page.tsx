@@ -518,9 +518,9 @@ export default function MedicationsPage() {
       {/* Add / Edit Medication Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="flex w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900 border border-surface-subtle dark:border-zinc-800">
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900 border border-surface-subtle dark:border-zinc-800">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-surface-subtle px-5 py-4 dark:border-zinc-800 bg-surface-subtle/30 dark:bg-zinc-800/30">
+            <div className="flex shrink-0 items-center justify-between border-b border-surface-subtle px-5 py-4 dark:border-zinc-800 bg-surface-subtle/30 dark:bg-zinc-800/30">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300">
                   <Pill className="h-4 w-4" />
@@ -539,7 +539,7 @@ export default function MedicationsPage() {
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
               {errorMsg && (
                 <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-shift-red dark:bg-rose-950/40 dark:text-rose-300">
                   <AlertCircle className="h-4 w-4 shrink-0" />

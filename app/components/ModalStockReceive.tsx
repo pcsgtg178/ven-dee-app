@@ -90,9 +90,9 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white p-5 shadow-2xl dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800">
+        <div className="flex shrink-0 items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">
             <PackagePlus className="h-5 w-5 text-emerald-600" />
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -108,7 +108,7 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+        <form onSubmit={handleSubmit} className="mt-4 flex-1 overflow-y-auto space-y-3 pr-1">
           {errorMsg && (
             <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
               {errorMsg}

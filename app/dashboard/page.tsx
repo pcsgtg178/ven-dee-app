@@ -29,7 +29,7 @@ import {
   MEDICATION_CATEGORY_CONFIG,
   resolveMedicationCategory,
 } from "../../types/vendee";
-import { calculateMedicationCostSatang } from "../../lib/conflictEngine";
+import { calculateMedicationCostSatang, getServicePricingBreakdown } from "../../lib/conflictEngine";
 import {
   getServices,
   getMedications,
@@ -174,9 +174,9 @@ export default function DashboardPage() {
     let totalCost = 0;
 
     periodServices.forEach((s) => {
-      // 1. Revenue
-      const rev = s.price ?? (s.serviceFeeSatang ? s.serviceFeeSatang / 100 : 0);
-      serviceRevenue += rev;
+      // 1. Revenue (Net Revenue after discount: Net Revenue = serviceFee - discount)
+      const pricing = getServicePricingBreakdown(s);
+      serviceRevenue += pricing.netRevenue;
 
       // 2. Cost calculation: either explicit medicationCostSatang, calculated from medicationUsages, or legacy fallback
       let caseCost = 0;
@@ -615,7 +615,8 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2.5">
               {periodServices.map((srv) => {
-                const srvPrice = srv.price ?? (srv.serviceFeeSatang ? srv.serviceFeeSatang / 100 : 0);
+                const pricing = getServicePricingBreakdown(srv);
+                const srvPrice = pricing.netRevenue;
                 let srvCost = 0;
                 if (srv.medicationCostSatang && srv.medicationCostSatang > 0) {
                   srvCost = srv.medicationCostSatang / 100;
@@ -700,7 +701,7 @@ export default function DashboardPage() {
                           +฿{srvProfit.toLocaleString()}
                         </div>
                         <div className="text-[10px] text-text-muted dark:text-zinc-400">
-                          รับ ฿{srvPrice.toLocaleString()} · ทุน ฿{srvCost.toLocaleString()}
+                          รับ ฿{srvPrice.toLocaleString()} {pricing.hasDiscount ? `(ลด ฿${pricing.discount.toLocaleString()}) ` : ""}· ทุน ฿{srvCost.toLocaleString()}
                         </div>
                       </div>
                     </div>

@@ -48,6 +48,7 @@ export default function ModalEditService({
   const [usageRows, setUsageRows] = useState<MedicationUsageRow[]>([]);
   const [serviceNote, setServiceNote] = useState("");
   const [servicePrice, setServicePrice] = useState("");
+  const [serviceDiscount, setServiceDiscount] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -70,6 +71,13 @@ export default function ModalEditService({
       setUsageRows(usageRowsFromLines(service.medicationUsages));
       setServiceNote(service.note || "");
       setServicePrice(service.price ? String(service.price) : "");
+      const initialDiscount =
+        service.discount !== undefined && service.discount !== null
+          ? service.discount
+          : service.discountSatang !== undefined && service.discountSatang !== null
+            ? service.discountSatang / 100
+            : 0;
+      setServiceDiscount(initialDiscount ? String(initialDiscount) : "");
       setErrorMsg("");
     }
   }, [service, isOpen]);
@@ -116,6 +124,7 @@ export default function ModalEditService({
             : undefined,
         note: serviceNote.trim() || undefined,
         price: servicePrice ? Number(servicePrice) : undefined,
+        discount: serviceDiscount ? Number(serviceDiscount) : 0,
         status: service.status,
         durationHours: service.durationHours,
         travelExpenseSatang: service.travelExpenseSatang,
@@ -235,20 +244,54 @@ export default function ModalEditService({
             />
           </div>
 
-          {/* Price */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
-              <DollarSign className="h-3.5 w-3.5 text-primary" />
-              <span>ค่าบริการ (บาท)</span>
-            </label>
-            <input
-              type="number"
-              value={servicePrice}
-              onChange={(e) => setServicePrice(e.target.value)}
-              placeholder="เช่น 500"
-              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
-            />
+          {/* Price & Discount */}
+          <div className="grid grid-cols-2 gap-3 items-start">
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
+                <DollarSign className="h-3.5 w-3.5 text-primary" />
+                <span>ค่าบริการ (บาท)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={servicePrice}
+                onChange={(e) => setServicePrice(e.target.value)}
+                placeholder="เช่น 1000"
+                className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
+                <DollarSign className="h-3.5 w-3.5 text-primary" />
+                <span>ส่วนลด (บาท)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={serviceDiscount}
+                onChange={(e) => setServiceDiscount(e.target.value)}
+                placeholder="เช่น 100"
+                className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+              />
+            </div>
           </div>
+
+          {/* Net Revenue Preview */}
+          {(Boolean(servicePrice) || Boolean(serviceDiscount)) && (() => {
+            const gross = Math.max(0, Number(servicePrice) || 0);
+            const disc = Math.max(0, Number(serviceDiscount) || 0);
+            const net = Math.max(0, gross - disc);
+            return (
+              <div className="rounded-xl bg-emerald-50/80 px-3 py-2 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-900/60">
+                ยอดสุทธิ: <strong className="font-extrabold text-sm text-emerald-700 dark:text-emerald-300">฿{net.toLocaleString()}</strong>
+                {disc > 0 && (
+                  <span className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 ml-1.5 font-normal">
+                    (จากราคา ฿{gross.toLocaleString()} ส่วนลด ฿{disc.toLocaleString()})
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Actions */}
           <div className="flex items-center gap-2 pt-2 border-t border-surface-subtle dark:border-zinc-800">

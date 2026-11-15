@@ -7,6 +7,7 @@ import {
   calculateMedicationCostSatang,
   calculateMedicationLineCostSatang,
   thbToSatang,
+  satangToThb,
 } from "../../lib/conflictEngine";
 import {
   isDateInPast,
@@ -33,6 +34,45 @@ function normalizeUsages(usages?: MedicationUsageLine[]): MedicationUsageLine[] 
 
 function parseUsages(raw: any): MedicationUsageLine[] {
   return Array.isArray(raw) ? (raw as MedicationUsageLine[]) : [];
+}
+
+function mapRowToServiceRecord(row: any, fallbackTime = "09:00"): CustomerServiceRecord {
+  const rawDiscount = row.discount !== undefined && row.discount !== null ? Number(row.discount) : undefined;
+  const rawDiscountSatang =
+    row.discount_satang !== undefined && row.discount_satang !== null ? Number(row.discount_satang) : undefined;
+
+  const discountSatang =
+    rawDiscountSatang !== undefined && Number.isFinite(rawDiscountSatang)
+      ? Math.max(0, Math.round(rawDiscountSatang))
+      : thbToSatang(Math.max(0, rawDiscount ?? 0));
+  const discountThb =
+    rawDiscount !== undefined && Number.isFinite(rawDiscount) && (rawDiscount > 0 || discountSatang === 0)
+      ? Math.max(0, rawDiscount)
+      : satangToThb(discountSatang);
+
+  return {
+    id: row.id,
+    type: "service",
+    customerId: row.customer_id || "",
+    customerName: row.customer_name,
+    date: row.service_date,
+    time: (row.service_time || fallbackTime).slice(0, 5),
+    services: (row.services || ["injection"]) as ServiceType[],
+    otherServiceText: row.other_service_text || "",
+    medications: Array.isArray(row.medications) ? row.medications.filter(Boolean) : [],
+    medicationUsages: parseUsages(row.medication_usages),
+    note: row.note || "",
+    price: row.price || 0,
+    serviceFeeSatang: row.service_fee_satang || 0,
+    discount: discountThb,
+    discountSatang,
+    medicationCostSatang: row.medication_cost_satang || 0,
+    durationHours: row.duration_hours,
+    travelExpenseSatang: row.travel_expense_satang || 0,
+    otherExpensesSatang: row.other_expenses_satang || 0,
+    status: row.status || "upcoming",
+    createdAt: row.created_at,
+  };
 }
 
 /**
@@ -65,27 +105,7 @@ export async function getServicesAction(params?: {
       return { success: false, error: { code: "DATABASE_ERROR", message: error.message } };
     }
 
-    const services: CustomerServiceRecord[] = (data || []).map((row: any) => ({
-      id: row.id,
-      type: "service",
-      customerId: row.customer_id || "",
-      customerName: row.customer_name,
-      date: row.service_date,
-      time: (row.service_time || "09:00").slice(0, 5),
-      services: (row.services || ["injection"]) as ServiceType[],
-      otherServiceText: row.other_service_text || "",
-      medications: Array.isArray(row.medications) ? row.medications.filter(Boolean) : [],
-      medicationUsages: parseUsages(row.medication_usages),
-      note: row.note || "",
-      price: row.price || 0,
-      serviceFeeSatang: row.service_fee_satang || 0,
-      medicationCostSatang: row.medication_cost_satang || 0,
-      durationHours: row.duration_hours,
-      travelExpenseSatang: row.travel_expense_satang || 0,
-      otherExpensesSatang: row.other_expenses_satang || 0,
-      status: row.status || "upcoming",
-      createdAt: row.created_at,
-    }));
+    const services: CustomerServiceRecord[] = (data || []).map((row: any) => mapRowToServiceRecord(row));
 
     return { success: true, data: services };
   } catch (err: any) {
@@ -110,6 +130,7 @@ export async function createServiceAction(data: {
   medicationUsages?: MedicationUsageLine[];
   note?: string;
   price?: number; // In THB from UI
+  discount?: number; // In THB from UI
   medicationCost?: number; // In THB from UI
   durationHours?: number;
   travelExpense?: number; // In THB from UI
@@ -136,7 +157,10 @@ export async function createServiceAction(data: {
     }
 
     // Satang Financial Ledger Standard Conversions
-    const serviceFeeSatang = thbToSatang(data.price || 0);
+    const priceThb = Math.max(0, Number(data.price) || 0);
+    const serviceFeeSatang = thbToSatang(priceThb);
+    const discountThb = Math.max(0, Number(data.discount) || 0);
+    const discountSatang = thbToSatang(discountThb);
     const usages = normalizeUsages(data.medicationUsages);
     const medicationCostSatang =
       usages.length > 0 ? calculateMedicationCostSatang(usages) : thbToSatang(data.medicationCost || 0);
@@ -145,54 +169,55 @@ export async function createServiceAction(data: {
 
     const formattedTime = (data.time || "09:00").slice(0, 5);
 
-    const { data: inserted, error } = await supabase
+    const insertPayload: Record<string, any> = {
+      customer_id: data.customerId || null,
+      customer_name: data.customerName,
+      service_date: data.date,
+      service_time: `${formattedTime}:00`,
+      services: data.services,
+      other_service_text: data.otherServiceText || "",
+      medications: (data.medications || []).map((m) => m.trim()).filter(Boolean),
+      note: data.note || "",
+      price: priceThb,
+      service_fee_satang: serviceFeeSatang,
+      discount: discountThb,
+      discount_satang: discountSatang,
+      medication_cost_satang: medicationCostSatang,
+      duration_hours: data.durationHours || null,
+      travel_expense_satang: travelExpenseSatang,
+      other_expenses_satang: otherExpensesSatang,
+      ...(usages.length > 0 ? { medication_usages: usages } : {}),
+      status: data.status || "upcoming",
+    };
+
+    let { data: inserted, error } = await supabase
       .from("customer_services")
-      .insert({
-        customer_id: data.customerId || null,
-        customer_name: data.customerName,
-        service_date: data.date,
-        service_time: `${formattedTime}:00`,
-        services: data.services,
-        other_service_text: data.otherServiceText || "",
-        medications: (data.medications || []).map((m) => m.trim()).filter(Boolean),
-        note: data.note || "",
-        price: data.price || 0,
-        service_fee_satang: serviceFeeSatang,
-        medication_cost_satang: medicationCostSatang,
-        duration_hours: data.durationHours || null,
-        travel_expense_satang: travelExpenseSatang,
-        other_expenses_satang: otherExpensesSatang,
-        ...(usages.length > 0 ? { medication_usages: usages } : {}),
-        status: data.status || "upcoming",
-      })
+      .insert(insertPayload)
       .select()
       .single();
+
+    // Fallback if optional migration columns (discount / medication_usages) are not applied yet
+    if (error && /(discount|medication_usages)/i.test(error.message || "")) {
+      const legacyPayload = { ...insertPayload };
+      if (/discount/i.test(error.message || "")) {
+        delete legacyPayload.discount;
+        delete legacyPayload.discount_satang;
+      }
+      if (/medication_usages/i.test(error.message || "")) {
+        delete legacyPayload.medication_usages;
+      }
+      ({ data: inserted, error } = await supabase
+        .from("customer_services")
+        .insert(legacyPayload)
+        .select()
+        .single());
+    }
 
     if (error) {
       return { success: false, error: { code: "DATABASE_ERROR", message: error.message } };
     }
 
-    const serviceRecord: CustomerServiceRecord = {
-      id: inserted.id,
-      type: "service",
-      customerId: inserted.customer_id || "",
-      customerName: inserted.customer_name,
-      date: inserted.service_date,
-      time: (inserted.service_time || formattedTime).slice(0, 5),
-      services: inserted.services as ServiceType[],
-      otherServiceText: inserted.other_service_text,
-      medications: Array.isArray(inserted.medications) ? inserted.medications.filter(Boolean) : [],
-      medicationUsages: parseUsages(inserted.medication_usages),
-      note: inserted.note,
-      price: inserted.price,
-      serviceFeeSatang: inserted.service_fee_satang,
-      medicationCostSatang: inserted.medication_cost_satang,
-      durationHours: inserted.duration_hours,
-      travelExpenseSatang: inserted.travel_expense_satang,
-      otherExpensesSatang: inserted.other_expenses_satang,
-      status: inserted.status,
-      createdAt: inserted.created_at,
-    };
+    const serviceRecord = mapRowToServiceRecord(inserted, formattedTime);
 
     return { success: true, data: serviceRecord, message: "บันทึกการให้บริการเรียบร้อยแล้ว" };
   } catch (err: any) {
@@ -219,6 +244,7 @@ export async function updateServiceAction(
     medicationUsages?: MedicationUsageLine[];
     note?: string;
     price?: number;
+    discount?: number;
     medicationCost?: number;
     durationHours?: number;
     travelExpense?: number;
@@ -282,7 +308,8 @@ export async function updateServiceAction(
       };
     }
 
-    const serviceFeeSatang = thbToSatang(data.price || 0);
+    const priceThb = Math.max(0, Number(data.price) || 0);
+    const serviceFeeSatang = thbToSatang(priceThb);
     // Medication usage lines (when provided) are the source of truth for medicationCost.
     // Never overwrite a legacy manual cost when neither usages nor medicationCost are supplied.
     const usages = data.medicationUsages !== undefined ? normalizeUsages(data.medicationUsages) : undefined;
@@ -307,9 +334,14 @@ export async function updateServiceAction(
           ? (data.medications || []).map((m) => m.trim()).filter(Boolean)
           : existingRow.medications,
       note: data.note || "",
-      price: data.price || 0,
+      price: priceThb,
       service_fee_satang: serviceFeeSatang,
     };
+    if (data.discount !== undefined) {
+      const discountThb = Math.max(0, Number(data.discount) || 0);
+      updatePayload.discount = discountThb;
+      updatePayload.discount_satang = thbToSatang(discountThb);
+    }
     if (data.durationHours !== undefined) {
       updatePayload.duration_hours = data.durationHours || null;
     }
@@ -339,10 +371,16 @@ export async function updateServiceAction(
       .select()
       .single();
 
-    // Fallback: migration 20261018 (medication_usages) not applied yet
-    if (error && /medication_usages/i.test(error.message || "")) {
+    // Fallback: migration 20261018 (medication_usages) or discount not applied yet
+    if (error && /(medication_usages|discount)/i.test(error.message || "")) {
       const legacyPayload = { ...updatePayload };
-      delete legacyPayload.medication_usages;
+      if (/medication_usages/i.test(error.message || "")) {
+        delete legacyPayload.medication_usages;
+      }
+      if (/discount/i.test(error.message || "")) {
+        delete legacyPayload.discount;
+        delete legacyPayload.discount_satang;
+      }
       ({ data: updated, error } = await supabase
         .from("customer_services")
         .update(legacyPayload)
@@ -355,27 +393,7 @@ export async function updateServiceAction(
       return { success: false, error: { code: "DATABASE_ERROR", message: error.message } };
     }
 
-    const serviceRecord: CustomerServiceRecord = {
-      id: updated.id,
-      type: "service",
-      customerId: updated.customer_id || "",
-      customerName: updated.customer_name,
-      date: updated.service_date,
-      time: (updated.service_time || formattedTime).slice(0, 5),
-      services: updated.services as ServiceType[],
-      otherServiceText: updated.other_service_text,
-      medications: Array.isArray(updated.medications) ? updated.medications.filter(Boolean) : [],
-      medicationUsages: parseUsages(updated.medication_usages),
-      note: updated.note,
-      price: updated.price,
-      serviceFeeSatang: updated.service_fee_satang,
-      medicationCostSatang: updated.medication_cost_satang,
-      durationHours: updated.duration_hours,
-      travelExpenseSatang: updated.travel_expense_satang,
-      otherExpensesSatang: updated.other_expenses_satang,
-      status: updated.status,
-      createdAt: updated.created_at,
-    };
+    const serviceRecord = mapRowToServiceRecord(updated, formattedTime);
 
     return { success: true, data: serviceRecord, message: "อัปเดตข้อมูลบริการเรียบร้อยแล้ว" };
   } catch (err: any) {

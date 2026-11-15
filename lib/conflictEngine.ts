@@ -3,7 +3,7 @@
  * Adheres strictly to DOMAIN_RULES.md invariants
  */
 
-import { ShiftRecord, CustomerServiceRecord, PersonalEventRecord, ShiftType } from "../types/vendee";
+import type { ShiftRecord, CustomerServiceRecord, PersonalEventRecord, ShiftType } from "../types/vendee.ts";
 
 export interface ConflictCheckResult {
   hasConflict: boolean;
@@ -156,14 +156,77 @@ export function checkPersonalEventOverlap(
 /**
  * Financial Ledger Utilities (Satang Standard: 1 THB = 100 Satang)
  */
+export interface ServicePricingBreakdownSatang {
+  grossFeeSatang: number;
+  discountSatang: number;
+  netRevenueSatang: number;
+}
+
+export interface ServicePricingBreakdown {
+  grossFee: number;
+  discount: number;
+  netRevenue: number;
+  hasDiscount: boolean;
+}
+
+export function calculateNetRevenueSatang(
+  serviceFeeSatang: number,
+  discountSatang = 0
+): number {
+  const fee = Number.isFinite(serviceFeeSatang) ? Math.max(0, Math.round(serviceFeeSatang)) : 0;
+  const discount = Number.isFinite(discountSatang) ? Math.max(0, Math.round(discountSatang)) : 0;
+  return Math.max(0, fee - discount);
+}
+
+export function getServicePricingBreakdownSatang(
+  service: Pick<CustomerServiceRecord, "price" | "serviceFeeSatang" | "discount" | "discountSatang">
+): ServicePricingBreakdownSatang {
+  const grossFeeSatang =
+    typeof service.serviceFeeSatang === "number" &&
+    Number.isFinite(service.serviceFeeSatang) &&
+    (service.serviceFeeSatang > 0 || service.price === undefined || service.price === null || service.price === 0)
+      ? Math.max(0, Math.round(service.serviceFeeSatang))
+      : thbToSatang(Math.max(0, Number(service.price) || 0));
+
+  const discountSatang =
+    typeof service.discountSatang === "number" &&
+    Number.isFinite(service.discountSatang) &&
+    (service.discountSatang > 0 || service.discount === undefined || service.discount === null || service.discount === 0)
+      ? Math.max(0, Math.round(service.discountSatang))
+      : thbToSatang(Math.max(0, Number(service.discount) || 0));
+
+  return {
+    grossFeeSatang,
+    discountSatang,
+    netRevenueSatang: calculateNetRevenueSatang(grossFeeSatang, discountSatang),
+  };
+}
+
+export function getServicePricingBreakdown(
+  service: Pick<CustomerServiceRecord, "price" | "serviceFeeSatang" | "discount" | "discountSatang">
+): ServicePricingBreakdown {
+  const satang = getServicePricingBreakdownSatang(service);
+  return {
+    grossFee: satangToThb(satang.grossFeeSatang),
+    discount: satangToThb(satang.discountSatang),
+    netRevenue: satangToThb(satang.netRevenueSatang),
+    hasDiscount: satang.discountSatang > 0,
+  };
+}
+
 export function calculateNetProfitSatang(
   serviceFeeSatang: number,
   medicationCostSatang: number,
   travelExpenseSatang = 0,
-  otherExpensesSatang = 0
+  otherExpensesSatang = 0,
+  discountSatang = 0
 ): number {
-  const totalExpenses = medicationCostSatang + travelExpenseSatang + otherExpensesSatang;
-  return serviceFeeSatang - totalExpenses;
+  const netRevenueSatang = calculateNetRevenueSatang(serviceFeeSatang, discountSatang);
+  const totalExpenses =
+    (Number.isFinite(medicationCostSatang) ? medicationCostSatang : 0) +
+    (Number.isFinite(travelExpenseSatang) ? travelExpenseSatang : 0) +
+    (Number.isFinite(otherExpensesSatang) ? otherExpensesSatang : 0);
+  return netRevenueSatang - totalExpenses;
 }
 
 export function calculateEffectiveHourlyRateSatang(
@@ -183,16 +246,24 @@ export function thbToSatang(thb: number): number {
 }
 
 /**
- * Medication usage costing (DOMAIN_RULES.md §3.1 item 3)
- * unit cost = price_satang / size  (Satang per 1 unit of the pack size)
- * line cost = round(quantity × unitCostSatang)
- * medicationCost = Σ line cost
+ * Medication usage costing (DOMAIN_RULES.md §3.1 item 3, Phase 14)
+ * For FIFO costing: unit cost is derived from stock layers or reference pack cost.
+ * calculateUnitCostSatang supports optional refCostPerPackSatang fallback when price is not used.
  */
-export function calculateUnitCostSatang(price?: string | number, size?: string | number): number {
-  const priceThb = Number(price);
-  if (!Number.isFinite(priceThb) || priceThb <= 0) return 0;
+export function calculateUnitCostSatang(
+  price?: string | number,
+  size?: string | number,
+  refCostPerPackSatang?: number
+): number {
   const sizeNum = parseFloat(String(size ?? ""));
   const divisor = Number.isFinite(sizeNum) && sizeNum > 0 ? sizeNum : 1;
+
+  if (typeof refCostPerPackSatang === "number" && Number.isFinite(refCostPerPackSatang) && refCostPerPackSatang > 0) {
+    return Math.round(refCostPerPackSatang / divisor);
+  }
+
+  const priceThb = Number(price);
+  if (!Number.isFinite(priceThb) || priceThb <= 0) return 0;
   return (priceThb * 100) / divisor;
 }
 

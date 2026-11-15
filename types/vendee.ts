@@ -103,7 +103,11 @@ export interface Medications {
   category?: MedicationCategory; // หมวดหมู่ตัวยา (default: other)
   size?: string; // ขนาด เช่น 100, 50, 100ml
   unit?: string; // หน่วย เช่น ยูนิต, เข็ม, ขวด, แผง, ชุด
-  price?: string | number; // ราคา (บาท) เช่น 2500, 1500
+  price?: string | number; // ราคา (บาท) เช่น 2500, 1500 (Legacy / อ้างอิง)
+  packSize?: number; // จำนวนหน่วยต่อขวด/กล่อง เช่น 200 (ยูนิต/ขวด)
+  packUnit?: string; // หน่วยบรรจุภัณฑ์ เช่น ขวด, กล่อง, แผง
+  refCostPerPackSatang?: number; // ต้นทุนอ้างอิงต่อขวด (หน่วยสตางค์: 1 THB = 100 Satang)
+  isArchived?: boolean; // ซ่อน/archive เมื่อไม่ต้องการแสดง
   description?: string; // รายละเอียด เช่น นาบูตะ *นำเข้า
   note?: string; // หมายเหตุเพิ่มเติม / รายละเอียด
   createdAt?: string;
@@ -154,7 +158,10 @@ export interface CustomerServiceRecord {
   price?: number;
   // External Gig & Service Financial Ledger (Satang Standard: 1 THB = 100 Satang)
   serviceFeeSatang?: number;
+  discount?: number; // ส่วนลด (บาท)
+  discountSatang?: number; // ส่วนลด (สตางค์: 1 THB = 100 Satang)
   medicationCostSatang?: number;
+  medicationCostSatangLegacy?: number; // สำรองต้นทุนยาเดิมก่อนล้างเป็น 0 (D16)
   durationHours?: number;
   travelExpenseSatang?: number;
   otherExpensesSatang?: number;

@@ -267,7 +267,7 @@
 ---
 
 ### Phase 14: Medication Stock Management (ระบบจัดการสต็อกยา — details: `.agent/BACKLOG_STOCK.md`)
-- [ ] **14.1** Medication Restructure (แยกต้นทุน/ราคาขาย, `medication_promotions`, รวมตัวยาซ้ำ, ล้างต้นทุนเก่าเป็น 0, archive)
+- [x] **14.1** Medication Restructure (แยกต้นทุน/ราคาขาย, `medication_promotions`, รวมตัวยาซ้ำ, ล้างต้นทุนเก่าเป็น 0, archive)
 - [ ] **14.2** Stock Schema (`stock_movements`, `stock_layers`, `stock_layer_consumptions`, คอลัมน์สต็อก)
 - [ ] **14.3** Transactional RPCs (FIFO receive / issue / adjust / consume / restore / reconsume / auto-complete / reverse)
 - [ ] **14.4** Service Integration (auto-complete ตอนเปิดแอป/ซิงค์, ตัด/คืนสต็อก, แก้ปริมาณยาในช่วงผ่อนผัน)
@@ -280,13 +280,13 @@
 ---
 
 ### Phase 15: Customer Service Discount & Financial Integration (ระบบส่วนลดบริการลูกค้าและการคำนวณการเงิน)
-- [ ] **15.1 Data Model & Supabase Schema Support (`types/vendee.ts`, Migration SQL)**
+- [x] **15.1 Data Model & Supabase Schema Support (`types/vendee.ts`, Migration SQL)**
   - **Context & Requirement**: เพิ่มฟิลด์สำหรับจัดเก็บข้อมูลส่วนลดให้สอดคล้องกับมาตรฐานความแม่นยำทางการเงิน (Satang Standard: 1 THB = 100 Satang)
   - `types/vendee.ts`: เพิ่มฟิลด์ `discount?: number;` (หน่วยบาท) และ `discountSatang?: number;` (หน่วยสตางค์) ใน `CustomerServiceRecord`
   - สร้าง Supabase Migration (`supabase/migrations/20261105_customer_service_discount.sql`):
     - เพิ่มคอลัมน์ `discount NUMERIC DEFAULT 0`
     - เพิ่มคอลัมน์ `discount_satang BIGINT DEFAULT 0` ในตาราง `public.customer_services`
-- [ ] **15.2 Server Actions & Data Layer Integration (`serviceActions.ts`, `storage.ts`)**
+- [x] **15.2 Server Actions & Data Layer Integration (`serviceActions.ts`, `storage.ts`)**
   - `app/actions/serviceActions.ts`:
     - อัปเดต `createServiceAction` และ `updateServiceAction` ให้รองรับพารามิเตอร์ `discount`
     - แปลงค่าเป็น `discount_satang` เพื่อบันทึกและส่งกลับใน response payload
@@ -294,7 +294,7 @@
   - `lib/storage.ts`:
     - ปรับฟังก์ชัน `saveService` ให้จัดเก็บฟิลด์ `discount` และ `discountSatang` ลง LocalStorage
     - รองรับการซิงค์ข้อมูลส่วนลดทั้งสองทิศทาง (Offline Cache <-> Supabase)
-- [ ] **15.3 UI Form Integration (`ModalAddTodo.tsx`, `ModalEditService.tsx`)**
+- [x] **15.3 UI Form Integration (`ModalAddTodo.tsx`, `ModalEditService.tsx`)**
   - **New Service Booking Form (`ModalAddTodo.tsx`)**:
     - เพิ่มช่อง Input "ส่วนลด (บาท)" ถัดจากช่อง "ค่าบริการ (บาท)" ในแท็บลงบริการลูกค้า
     - แสดงข้อความพรีวิวสรุปยอดชำระสุทธิแบบ Real-time (เช่น *ยอดสุทธิ: ฿900 จากราคา ฿1,000 (ส่วนลด ฿100)*)
@@ -302,7 +302,7 @@
   - **Service Edit Modal (`ModalEditService.tsx`)**:
     - เพิ่มช่อง Input "ส่วนลด (บาท)" พร้อมพรีวิวยอดสุทธิ
     - โหลดค่าส่วนลดเดิมขึ้นมาแสดงเมื่อเปิด Modal แก้ไขบริการ
-- [ ] **15.4 Display & Financial Overview Updates (`ActivityCard.tsx`, `CustomerDetailPage`, `dashboard/page.tsx`)**
+- [x] **15.4 Display & Financial Overview Updates (`ActivityCard.tsx`, `CustomerDetailPage`, `dashboard/page.tsx`)**
   - `app/components/ActivityCard.tsx`:
     - กรณีมีส่วนลด ให้แสดงยอดชำระสุทธิเป็นตัวหนา พร้อมระบุราคาเดิมและยอดส่วนลด (เช่น `฿900 (ลด ฿100)`)
   - `app/customers/[id]/page.tsx`:
@@ -310,7 +310,7 @@
   - `app/dashboard/page.tsx`:
     - ปรับสูตรคำนวณรายรับ (Service Revenue): คิดจากยอดหลังหักส่วนลด $\text{Net Revenue} = \text{serviceFee} - \text{discount}$
     - ปรับสูตรคำนวณกำไรสุทธิ (Net Profit): $\text{Net Profit} = \text{Net Revenue} - \text{Expenses}$
-- [ ] **15.5 Unit Tests & Domain Rules Update (`lib/__tests__/serviceDiscount.test.ts`, `.agent/DOMAIN_RULES.md`)**
+- [x] **15.5 Unit Tests & Domain Rules Update (`lib/__tests__/serviceDiscount.test.ts`, `.agent/DOMAIN_RULES.md`)**
   - เขียน Unit Tests ครอบคลุม:
     - การแปลงหน่วยบาทเป็นสตางค์สำหรับส่วนลด (`thbToSatang`)
     - การบันทึกและแก้ไขข้อมูลส่วนลดผ่าน LocalStorage และ Server Actions
@@ -378,6 +378,6 @@
 
 ## 📌 Task Status Summary
 - **Total Tasks**: 75
-- **Completed**: 59
+- **Completed**: 64
 - **In Progress**: 0
-- **Pending**: 16
+- **Pending**: 11

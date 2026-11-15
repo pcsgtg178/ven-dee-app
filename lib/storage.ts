@@ -1706,6 +1706,21 @@ export async function saveService(
       ? service.otherExpensesSatang
       : existingService?.otherExpensesSatang;
 
+  const resolvedDiscountThb =
+    service.discount !== undefined
+      ? Math.max(0, Number(service.discount) || 0)
+      : existingService?.discount !== undefined
+        ? Math.max(0, Number(existingService.discount) || 0)
+        : existingService?.discountSatang !== undefined
+          ? Math.max(0, existingService.discountSatang / 100)
+          : undefined;
+  const resolvedDiscountSatang =
+    service.discountSatang !== undefined
+      ? Math.max(0, Math.round(service.discountSatang))
+      : resolvedDiscountThb !== undefined
+        ? Math.round(resolvedDiscountThb * 100)
+        : existingService?.discountSatang ?? 0;
+
   let remoteService: CustomerServiceRecord | null = null;
 
   // 1. Sync with Supabase via Server Action FIRST (Server-First pattern with unwrap)
@@ -1728,6 +1743,7 @@ export async function saveService(
           medicationCost: legacyMedicationCostThb,
           note: service.note,
           price: service.price,
+          discount: resolvedDiscountThb,
           status: resolvedStatus,
           durationHours: resolvedDurationHours,
           travelExpense:
@@ -1753,6 +1769,7 @@ export async function saveService(
           medicationCost: legacyMedicationCostThb,
           note: service.note,
           price: service.price,
+          discount: resolvedDiscountThb,
           status: resolvedStatus,
           durationHours: resolvedDurationHours,
           travelExpense:
@@ -1776,6 +1793,7 @@ export async function saveService(
         medicationCost: legacyMedicationCostThb,
         note: service.note,
         price: service.price,
+        discount: resolvedDiscountThb,
         status: resolvedStatus,
         durationHours: resolvedDurationHours,
         travelExpense:
@@ -1794,6 +1812,8 @@ export async function saveService(
     id: finalId,
     type: "service",
     time: normalizedTime,
+    discount: resolvedDiscountThb ?? 0,
+    discountSatang: resolvedDiscountSatang,
     status: resolvedStatus,
     durationHours: resolvedDurationHours,
     travelExpenseSatang: resolvedTravelExpenseSatang,
@@ -1845,31 +1865,27 @@ export async function deleteService(id: string): Promise<void> {
 // Medications Storage Management
 export const initialMedications: Medications[] = [
   {
-    id: "med-botox-100",
+    id: "med-botox-200",
     name: "Botox",
-    size: "100",
+    size: "200",
+    packSize: 200,
     unit: "ยูนิต",
-    price: "2500",
-    description: "นาบูตะ *นำเข้า",
-    note: "นาบูตะ *นำเข้า",
-    createdAt: "2026-10-11T08:00:00Z",
-  },
-  {
-    id: "med-botox-50",
-    name: "Botox",
-    size: "50",
-    unit: "ยูนิต",
-    price: "1500",
-    description: "นาบูตะ *นำเข้า",
-    note: "นาบูตะ *นำเข้า",
+    packUnit: "ขวด",
+    price: "4500",
+    refCostPerPackSatang: 300000,
+    description: "Botox 200 ยูนิต/ขวด",
+    note: "Botox 200 ยูนิต/ขวด",
     createdAt: "2026-10-11T08:00:00Z",
   },
   {
     id: "med-1",
     name: "Vitamin B12",
     size: "1",
+    packSize: 1,
     unit: "เข็ม",
+    packUnit: "เข็ม",
     price: "200",
+    refCostPerPackSatang: 8000,
     description: "วิตามินบำรุงประสาทและร่างกาย",
     note: "วิตามินบำรุงประสาทและร่างกาย",
     createdAt: "2026-09-01T08:00:00Z",
@@ -2025,6 +2041,10 @@ export async function saveMedication(
           category: med.category,
           unit: med.unit,
           price: priceVal,
+          packSize: med.packSize,
+          packUnit: med.packUnit,
+          refCostPerPackSatang: med.refCostPerPackSatang,
+          isArchived: med.isArchived,
           description: med.description || med.note,
         });
         if (res.success && res.data) {
@@ -2040,6 +2060,10 @@ export async function saveMedication(
           category: med.category,
           unit: med.unit,
           price: priceVal,
+          packSize: med.packSize,
+          packUnit: med.packUnit,
+          refCostPerPackSatang: med.refCostPerPackSatang,
+          isArchived: med.isArchived,
           description: med.description || med.note,
         });
         if (res.success && res.data) {

@@ -28,6 +28,7 @@ import ModalEditCustomer from "../../components/ModalEditCustomer";
 import ModalEditService from "../../components/ModalEditService";
 import ModalDeleteCustomer from "../../components/ModalDeleteCustomer";
 import { Customer, CustomerServiceRecord, SERVICE_CONFIG } from "../../../types/vendee";
+import { getServicePricingBreakdown } from "../../../lib/conflictEngine";
 import {
   getCustomerById,
   canEditService,
@@ -481,13 +482,31 @@ function ServiceDetailCard({
           )}
 
           {/* Note & Price */}
-          <div className="flex flex-wrap items-center justify-between text-xs text-text-muted dark:text-zinc-400 pt-0.5">
+          <div className="flex flex-wrap items-center justify-between text-xs text-text-muted dark:text-zinc-400 pt-0.5 gap-2">
             {service.note && <span>📝 {service.note}</span>}
-            {service.price ? (
-              <span className="font-bold text-primary dark:text-emerald-400">
-                ค่าบริการ: ฿{service.price.toLocaleString()}
-              </span>
-            ) : null}
+            {service.price !== undefined && service.price !== null ? (() => {
+              const pricing = getServicePricingBreakdown(service);
+              return (
+                <div className="font-bold text-primary dark:text-emerald-400 ml-auto">
+                  {pricing.hasDiscount ? (
+                    <span className="inline-flex items-baseline gap-1.5">
+                      <span>ค่าบริการ:</span>
+                      <strong className="text-sm font-extrabold text-emerald-600 dark:text-emerald-300">
+                        ฿{pricing.netRevenue.toLocaleString()}
+                      </strong>
+                      <span className="text-[11px] line-through text-text-muted dark:text-zinc-400">
+                        ฿{pricing.grossFee.toLocaleString()}
+                      </span>
+                      <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                        (ลด ฿{pricing.discount.toLocaleString()})
+                      </span>
+                    </span>
+                  ) : (
+                    <span>ค่าบริการ: ฿{pricing.grossFee.toLocaleString()}</span>
+                  )}
+                </div>
+              );
+            })() : null}
           </div>
         </div>
 

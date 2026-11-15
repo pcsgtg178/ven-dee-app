@@ -39,6 +39,7 @@ import {
   SHIFT_CONFIG,
   SHIFT_CODE_MAP,
 } from "../../types/vendee";
+import { getServicePricingBreakdown } from "../../lib/conflictEngine";
 
 import {
   PersonalEventRecord,
@@ -686,18 +687,33 @@ export default function ActivityCard({
               </div>
             )}
 
-            {/* Price */}
-            {service.price !== undefined && service.price !== null && (
-              <div className="flex items-center justify-between text-[11px] text-text-muted dark:text-zinc-400">
-                <span className="font-bold text-primary-dark dark:text-primary-light">
-                  {service.price === 0 ? (
-                    "ยังไม่ได้กำหนดราคา"
-                  ) : (
-                    <span>฿{service.price.toLocaleString()}</span>
-                  )}
-                </span>
-              </div>
-            )}
+            {/* Price & Discount */}
+            {service.price !== undefined && service.price !== null && (() => {
+              const pricing = getServicePricingBreakdown(service);
+              return (
+                <div className="flex items-center justify-between text-[11px] text-text-muted dark:text-zinc-400">
+                  <span className="font-bold text-primary-dark dark:text-primary-light">
+                    {pricing.grossFee === 0 && !pricing.hasDiscount ? (
+                      "ยังไม่ได้กำหนดราคา"
+                    ) : pricing.hasDiscount ? (
+                      <span className="inline-flex items-baseline gap-1">
+                        <strong className="font-extrabold text-xs text-emerald-700 dark:text-emerald-300">
+                          ฿{pricing.netRevenue.toLocaleString()}
+                        </strong>
+                        <span className="text-[10px] text-text-muted dark:text-zinc-400 line-through">
+                          ฿{pricing.grossFee.toLocaleString()}
+                        </span>
+                        <span className="rounded bg-rose-100 px-1 py-0.2 text-[9px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                          (ลด ฿{pricing.discount.toLocaleString()})
+                        </span>
+                      </span>
+                    ) : (
+                      <span>฿{pricing.grossFee.toLocaleString()}</span>
+                    )}
+                  </span>
+                </div>
+              );
+            })()}
 
           </div>
 

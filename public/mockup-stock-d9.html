@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup D9: กรณีสต็อกไม่พอ / ติดลบ (VenDee Stock Management)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #0284c7;
+      --danger: #ef4444;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
+      --warning: #f59e0b;
+      --warning-bg: #fffbeb;
+      --warning-border: #fde68a;
+      --success: #10b981;
+      --purple: #8b5cf6;
+      --purple-bg: #f5f3ff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Prompt', sans-serif; }
+    body { background: var(--bg); color: var(--text-main); padding: 20px; display: flex; justify-content: center; }
+    .container { max-width: 480px; width: 100%; display: flex; flex-direction: column; gap: 24px; }
+
+    .header-info {
+      background: #0f172a;
+      color: white;
+      padding: 16px;
+      border-radius: 16px;
+      font-size: 13px;
+    }
+    .header-info h1 { font-size: 16px; margin-bottom: 6px; color: #38bdf8; }
+    .header-info p { opacity: 0.85; line-height: 1.5; }
+
+    .screen-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    .screen-title {
+      background: #f1f5f9;
+      padding: 10px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .screen-body { padding: 16px; }
+
+    /* Component 1: Medication Card with Negative Stock */
+    .med-card {
+      border: 1px solid var(--danger-border);
+      background: #fff;
+      border-radius: 16px;
+      padding: 14px;
+      position: relative;
+    }
+    .med-card-stripe {
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 5px;
+      background: var(--danger);
+      border-radius: 16px 0 0 16px;
+    }
+    .med-header { display: flex; justify-content: space-between; align-items: flex-start; margin-left: 6px; }
+    .med-name { font-weight: 700; font-size: 15px; }
+    .badge-botox { background: var(--purple-bg); color: var(--purple); font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600; margin-left: 6px; }
+    .badge-danger {
+      background: var(--danger-bg);
+      color: var(--danger);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--danger-border);
+    }
+    .stock-highlight {
+      margin-top: 10px;
+      margin-left: 6px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .stock-negative {
+      color: var(--danger);
+      font-size: 20px;
+      font-weight: 800;
+    }
+    .stock-sub { font-size: 12px; color: var(--text-muted); }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      margin-left: 6px;
+    }
+    .btn {
+      padding: 6px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: white;
+      cursor: pointer;
+    }
+    .btn-primary { background: #0284c7; color: white; border: none; }
+
+    /* Component 2: Service Booking Form (MedicationUsageEditor with Non-blocking Warning) */
+    .form-group { margin-bottom: 12px; }
+    .form-label { font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block; }
+    .form-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 13px;
+      outline: none;
+    }
+    .med-selector-box {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      background: #fafafa;
+    }
+    .med-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .stock-status-tag {
+      font-size: 11px;
+      color: var(--danger);
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    /* Warning Banner: Non-blocking */
+    .warning-banner {
+      background: var(--warning-bg);
+      border: 1px solid var(--warning-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 12px;
+      color: #92400e;
+      line-height: 1.4;
+    }
+    .warning-icon { font-size: 14px; line-height: 1; }
+
+    /* Component 3: Customer History / Service Card */
+    .service-card {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      position: relative;
+    }
+    .service-stripe {
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 5px;
+      background: var(--success);
+      border-radius: 16px 0 0 16px;
+    }
+    .service-meta { margin-left: 8px; }
+    .badge-estimated {
+      background: #fef3c7;
+      color: #b45309;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid #fde68a;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header Requirement Note -->
+  <div class="header-info">
+    <h1>📦 Mockup: ข้อตัดสินใจ D9 (สต็อกไม่พอ / ตัดเกิน)</h1>
+    <p><strong>กฎทางธุรกิจ:</strong> ไม่บล็อกการบันทึกงาน ยอดสต็อกจะติดลบได้ พร้อมมีป้าย <strong>"ต้นทุนประมาณ"</strong> คิดจากต้นทุนรับเข้าครั้งล่าสุด และไม่ย้อนแก้ต้นทุนย้อนหลัง</p>
+  </div>
+
+  <!-- 1. หน้าจอ /medications: การ์ดตัวยาที่ยอดสต็อกติดลบ -->
+  <div class="screen-section">
+    <div class="screen-title">
+      <span>1. หน้าตัวยา (/medications)</span>
+      <span style="color: var(--danger);">สถานะ: ติดลบ</span>
+    </div>
+    <div class="screen-body">
+      <div class="med-card">
+        <div class="med-card-stripe"></div>
+        <div class="med-header">
+          <div>
+            <span class="med-name">Botox Aestox</span>
+            <span class="badge-botox">Botox</span>
+          </div>
+          <span class="badge-danger">⚠️ สต็อกติดลบ</span>
+        </div>
+
+        <div class="stock-highlight">
+          <span class="stock-negative">-30 ยูนิต</span>
+          <span class="stock-sub">(ค้างสต็อก ~ -0.3 ขวด)</span>
+        </div>
+
+        <div style="margin-left: 6px; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+          ต้นทุนอ้างอิงล่าสุด: ฿2,200/ขวด (฿22/ยูนิต)
+        </div>
+
+        <div class="action-buttons">
+          <button class="btn btn-primary">+ รับเข้า</button>
+          <button class="btn">นับสต็อก</button>
+          <button class="btn">ประวัติ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. หน้าจอฟอร์มบันทึกบริการลูกค้า (MedicationUsageEditor) ตอนใช้เกินสต็อก -->
+  <div class="screen-section">
+    <div class="screen-title">
+      <span>2. ฟอร์มลงบริการลูกค้า (ModalAddTodo / Edit)</span>
+      <span style="color: var(--warning);">Non-blocking Warning</span>
+    </div>
+    <div class="screen-body">
+      <div class="form-group">
+        <label class="form-label">ลูกค้า: คุณก้อย (ฉีดโบท็อกซ์ริ้วรอย)</label>
+      </div>
+
+      <div class="med-selector-box">
+        <div class="form-label" style="margin-bottom: 4px;">ตัวยาและปริมาณที่ใช้:</div>
+        
+        <div class="med-row">
+          <input type="text" class="form-input" value="Botox Aestox (100u)" readonly style="flex: 2; background: #fff;">
+          <input type="text" class="form-input" value="50" style="flex: 1; text-align: center; font-weight: bold;">
+          <span style="font-size: 12px; color: var(--text-muted); width: 45px;">ยูนิต</span>
+        </div>
+        
+        <div class="stock-status-tag">
+          ⚠️ สต็อกคงเหลือปัจจุบัน: มีเพียง 20 ยูนิต (จะติดลบ -30 ยูนิต)
+        </div>
+
+        <!-- กล่องเตือนแบบไม่บล็อก (บันทึกได้) -->
+        <div class="warning-banner">
+          <div class="warning-icon">⚠️</div>
+          <div>
+            <strong>ยาในสต็อกไม่เพียงพอ:</strong> ระบบจะตัดสต็อกติดลบ 30 ยูนิต โดยคิดเป็น <span class="badge-estimated">ต้นทุนประมาณ</span> อ้างอิงจากต้นทุนขวดล่าสุด (฿22/ยูนิต)
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 12px; color: var(--text-muted);">ต้นทุนรวมเคสนี้ (FIFO + ประมาณ):</span>
+        <strong style="font-size: 14px; color: #b45309;">฿1,100 <span class="badge-estimated">ต้นทุนประมาณ</span></strong>
+      </div>
+
+      <button class="btn btn-primary" style="width: 100%; margin-top: 14px; padding: 10px; font-size: 13px;">
+        บันทึกบริการ (ดำเนินการได้ทันที)
+      </button>
+    </div>
+  </div>
+
+  <!-- 3. หน้าประวัติบริการ / บัตรบริการ (Service History Card) -->
+  <div class="screen-section">
+    <div class="screen-title">
+      <span>3. ประวัติบริการ & แดชบอร์ด (/customers/[id])</span>
+      <span>แสดงป้ายกำกับ</span>
+    </div>
+    <div class="screen-body">
+      <div class="service-card">
+        <div class="service-stripe"></div>
+        <div class="service-meta">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="font-size: 14px;">คุณก้อย · ฉีดโบท็อกซ์ริ้วรอย</strong>
+            <span style="font-size: 11px; background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 6px; font-weight: 600;">เสร็จสิ้น</span>
+          </div>
+
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+            ยาที่ใช้: Botox Aestox (50 ยูนิต)
+          </div>
+
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+            <span>ค่าบริการรับ: <strong>฿2,500</strong></span>
+            <div>
+              <span>ต้นทุน: <strong>฿1,100</strong></span>
+              <span class="badge-estimated" title="ส่วนที่เกินสต็อกคิดจากต้นทุนขวดล่าสุด">ต้นทุนประมาณ</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

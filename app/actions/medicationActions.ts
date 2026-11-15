@@ -14,6 +14,13 @@ function mapRowToMedication(row: any): Medications {
     size: row.size || undefined,
     unit: row.unit || "ยูนิต",
     price: row.price !== null && row.price !== undefined ? String(row.price) : undefined,
+    packSize: row.pack_size !== undefined && row.pack_size !== null ? Number(row.pack_size) : undefined,
+    packUnit: row.pack_unit || "ขวด",
+    refCostPerPackSatang:
+      row.ref_cost_per_pack_satang !== undefined && row.ref_cost_per_pack_satang !== null
+        ? Number(row.ref_cost_per_pack_satang)
+        : undefined,
+    isArchived: Boolean(row.is_archived),
     description: row.description || undefined,
     note: row.description || undefined,
     createdAt: row.created_at,
@@ -60,19 +67,31 @@ export async function createMedicationAction(data: {
   size?: string;
   unit?: string;
   price?: string | number;
+  packSize?: number;
+  packUnit?: string;
+  refCostPerPackSatang?: number;
+  isArchived?: boolean;
   description?: string;
 }): Promise<ActionResult<Medications>> {
   try {
     const supabase = await createClient();
 
     const priceNum = data.price !== undefined && data.price !== "" ? Number(data.price) : 0;
+    const parsedPackSize =
+      data.packSize !== undefined && data.packSize > 0
+        ? data.packSize
+        : parseFloat(data.size || "1") || 1;
 
     const insertPayload: Record<string, any> = {
       name: data.name.trim(),
       category: resolveMedicationCategory(data.name, data.category),
-      size: data.size?.trim() || null,
+      size: data.size?.trim() || String(parsedPackSize),
       unit: data.unit?.trim() || "ยูนิต",
       price: priceNum,
+      pack_size: parsedPackSize,
+      pack_unit: data.packUnit?.trim() || "ขวด",
+      ref_cost_per_pack_satang: data.refCostPerPackSatang || 0,
+      is_archived: Boolean(data.isArchived),
       description: data.description?.trim() || null,
     };
 
@@ -82,10 +101,16 @@ export async function createMedicationAction(data: {
       .select()
       .single();
 
-    // Fallback: migration 20261018 not applied yet → retry without category
-    if (error && isMissingCategoryColumn(error)) {
+    // Fallback: migration columns not applied yet → retry with basic columns
+    if (error && /(pack_size|ref_cost|is_archived|category)/i.test(error.message || "")) {
       const legacyPayload = { ...insertPayload };
-      delete legacyPayload.category;
+      delete legacyPayload.pack_size;
+      delete legacyPayload.pack_unit;
+      delete legacyPayload.ref_cost_per_pack_satang;
+      delete legacyPayload.is_archived;
+      if (isMissingCategoryColumn(error)) {
+        delete legacyPayload.category;
+      }
       ({ data: created, error } = await supabase
         .from("medications")
         .insert(legacyPayload)
@@ -126,6 +151,10 @@ export async function updateMedicationAction(
     size?: string;
     unit?: string;
     price?: string | number;
+    packSize?: number;
+    packUnit?: string;
+    refCostPerPackSatang?: number;
+    isArchived?: boolean;
     description?: string;
   }
 ): Promise<ActionResult<Medications>> {
@@ -140,6 +169,10 @@ export async function updateMedicationAction(
     if (data.category !== undefined) updatePayload.category = resolveMedicationCategory(data.name, data.category);
     if (data.size !== undefined) updatePayload.size = data.size.trim() || null;
     if (data.unit !== undefined) updatePayload.unit = data.unit.trim() || "ยูนิต";
+    if (data.packSize !== undefined) updatePayload.pack_size = data.packSize;
+    if (data.packUnit !== undefined) updatePayload.pack_unit = data.packUnit.trim() || "ขวด";
+    if (data.refCostPerPackSatang !== undefined) updatePayload.ref_cost_per_pack_satang = data.refCostPerPackSatang;
+    if (data.isArchived !== undefined) updatePayload.is_archived = Boolean(data.isArchived);
     if (data.description !== undefined) updatePayload.description = data.description.trim() || null;
 
     if (data.price !== undefined && data.price !== "") {
@@ -154,9 +187,15 @@ export async function updateMedicationAction(
       .select()
       .single();
 
-    if (error && isMissingCategoryColumn(error)) {
+    if (error && /(pack_size|ref_cost|is_archived|category)/i.test(error.message || "")) {
       const legacyPayload = { ...updatePayload };
-      delete legacyPayload.category;
+      delete legacyPayload.pack_size;
+      delete legacyPayload.pack_unit;
+      delete legacyPayload.ref_cost_per_pack_satang;
+      delete legacyPayload.is_archived;
+      if (isMissingCategoryColumn(error)) {
+        delete legacyPayload.category;
+      }
       ({ data: updated, error } = await supabase
         .from("medications")
         .update(legacyPayload)

@@ -185,14 +185,17 @@
    - ฟอร์มสร้างบริการต้องเริ่มว่างและ reset หลังบันทึก (ตาม §2.6)
 
 ### 3.2 Financial Calculation Formulas
-1. **Total Expenses (ต้นทุนรวม)**:
+1. **Net Revenue (รายรับสุทธิหลังหักส่วนลด)**:
+   $$\text{Net Revenue} = \max(0, \text{serviceFee} - \text{discount})$$
+
+2. **Total Expenses (ต้นทุนรวม)**:
    $$\text{Total Expenses} = \text{medicationCost} + (\text{travelExpense} \mathbin{??} 0) + (\text{otherExpenses} \mathbin{??} 0)$$
    *(กรณีผู้ใช้กรอกเฉพาะข้อมูลหลัก: $\text{Total Expenses} = \text{medicationCost}$)*
 
-2. **Net Profit (กำไรสุทธิ)**:
-   $$\text{Net Profit} = \text{serviceFee} - \text{Total Expenses}$$
+3. **Net Profit (กำไรสุทธิ)**:
+   $$\text{Net Profit} = \text{Net Revenue} - \text{Total Expenses}$$
 
-3. **Effective Hourly Rate (อัตราค่าจ้างสุทธิต่อชั่วโมง - คำนวณแบบยืดหยุ่น)**:
+4. **Effective Hourly Rate (อัตราค่าจ้างสุทธิต่อชั่วโมง - คำนวณแบบยืดหยุ่น)**:
    - หากผู้ใช้ไม่ได้ระบุ `durationHours` หรือระบุเป็น $0$ ให้ข้ามการคำนวณนี้ (คืนค่า `null` หรือ `undefined` เพื่อไม่แสดงผลบน UI)
    - หากมีการระบุ $\text{durationHours} > 0$ ให้คำนวณตามสูตร:
      $$\text{Effective Hourly Rate} = \frac{\text{Net Profit}}{\text{durationHours}}$$

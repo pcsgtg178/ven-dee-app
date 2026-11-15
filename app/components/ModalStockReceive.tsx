@@ -5,7 +5,7 @@ import { X, PackagePlus } from "lucide-react";
 import type { Medications } from "../../types/vendee";
 import { receiveStockAction } from "../actions/stockActions";
 import { unwrap } from "../../lib/actionHelper";
-import { packsToUnits } from "../../lib/stock";
+import { packsToUnits, isPackSizeUnset } from "../../lib/stock";
 import { getTodayDateStringBangkok } from "../../lib/dateUtils";
 import { updateLocalMedicationStock } from "../../lib/storage";
 
@@ -50,6 +50,8 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
   const packCostNum = Number(packCostThb) || 0;
   const totalUnits = packsToUnits(packsNum, packSize);
   const unitCostThb = packSize > 0 ? packCostNum / packSize : 0;
+  const totalCostThb = packsNum * packCostNum;
+  const packSizeUnset = isPackSizeUnset(medication);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,10 +148,25 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
             </div>
           </div>
 
+          {packSizeUnset && (
+            <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+              ⚠️ ตัวยานี้ยังตั้งไว้ว่า 1 {packUnit} = 1 {unit} — ถ้า 1 {packUnit} มีหลาย{unit} (เช่น 200 {unit})
+              กรุณาไปแก้ &quot;ขนาดบรรจุ&quot; ในหน้าแก้ไขตัวยาก่อนรับเข้า ไม่งั้นยอดสต็อกและต้นทุนต่อ{unit}จะผิด
+            </div>
+          )}
+
           {packsNum > 0 && (
-            <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
-              = {totalUnits.toLocaleString()} {unit} ·{" "}
-              {unitCostThb.toLocaleString("th-TH", { maximumFractionDigits: 2 })} บ./{unit}
+            <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 space-y-0.5">
+              <div>
+                {packsNum.toLocaleString()} {packUnit} × {packSize.toLocaleString()} {unit} = รับเข้า{" "}
+                {totalUnits.toLocaleString()} {unit}
+              </div>
+              {packCostNum > 0 && (
+                <div className="font-medium text-emerald-700 dark:text-emerald-300">
+                  รวม ฿{totalCostThb.toLocaleString("th-TH", { maximumFractionDigits: 2 })} · เฉลี่ย ฿
+                  {unitCostThb.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{unit}
+                </div>
+              )}
             </div>
           )}
 

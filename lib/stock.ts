@@ -55,6 +55,21 @@ export function isNegativeStock(med: Pick<Medications, "stockOnHand">): boolean 
 }
 
 /**
+ * Returns true when the pack size looks unconfigured: 1 pack = 1 usage unit while the
+ * purchase unit differs from the usage unit (e.g. "1 ขวด = 1 ยูนิต").
+ * Same-unit setups (e.g. "1 เข็ม = 1 เข็ม") are considered valid.
+ */
+export function isPackSizeUnset(
+  med: Pick<Medications, "packSize" | "unit" | "packUnit">
+): boolean {
+  const size = Number(med.packSize ?? 1);
+  if (Number.isFinite(size) && size > 1) return false;
+  const unit = (med.unit || "ยูนิต").trim();
+  const packUnit = (med.packUnit || "ขวด").trim();
+  return unit !== packUnit;
+}
+
+/**
  * Estimates FIFO cost in Satang from remaining layers, falling back to refUnitCostSatang
  * for any quantity exceeding available layers (D17).
  */

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { packsToUnits, formatOnHand, isLowStock, isNegativeStock, estimateFifoCost } from "../stock.ts";
+import { packsToUnits, formatOnHand, isLowStock, isNegativeStock, estimateFifoCost, isPackSizeUnset } from "../stock.ts";
 import { isWithinGracePeriod, canEditMedicationUsage } from "../dateUtils.ts";
 import type { StockLayer } from "../../types/vendee.ts";
 
@@ -89,4 +89,14 @@ test("isWithinGracePeriod and canEditMedicationUsage", () => {
 
   assert.equal(canEditMedicationUsage({ date: "2026-10-15", status: "completed" }, today), true);
   assert.equal(canEditMedicationUsage({ date: "2026-10-15", status: "cancelled" }, today), false);
+});
+
+test("isPackSizeUnset flags 1 pack = 1 unit only when purchase unit differs from usage unit", () => {
+  // 1 กล่อง = 1 ยูนิต -> likely unconfigured
+  assert.equal(isPackSizeUnset({ packSize: 1, unit: "ยูนิต", packUnit: "กล่อง" }), true);
+  assert.equal(isPackSizeUnset({ packSize: undefined, unit: "ยูนิต", packUnit: "ขวด" }), true);
+  // 1 กล่อง = 200 ยูนิต -> configured
+  assert.equal(isPackSizeUnset({ packSize: 200, unit: "ยูนิต", packUnit: "กล่อง" }), false);
+  // 1 เข็ม = 1 เข็ม -> valid same-unit setup
+  assert.equal(isPackSizeUnset({ packSize: 1, unit: "เข็ม", packUnit: "เข็ม" }), false);
 });

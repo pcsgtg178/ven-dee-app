@@ -24,7 +24,7 @@ import ModalStockReceive from "../components/ModalStockReceive";
 import ModalStockIssue from "../components/ModalStockIssue";
 import ModalStockCount from "../components/ModalStockCount";
 import ModalStockHistory from "../components/ModalStockHistory";
-import { formatOnHand, isLowStock, isNegativeStock } from "../../lib/stock";
+import { formatOnHand, isLowStock, isNegativeStock, isPackSizeUnset } from "../../lib/stock";
 import { archiveMedicationAction } from "../actions/medicationActions";
 import { unwrap } from "../../lib/actionHelper";
 import {
@@ -100,6 +100,13 @@ export default function MedicationsPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  // Legacy "size" (e.g. "100") from before Phase 14 — offer it as a one-click pack size fix.
+  const legacySizeNum = parseFloat(String(editingMed?.size ?? ""));
+  const legacySizeHint =
+    editingMed && (Number(packSize) || 1) <= 1 && Number.isFinite(legacySizeNum) && legacySizeNum > 1
+      ? legacySizeNum
+      : null;
+
   const handleOpenAdd = () => {
     setEditingMed(null);
     setName("");
@@ -149,7 +156,7 @@ export default function MedicationsPage() {
     setErrorMsg("");
 
     try {
-      const parsedPackSize = Math.max(1, Number(packSize) || Number(size) || 1);
+      const parsedPackSize = Math.max(1, Number(packSize) || 1);
       const parsedRefCostSatang = refCostPerPackThb !== "" ? Math.round(Math.max(0, Number(refCostPerPackThb) || 0) * 100) : 0;
       const parsedReorder = Math.max(0, Number(reorderPointPacks) || 0);
 
@@ -157,7 +164,7 @@ export default function MedicationsPage() {
         id: editingMed ? editingMed.id : undefined,
         name: name.trim(),
         category,
-        size: size.trim() || String(parsedPackSize),
+        size: String(parsedPackSize),
         price: price.trim() || undefined,
         unit: unit.trim() || undefined,
         packSize: parsedPackSize,
@@ -391,7 +398,12 @@ export default function MedicationsPage() {
                           </span>
                           {(med.packSize || med.size || med.unit) && (
                             <span className="shrink-0 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60">
-                              {med.packSize ?? med.size} {med.unit || ""}/{med.packUnit || "ขวด"}
+                              1 {med.packUnit || "ขวด"} = {(med.packSize ?? (Number(med.size) || 1)).toLocaleString()} {med.unit || "ยูนิต"}
+                            </span>
+                          )}
+                          {isPackSizeUnset(med) && (
+                            <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                              ยังไม่ตั้งขนาดบรรจุ
                             </span>
                           )}
                           {(() => {
@@ -550,75 +562,106 @@ export default function MedicationsPage() {
                 />
               </div>
 
-              {/* Size, Unit & Price Grid */}
-              <div className="grid grid-cols-3 gap-2.5">
-                {/* Size */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                    ขนาด
-                  </label>
-                  <input
-                    type="text"
-                    value={size}
-                    onChange={(e) => setSize(e.target.value)}
-                    placeholder="เช่น 100, 50"
-                    className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900 font-semibold"
-                  />
+              {/* Units & Packaging */}
+              <div className="space-y-3 rounded-2xl border border-purple-100 bg-purple-50/40 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+                <div className="text-xs font-extrabold text-text-main dark:text-zinc-100">
+                  หน่วยนับ & บรรจุภัณฑ์
                 </div>
 
-                {/* Unit */}
+                {/* Usage unit */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                    หน่วย
+                    หน่วยที่ใช้กับลูกค้า
                   </label>
                   <input
                     type="text"
                     value={unit}
                     onChange={(e) => setUnit(e.target.value)}
-                    placeholder="เช่น ยูนิต, เข็ม"
-                    className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900 font-semibold"
+                    placeholder="เช่น ยูนิต, cc, เข็ม"
+                    className="w-full rounded-xl border border-surface-subtle bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 font-semibold"
                   />
+                  <div className="flex flex-wrap gap-1.5">
+                    {["ยูนิต", "cc", "เข็ม", "ชิ้น", "เม็ด"].map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setUnit(u)}
+                        className={`rounded-lg px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                          unit === u
+                            ? "bg-purple-600 text-white"
+                            : "bg-white text-text-muted hover:bg-purple-100 hover:text-purple-700 dark:bg-zinc-800 dark:text-zinc-300"
+                        }`}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Price */}
+                {/* Purchase unit */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                    ราคา (บาท)
+                    หน่วยที่ซื้อ / รับเข้า
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-text-muted">
-                      ฿
-                    </span>
+                  <input
+                    type="text"
+                    value={packUnit}
+                    onChange={(e) => setPackUnit(e.target.value)}
+                    placeholder="เช่น กล่อง, ขวด"
+                    className="w-full rounded-xl border border-surface-subtle bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 font-semibold"
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {["กล่อง", "ขวด", "แพ็ค", "ชุด", "แผง", "กระปุก"].map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setPackUnit(u)}
+                        className={`rounded-lg px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                          packUnit === u
+                            ? "bg-purple-600 text-white"
+                            : "bg-white text-text-muted hover:bg-purple-100 hover:text-purple-700 dark:bg-zinc-800 dark:text-zinc-300"
+                        }`}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Conversion: 1 packUnit = N unit */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                    ขนาดบรรจุ
+                  </label>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-text-main dark:text-zinc-100">
+                    <span className="shrink-0">1 {packUnit || "ขวด"} =</span>
                     <input
                       type="number"
                       step="any"
-                      min="0"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      placeholder="เช่น 2500"
-                      className="w-full rounded-xl border border-surface-subtle bg-slate-50 pl-6 pr-2.5 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900 font-semibold"
+                      min="1"
+                      value={packSize}
+                      onChange={(e) => setPackSize(e.target.value)}
+                      placeholder="200"
+                      aria-label="ขนาดบรรจุ"
+                      className="w-24 rounded-xl border border-surface-subtle bg-white px-2.5 py-2 text-sm focus:border-purple-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 font-semibold"
                     />
+                    <span className="shrink-0">{unit || "ยูนิต"}</span>
                   </div>
+                  {isPackSizeUnset({ packSize: Number(packSize) || 1, unit, packUnit }) && (
+                    <div className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                      ⚠️ ตอนนี้ 1 {packUnit || "ขวด"} = 1 {unit || "ยูนิต"} — ถ้า 1 {packUnit || "ขวด"} มีหลาย{unit || "ยูนิต"} (เช่น 200) กรุณาแก้ให้ถูก ไม่งั้นยอดสต็อกและต้นทุนต่อ{unit || "ยูนิต"}จะผิด
+                    </div>
+                  )}
+                  {legacySizeHint && (
+                    <button
+                      type="button"
+                      onClick={() => setPackSize(String(legacySizeHint))}
+                      className="text-[11px] font-bold text-purple-700 underline hover:text-purple-900 dark:text-purple-300 cursor-pointer"
+                    >
+                      ข้อมูลเดิมระบุขนาด {legacySizeHint} — ใช้ค่านี้
+                    </button>
+                  )}
                 </div>
-              </div>
-
-              {/* Preset Unit Suggestions */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                <span className="text-[11px] text-text-muted">หน่วยที่พบบ่อย:</span>
-                {["ยูนิต", "เข็ม", "ขวด", "ชุด", "แผง", "กระปุก", "cc"].map((u) => (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => setUnit(u)}
-                    className={`rounded-lg px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                      unit === u
-                        ? "bg-purple-600 text-white"
-                        : "bg-surface-subtle text-text-muted hover:bg-purple-100 hover:text-purple-700 dark:bg-zinc-800 dark:text-zinc-300"
-                    }`}
-                  >
-                    {u}
-                  </button>
-                ))}
               </div>
 
               {/* Category */}
@@ -642,46 +685,25 @@ export default function MedicationsPage() {
                 </div>
               </div>
 
-              {/* Stock Pack Settings */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                    ขนาดต่อแพ็ค/ขวด
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <input
-                      type="number"
-                      step="any"
-                      min="1"
-                      value={packSize}
-                      onChange={(e) => setPackSize(e.target.value)}
-                      placeholder="200"
-                      className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-2.5 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
-                    />
-                    <input
-                      type="text"
-                      value={packUnit}
-                      onChange={(e) => setPackUnit(e.target.value)}
-                      placeholder="ขวด"
-                      className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-2.5 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                    ต้นทุนอ้างอิง/แพ็ค (บ.)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={refCostPerPackThb}
-                    onChange={(e) => setRefCostPerPackThb(e.target.value)}
-                    placeholder="เช่น 2500"
-                    className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
-                  />
-                </div>
+              {/* Reference cost per pack */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                  ต้นทุนอ้างอิง ต่อ{packUnit || "ขวด"} (บาท)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={refCostPerPackThb}
+                  onChange={(e) => setRefCostPerPackThb(e.target.value)}
+                  placeholder="เช่น 2500"
+                  className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
+                />
+                {Number(refCostPerPackThb) > 0 && (Number(packSize) || 1) > 0 && (
+                  <p className="text-[11px] text-text-muted dark:text-zinc-400">
+                    ≈ ฿{(Number(refCostPerPackThb) / (Number(packSize) || 1)).toLocaleString("th-TH", { maximumFractionDigits: 2 })} ต่อ{unit || "ยูนิต"} · ใช้เมื่อยังไม่มีล็อตรับเข้า
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">

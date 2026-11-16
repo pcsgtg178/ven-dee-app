@@ -167,7 +167,8 @@ export function isShiftUndoSwapEligible(
 
 /**
  * Unified check whether a shift is locked from editing, transferring, or deleting.
- * Refer shifts within grace period are exempt from historical date locking.
+ * All shifts (normal and refer) within Grace Period (current month, or previous month on days 1-7)
+ * are exempt from historical date locking (Phase 18).
  */
 export function isShiftLocked(
   shift: {
@@ -181,19 +182,58 @@ export function isShiftLocked(
 ): boolean {
   if (!shift) return false;
 
-  // Refer shift within grace period is unlocked for retroactive operations (editing, transferring)
-  if (isReferShift(shift) && isReferShiftWithinGracePeriod(shift.date, today)) {
-    return false;
-  }
-
-  // Non-refer shifts or refer shifts outside grace period:
+  // Explicit lock flag takes precedence
   if (shift.isLocked || shift.swapMeta?.isLocked) {
     return true;
   }
+
+  // Shifts in the past are locked only when outside the Grace Period
   if (isShiftInPast(shift.date, today)) {
-    return true;
+    return !isDateWithinGracePeriod(shift.date, today);
   }
+
   return false;
+}
+
+/**
+ * Unified check whether a shift can be edited (Phase 18).
+ * Active shifts that are not locked can be edited.
+ */
+export function isShiftEditable(
+  shift: {
+    date: string;
+    status?: string;
+    shiftType?: string;
+    category?: string;
+    isLocked?: boolean;
+    swapMeta?: { isLocked?: boolean };
+  } | null | undefined,
+  today?: Date
+): boolean {
+  if (!shift) return false;
+  if (shift.status !== "active") return false;
+  return !isShiftLocked(shift, today);
+}
+
+/**
+ * Unified check whether a shift can be deleted (Phase 18).
+ * Swapped out, sold out, or parent shifts cannot be deleted directly (must use Undo).
+ * Shifts within Grace Period that are not locked can be deleted.
+ */
+export function isShiftDeletable(
+  shift: {
+    date: string;
+    status?: string;
+    shiftType?: string;
+    category?: string;
+    isLocked?: boolean;
+    swapMeta?: { isLocked?: boolean };
+  } | null | undefined,
+  today?: Date
+): boolean {
+  if (!shift) return false;
+  if (shift.status === "swapped_out" || shift.status === "sold_out") return false;
+  return !isShiftLocked(shift, today);
 }
 
 /**

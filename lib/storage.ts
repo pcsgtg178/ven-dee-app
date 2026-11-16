@@ -59,6 +59,8 @@ import {
   isShiftSwapEligible,
   isShiftUndoSwapEligible,
   isShiftLocked,
+  isShiftEditable,
+  isShiftDeletable,
   isServiceDateWithinGracePeriod,
   getEarliestServiceGracePeriodDate,
   isServiceEditable,
@@ -223,18 +225,21 @@ export const initialCustomers: Customer[] = [
 ];
 
 /**
- * Conditional Visibility Rule for Shift Editing (DOMAIN_RULES.md §2.5 & Phase 12 Grace Period):
+ * Conditional Visibility Rule for Shift Editing (DOMAIN_RULES.md §2.5 & Phase 18 Grace Period):
  * - Hide completely if shift cannot be edited.
- * - Do NOT display if:
- *   1. Shift is already past/locked (isLocked === true or historical date), UNLESS it is a Refer shift in Grace Period.
- *   2. Shift has been swapped out (status === 'swapped_out').
- *   3. Shift is cancelled (status === 'cancelled').
- * - Only shifts with status === 'active' and unlocked dates can be edited.
+ * - Only active shifts within Grace Period or today/future can be edited.
  */
 export function canEditShift(shift: ShiftRecord): boolean {
-  if (shift.status !== "active") return false;
-  if (isShiftLocked(shift)) return false;
-  return true;
+  return isShiftEditable(shift);
+}
+
+/**
+ * Conditional Deletion Rule for Shifts (DOMAIN_RULES.md §2.5 & Phase 18 Grace Period):
+ * - Shifts within Grace Period or today/future can be deleted.
+ * - Swapped out or sold out shifts cannot be deleted directly (must use rollback/undo).
+ */
+export function canDeleteShift(shift: ShiftRecord): boolean {
+  return isShiftDeletable(shift);
 }
 
 /**
@@ -960,9 +965,14 @@ export async function saveShift(
   const isExistingInDb = Boolean(shift.id && !shift.id.startsWith("shift-"));
   const existingShift = shift.id ? current.find((s) => s.id === shift.id) : undefined;
 
-  // Check if trying to edit locked / past shift (Phase 12: Refer Grace Period allowed)
+  // Check if trying to edit locked / past shift (Phase 18: Grace Period allowed)
   if (existingShift && isShiftLocked(existingShift)) {
     throw new Error("ไม่สามารถแก้ไขเวรในอดีตที่ถูกล็อกแล้วได้");
+  }
+
+  // Prevent moving shift to an expired past date outside grace period
+  if (isShiftInPast(shift.date) && !isDateWithinGracePeriod(shift.date)) {
+    throw new Error("ไม่สามารถย้ายเวรไปยังวันที่ในอดีตที่อยู่นอกช่วงเวลาผ่อนผันได้");
   }
 
   // Prevent duplicate active shift on the same date and same shift type
@@ -1003,6 +1013,7 @@ export async function saveShift(
   if (!isDbSyncDisabled()) {
     if (isExistingInDb) {
       const res = await updateShiftAction(shift.id!, {
+        date: shift.date,
         shiftType: shift.shiftType,
         category: resolvedCategory,
         note: shift.note,

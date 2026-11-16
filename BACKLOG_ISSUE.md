@@ -1,6 +1,6 @@
 # BACKLOG_ISSUE — Issue ที่ผู้ใช้แจ้ง
 
-สถานะ: **Resolved (ISSUE-1, ISSUE-2, and ISSUE-3 Cascading Swap Solved & Verified)**
+สถานะ: **Resolved (ISSUE-1, ISSUE-2, ISSUE-3 Cascading Swap, and ISSUE-4 Retroactive Shift Solved & Verified)**
 ความสัมพันธ์: Phase 10 [BACKLOG_MIGRATE.md](./BACKLOG_MIGRATE.md) (แยก `shift_swaps`) จะต่อยอดโครงสร้างให้เป็นตารางแยกและ RPC เต็มรูปแบบ
 
 | ID | หัวข้อ | Severity | ประเภท |
@@ -8,6 +8,7 @@
 | ISSUE-1 | บันทึกงานคลินิกแล้วไม่พบใน DB | **High** (data loss) | Missing persistence |
 | ISSUE-2 | คืนเวรแล้วข้อมูลแลกเวรค้าง/เวรเดิมถูกใส่เป็นของคนอื่น | **High** (data corruption) | Logic + error handling |
 | ISSUE-3 | แลกเวรเป็นทอดๆ แล้วเวรต้นทางกลับมาแสดงซ้ำ (Cascading Swap / False Orphan Repair) | **High** (UI / state corruption) | Auto-repair logic flaw |
+| ISSUE-4 | ไม่สามารถแก้ไขหรือลบเวรย้อนหลังได้ (Retroactive Shift Edit & Delete Blocked) | **Medium** (UX restriction) | Domain rule & locking logic |
 
 ---
 
@@ -198,6 +199,51 @@ const activeParentIds = new Set(
 - [x] เมื่อเรียก `repairLocalSwapInconsistencies` กับข้อมูลเวรใน Chain จะต้องไม่ flag เวร A เป็น orphan และไม่เปลี่ยนกลับเป็น `active`
 - [x] เมื่อ reload/sync หน้าจอ เวร A ยังคงซ่อนอยู่ตามปกติ และเวร C แสดงผลเป็น `active`
 - [x] Unit test สำหรับ cascading swap repair ผ่าน 100%
+
+---
+
+## ISSUE-4: ไม่สามารถแก้ไขหรือลบเวรย้อนหลังได้ (Retroactive Shift Edit & Delete Blocked)
+
+### อาการ
+ผู้ใช้ต้องการแก้ไขเวรในอดีต (เช่น เปลี่ยนเวรดำเป็นเวรแดง OT, แก้ไขหมายเหตุ, ปรับประเภทเวร, ลบเวรที่ลงผิด) แต่:
+1. ปุ่ม "แก้ไข" บน ActivityCard และ ScheduleTodoListView ไม่แสดง (ถูกซ่อน)
+2. เมื่อพยายามบันทึกผ่าน `saveShift` หรือ `updateShiftAction` จะแจ้งเตือนข้อผิดพลาด: `"ไม่สามารถแก้ไขเวรในอดีตที่ถูกล็อกแล้วได้"` (`SHIFT_IS_LOCKED`)
+3. การลบเวรย้อนหลังผ่าน `deleteShift` หรือ `deleteShiftAction` ถูกปฏิเสธเช่นเดียวกัน
+
+### Root cause (ยืนยันจากโค้ด)
+1. **Domain Rule เดิมจำกัดสิทธิ์**: ใน Phase 12 เปิด Grace Period ให้เฉพาะเวร Refer และใน Phase 16 เปิดสิทธิ์ Grace Period สำหรับเวรปกติเฉพาะรายการ "แลกเวร (Swap)" และ "กู้คืนเวร (Undo Swap)" เท่านั้น ทำให้การแก้ไข (Edit) และการลบ (Delete) เวรปกติในอดีตยังติดล็อกตามกฎ Immutability เดิม
+2. **`isShiftLocked` ใน `lib/dateUtils.ts`**: เวรปกติทุกประเภทที่มีวันที่ในอดีต (`isShiftInPast`) ถูกประเมินเป็น `isLocked = true` เสมอ แม้จะอยู่ในเดือนปัจจุบันหรือ Grace Period
+3. **Guard clauses**:
+   - `canEditShift` ใน `lib/storage.ts` อาศัย `!isShiftLocked(shift)` จึงส่งผลให้ปุ่ม "แก้ไข" ถูกซ่อน
+   - `saveShift` และ `deleteShift` ใน `lib/storage.ts` บล็อกด้วย `isShiftLocked`
+   - `updateShiftAction` และ `deleteShiftAction` ใน `app/actions/shiftActions.ts` บล็อกด้วย `SHIFT_IS_LOCKED` สำหรับเวรที่ไม่ใช่เวร Refer
+
+### แนวทางแก้ (Phase 18: Unified Retroactive Shift Edit & Delete)
+1. **`lib/dateUtils.ts`**:
+   - ปรับปรุง `isShiftLocked`: เวรในอดีตที่อยู่ภายใน Grace Period (`isDateWithinGracePeriod`: เดือนปัจจุบัน หรือ วันที่ 1–7 ของเดือนถัดไป) จะไม่ถูกล็อก
+   - เพิ่ม `isShiftEditable(shift, today)` และ `isShiftDeletable(shift, today)`
+2. **`lib/storage.ts`**:
+   - อัปเดต `canEditShift` ให้ใช้ `isShiftEditable`
+   - เพิ่ม `canDeleteShift` โดยใช้ `isShiftDeletable` (เวร `swapped_out`/`sold_out` ห้ามลบ ต้องใช้ Undo)
+   - ปรับ `saveShift` ส่งฟิลด์ `date` ไปยัง `updateShiftAction` และตรวจความถูกต้องหากมีการย้ายวันที่ไปยังอดีต
+   - ปรับ `deleteShift` รองรับการลบเวรใน Grace Period
+3. **`app/actions/shiftActions.ts`**:
+   - `updateShiftAction`: ปลดล็อกเวรใน Grace Period, เพิ่มพารามิเตอร์ `date?: string` และตรวจไม่ให้ย้ายไปยังวันที่นอก Grace Period
+   - `deleteShiftAction`: ปลดล็อกเวรใน Grace Period
+4. **`ModalEditShift.tsx` & UI Components**:
+   - แสดง Retroactive Warning Alert Banner เมื่อแก้ไขเวรย้อนหลัง
+   - เพิ่ม `min={getEarliestGracePeriodDate()}` บน Date Picker
+   - อัปเดตปุ่มลบเวรใน `ActivityCard.tsx` ให้เชื่อมโยงกับ `canDeleteShift`
+5. **Unit Tests**:
+   - เพิ่มการทดสอบครอบคลุมใน `lib/__tests__/shiftRetroactive.test.ts` และอัปเดต `lib/__tests__/referRetroactive.test.ts`
+
+### Acceptance criteria
+- [x] เวรปกติ (เช้า, บ่าย, ดึก ทั้งหมวดดำและแดง) ในเดือนปัจจุบัน สามารถกดแก้ไขและบันทึกย้อนหลังได้สำเร็จ
+- [x] เวรปกติในเดือนก่อนหน้า สามารถแก้ไขและลบได้หากวันปัจจุบันอยู่ในวันที่ 1–7 ของเดือน
+- [x] เวรที่อยู่นอก Grace Period (เช่น 2 เดือนก่อน หรือเดือนก่อนหน้าหลังจากวันที่ 7) จะถูกล็อกถาวร ไม่สามารถแก้ไขหรือลบได้
+- [x] `ModalEditShift` แสดงแถบเตือนสีส้มเมื่อแก้ไขเวรย้อนหลัง และจำกัด `min` วันที่ไม่ให้เลือกเกิน Grace Period
+- [x] เวรที่ถูกแลกออกไป (`swapped_out`) หรือขายออกไป (`sold_out`) ยังคงถูกห้ามลบโดยตรง (ต้องใช้ Undo)
+- [x] Unit tests ทั้งหมดผ่าน 100%
 
 ---
 

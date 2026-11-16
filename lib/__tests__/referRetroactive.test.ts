@@ -97,7 +97,7 @@ test("1.4 isReferShiftWithinGracePeriod handles year transitions (Jan 1-7 allows
   assert.equal(isReferShiftWithinGracePeriod("2026-12-28", midJan), false);
 });
 
-test("2.1 isShiftLocked exempts Refer shifts in Grace Period but locks Non-Refer shifts", () => {
+test("2.1 isShiftLocked exempts all shifts in Grace Period but locks expired shifts outside Grace Period", () => {
   // Mock current date: 2026-11-05
   const today = new Date("2026-11-05T12:00:00+07:00");
 
@@ -117,21 +117,38 @@ test("2.1 isShiftLocked exempts Refer shifts in Grace Period but locks Non-Refer
   // Refer in prev month on day 5 -> NOT locked
   assert.equal(isShiftLocked(pastReferPrevMonth, today), false);
 
-  const pastBlackShift = createMockShift({
+  const pastBlackShiftInGrace = createMockShift({
     date: "2026-11-02",
     shiftType: "morning",
     category: "black",
   });
-  // Black shift in past -> ALWAYS locked
-  assert.equal(isShiftLocked(pastBlackShift, today), true);
+  // Phase 18: Black shift in current month grace period -> NOT locked
+  assert.equal(isShiftLocked(pastBlackShiftInGrace, today), false);
 
-  const pastOTShift = createMockShift({
+  const pastOTShiftInGrace = createMockShift({
     date: "2026-11-02",
     shiftType: "afternoon",
     category: "red",
   });
-  // OT shift in past -> LOCKED (Grace period is strictly for Refer shifts)
-  assert.equal(isShiftLocked(pastOTShift, today), true);
+  // Phase 18: OT shift in current month grace period -> NOT locked
+  assert.equal(isShiftLocked(pastOTShiftInGrace, today), false);
+
+  const expiredBlackShift = createMockShift({
+    date: "2026-09-02",
+    shiftType: "morning",
+    category: "black",
+  });
+  // Black shift 2 months ago -> LOCKED
+  assert.equal(isShiftLocked(expiredBlackShift, today), true);
+
+  // Day 15 test: previous month is now expired
+  const midNov = new Date("2026-11-15T12:00:00+07:00");
+  const pastOctShift = createMockShift({
+    date: "2026-10-25",
+    shiftType: "morning",
+    category: "black",
+  });
+  assert.equal(isShiftLocked(pastOctShift, midNov), true);
 });
 
 test("3.1 One-Way Shift Transfer allows retroactive Refer shift in Grace Period", () => {
@@ -187,7 +204,7 @@ test("3.2 One-Way Shift Transfer rejects past Non-Refer shifts and expired Refer
   );
 });
 
-test("4.1 Swap Retroactive allows Refer shifts within grace period and rejects expired / black shifts", () => {
+test("4.1 Swap Retroactive allows shifts within grace period and rejects expired shifts", () => {
   // Refer shift in current month: isShiftLocked is false -> can swap
   const referInGrace = createMockShift({
     date: "2026-11-01",
@@ -196,13 +213,21 @@ test("4.1 Swap Retroactive allows Refer shifts within grace period and rejects e
   });
   assert.equal(isShiftLocked(referInGrace), false);
 
-  // Black shift in past: isShiftLocked is true -> cannot swap
-  const blackInPast = createMockShift({
+  // Black shift in current month: isShiftLocked is false -> can swap (Phase 16/18)
+  const blackInGrace = createMockShift({
     date: "2026-11-01",
     shiftType: "morning",
     category: "black",
   });
-  assert.equal(isShiftLocked(blackInPast), true);
+  assert.equal(isShiftLocked(blackInGrace), false);
+
+  // Black shift from 3 months ago: isShiftLocked is true -> cannot swap
+  const blackExpired = createMockShift({
+    date: "2026-08-01",
+    shiftType: "morning",
+    category: "black",
+  });
+  assert.equal(isShiftLocked(blackExpired), true);
 
   // Refer shift from 3 months ago: isShiftLocked is true -> cannot swap
   const referExpired = createMockShift({

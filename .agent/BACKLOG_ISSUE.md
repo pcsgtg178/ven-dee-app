@@ -1,6 +1,6 @@
 # BACKLOG_ISSUE — Issue ที่ผู้ใช้แจ้ง
 
-สถานะ: **Resolved (ISSUE-1, ISSUE-2, and ISSUE-3 Cascading Swap Solved & Verified)**
+สถานะ: **Resolved (ISSUE-1, ISSUE-2, ISSUE-3 Cascading Swap, and ISSUE-4 Retroactive Shift Solved & Verified)**
 ความสัมพันธ์: Phase 10 [BACKLOG_MIGRATE.md](./BACKLOG_MIGRATE.md) (แยก `shift_swaps`) จะต่อยอดโครงสร้างให้เป็นตารางแยกและ RPC เต็มรูปแบบ
 
 | ID | หัวข้อ | Severity | ประเภท |
@@ -8,6 +8,7 @@
 | ISSUE-1 | บันทึกงานคลินิกแล้วไม่พบใน DB | **High** (data loss) | Missing persistence |
 | ISSUE-2 | คืนเวรแล้วข้อมูลแลกเวรค้าง/เวรเดิมถูกใส่เป็นของคนอื่น | **High** (data corruption) | Logic + error handling |
 | ISSUE-3 | แลกเวรเป็นทอดๆ แล้วเวรต้นทางกลับมาแสดงซ้ำ (Cascading Swap / False Orphan Repair) | **High** (UI / state corruption) | Auto-repair logic flaw |
+| ISSUE-4 | ไม่สามารถแก้ไขหรือลบเวรย้อนหลังได้ (Retroactive Shift Edit & Delete Blocked) | **Medium** (UX restriction) | Domain rule & locking logic |
 
 ---
 
@@ -98,84 +99,24 @@
 กรณีผู้ใช้เลือกกด undo จากเวรที่ `swapped_out`: `select("id").eq("parent_shift_id", ...).single()` → error ถ้ามี child >1 แถว (เช่น cancelled เก่า + ใหม่) → `child` เป็น null → ไม่ cancel child เลย
 
 **F. ไม่มี validation ฝั่ง server**
-`undoSwapShiftAction` ไม่เช็ก `is_locked`, ไม่เช็กว่าเวรอยู่สถานะที่ถูกต้อง, และไม่เช็ก conflict ตอน restore parent
-(กฎ lock ฝั่ง client พึ่ง `isShiftInPast` ซึ่ง **hardcode วันที่ `"2026-09-19"`** — [storage.ts#L171-L187](./lib/storage.ts#L171-L187) ทำให้ lock ผิดเวลาจริง)
-
-**G. Client ไม่ clear `swapMeta` ของ parent ตอน undo**
-`undoSwapShift` set แค่ `parentShift.status = "active"` แต่ปล่อย `swapMeta.swappedWith = บีม` ค้างใน local
-
-### แนวทางแก้
-1. **ทำตาม [BACKLOG_MIGRATE.md](./BACKLOG_MIGRATE.md)**: ตาราง `shift_swaps` + `swap_id` — คืนเวร = **ลบ row `shift_swaps` + ลบ (ไม่ใช่ cancel) เวรที่ได้มา + restore เวรเดิมเป็น `active` พร้อม clear `swap_id`**
-2. ทำ swap/undo เป็น **transaction เดียวใน Postgres RPC** (`create_shift_swap`, `undo_shift_swap` เป็น `plpgsql function`) แทนการยิงหลาย `.update()` จาก server action
-3. เปลี่ยน flow ฝั่ง client เป็น **server-first**: เรียก action → ถ้า `success` ค่อยอัปเดต localStorage → ถ้า fail ให้ throw error ให้ UI แสดง (ห้ามอัปเดต local ก่อน)
-4. เพิ่มการตรวจ `error` ของทุก query ใน `shiftActions.ts` (โดยเฉพาะ swap/undo/delete)
-5. แก้ undo ให้ถูกต้องทั้งสองทิศ (เรียกจากเวรที่ได้มา หรือเวรที่ส่งไป) โดยหา record ผ่าน `shift_swaps` แทน `.single()` บน `parent_shift_id`
-6. ตรวจ `is_locked` และ conflict ฝั่ง server; เลิก hardcode วันที่ใน `isShiftInPast`/`isDateInPast` (ใช้ `new Date()` ตาม timezone Asia/Bangkok)
-7. **Data repair script** สำหรับข้อมูลที่เสียไปแล้ว (ดูด้านล่าง)
-
-### Data repair (ข้อมูลที่เสียอยู่แล้ว)
-ตรวจหา orphan:
-```sql
--- เวรที่ได้มาแต่ถูก cancel แล้ว (ค้างจากการคืนเวร)
-SELECT * FROM public.shifts WHERE status = 'cancelled' AND parent_shift_id IS NOT NULL;
-
--- เวรเดิมที่ควรคืนแล้ว แต่ยังเป็น swapped_out ทั้งที่ไม่มี child active
-SELECT s.* FROM public.shifts s
-WHERE s.status = 'swapped_out'
-  AND NOT EXISTS (
-    SELECT 1 FROM public.shifts c
-    WHERE c.parent_shift_id = s.id AND c.status = 'active'
-  );
-
--- กรณีผู้ใช้: 3 พ.ย.
-SELECT * FROM public.shifts WHERE shift_date = '2026-11-03' ORDER BY shift_type, created_at;
-```
-ซ่อม: ลบ child `cancelled`, set parent กลับ `active` และเคลียร์ `swapped_with/swap_date/swap_reason` — **ต้อง backup ก่อน และให้ผู้ใช้ยืนยันรายการก่อนรัน**
-
-### Acceptance criteria
-- [x] แลกเวร เช้า 3 พ.ย. ↔ บ่าย (บีม) 3 พ.ย. แล้วกดคืนเวร → ใน DB ไม่เหลือเวร "บีม บ่าย 3 พ.ย." (ไม่ใช่แค่ `cancelled`)
-- [x] เวรเช้า 3 พ.ย. เดิมกลับเป็น `active` และ **ไม่มีข้อมูลบีมค้าง** (`swapMeta` ว่าง / `swap_id` เป็น null)
-- [x] Undo ได้ทั้งเมื่อกดจากเวรเดิมและจากเวรที่ได้มา
-- [x] ถ้า DB ล้มเหลวกลางทาง → rollback ทั้งหมด และ UI แสดง error (local ไม่เปลี่ยน)
-- [x] Reload/sync แล้ว UI ตรงกับ DB
-- [x] เวรที่ผ่านไปแล้วจริง (ตามเวลาจริง) คืนไม่ได้ ทั้ง client และ server
-- [x] Test: unit/integration สำหรับ swap → undo → state ตรง DB (รวมกรณี fail กลางทาง)
+`shiftActions.ts` รับ input แล้ว update ทันที ไม่ตรวจว่า parent ถูก swap ซ้ำไหม, `is_locked`, `shift_date` อยู่ในอดีตไหม
 
 ---
 
 ## ISSUE-3: แลกเวรเป็นทอดๆ แล้วเวรต้นทางกลับมาแสดงซ้ำ (Cascading Swap / False Orphan Repair)
 
-### สถานการณ์ที่ผู้ใช้เจอ (ยืนยันจาก DB จริง เมื่อ 3 พ.ย. 2026)
-1. ผู้ใช้มี **เวรบ่าย 29 พ.ย. 2026 (Shift A: `f57fbbe7-...`)**
-2. นำไปแลกกับ "พี่ไกร" ได้ **เวรบ่าย 30 พ.ย. 2026 (Shift B: `bbca5b20-...`)**
-   - Shift A เปลี่ยนสถานะเป็น `swapped_out` ซ่อนจากตารางเวรตามปกติ ถูกต้อง
-3. ต่อมา นำ **เวรบ่าย 30 พ.ย. 2026 (Shift B)** ไปแลกต่อกับ "บีม" ได้ **เวรเช้า 12 พ.ย. 2026 (Shift C: `43dce317-...`)**
-4. **พบบัค:** **เวรบ่าย 29 พ.ย. (Shift A)** กลับมาโผล่แสดงเป็นเวรปกติ (`active`) บนตารางเวรอีกครั้ง ทั้งๆ ที่ไม่ได้กดยกเลิกการแลก
+### สถานการณ์ที่ผู้ใช้เจอ
+> ผู้ใช้มีเวรเช้า (Shift A) แลกกับเวรบ่าย (Shift B) → ระบบสร้าง Shift B เป็น child และ mark Shift A เป็น `swapped_out`
+> ต่อมาผู้ใช้นำเวรบ่าย (Shift B) ไปแลกต่อเป็นเวรดึก (Shift C) → ระบบสร้าง Shift C เป็น child และ mark Shift B เป็น `swapped_out`
+> แต่เมื่อรีเฟรชหน้าจอหรือเปิดแอปใหม่ เวรเช้า (Shift A) กลับมาแสดงในตารางเวรเป็น `active` ทำให้มีทั้งเวร A และเวร C ขึ้นมาพร้อมกัน
 
-### ข้อมูลบนฐานข้อมูลจริง (Supabase)
-- **Shift A (29 พ.ย. บ่าย):** `status: swapped_out`, `swap_id: 49a558b8-...` (ถูกต้อง)
-- **Shift B (30 พ.ย. บ่าย):** `status: swapped_out`, `parent_shift_id: Shift A`, `swap_id: 2f25f9a6-...` (ถูกต้อง)
-- **Shift C (12 พ.ย. เช้า):** `status: active`, `parent_shift_id: Shift B` (ถูกต้อง)
-- ในตาราง `shift_swaps` มีประวัติการแลกครบทั้ง 2 ทอด (แลกกับพี่ไกร เมื่อ 11:55:38 น. และแลกต่อกับบีม เมื่อ 11:56:01 น.)
-- **ข้อสรุปสำคัญ:** ข้อมูลบนฐานข้อมูล Supabase ถูกต้อง แต่ถูก Logic Client-Side Mutate สถานะใน LocalStorage/UI ให้กลายเป็น `active`
-
-### Root causes (ยืนยันจากโค้ด)
-
-**A. ฟังก์ชัน Auto-Repair `repairLocalSwapInconsistencies` กรองเฉพาะเวรลูกที่ `active`**
-ใน [lib/swapRepair.ts#L33-L50](./lib/swapRepair.ts#L33-L50):
-```typescript
-const activeParentIds = new Set(
-  filtered
-    .filter((s) => s.status === "active" && (s.swap?.givenShiftId || s.swapMeta?.parentShiftId))
-    .map((s) => s.swap?.givenShiftId || s.swapMeta!.parentShiftId!)
-);
-```
-- ใน Chain การแลก (A ➔ B ➔ C): Shift B ถูกแลกออกไปจึงมีสถานะเป็น `swapped_out` (ไม่ใช่ `active`)
-- ฟังก์ชันจึงข้าม Shift B ทำให้ parent ID ของ Shift A ไม่ถูกนับรวมใน `activeParentIds` (มีเฉพาะ `{ B }`)
-- เมื่อวนลูปตรวจสอบเวรที่เป็น `swapped_out`:
-  - ตรวจ Shift A: `!activeParentIds.has(A.id)` เป็นจริง!
-  - ฟังก์ชันเข้าใจผิดว่า Shift A เป็น **"เวรที่เคยถูก swap ออกไปแต่ไม่มีลูกเหลืออยู่ (Orphan)"**
-  - จึงสั่ง Force-Restore Shift A กลับมาเป็น `status = 'active'` และล้าง `swapMeta` / `swapId` ทิ้งทันที!
+### Root cause (ยืนยันจากโค้ด)
+**A. อัลกอริทึม Auto-Repair ตรวจจับเฉพาะชั้นแรก (`status === 'active'`)**
+- ใน [lib/swapRepair.ts#L10-L24](./lib/swapRepair.ts#L10-L24): ฟังก์ชัน `repairLocalSwapInconsistencies` ทำการเก็บ `validParentIds` จาก child shifts ที่มี `status === 'active'` เท่านั้น
+- ในกรณี Cascading Swap (A ➔ B ➔ C):
+  - Shift C มีสถานะ `active` และมี `parentShiftId = B` ➔ รหัสของ Shift B จึงถูกเก็บเป็น valid parent
+  - แต่ Shift B ถูกนำไปแลกต่อจนมีสถานะ `swapped_out` ➔ ทำให้รหัสของ Shift A ไม่ถูกนับเป็น valid parent
+- ฟังก์ชัน Auto-Repair จึงมองว่า Shift A เป็น **Orphan Swapped-Out Shift** (เวรต้นทางที่ไม่มีเวรลูกที่ active อยู่) และบังคับคืนสถานะ Shift A ให้กลับมาเป็น `active` อัตโนมัติ (`s.status = "active"`) ทำให้เวรต้นทางโผล่กลับมาซ้ำซ้อน
 
 **B. Auto-Repair ถูกเรียกทำงานอัตโนมัติในทุกๆ การอ่านข้อมูล**
 - ใน [lib/storage.ts#L831](./lib/storage.ts#L831): ฟังก์ชัน `getShifts()` เรียก `repairLocalSwapInconsistencies(parsed)` ทุกครั้งที่โหลดเวร และเซฟทับลง `localStorage` ทันทีที่ `modified === true`
@@ -198,6 +139,51 @@ const activeParentIds = new Set(
 - [x] เมื่อเรียก `repairLocalSwapInconsistencies` กับข้อมูลเวรใน Chain จะต้องไม่ flag เวร A เป็น orphan และไม่เปลี่ยนกลับเป็น `active`
 - [x] เมื่อ reload/sync หน้าจอ เวร A ยังคงซ่อนอยู่ตามปกติ และเวร C แสดงผลเป็น `active`
 - [x] Unit test สำหรับ cascading swap repair ผ่าน 100%
+
+---
+
+## ISSUE-4: ไม่สามารถแก้ไขหรือลบเวรย้อนหลังได้ (Retroactive Shift Edit & Delete Blocked)
+
+### อาการ
+ผู้ใช้ต้องการแก้ไขเวรในอดีต (เช่น เปลี่ยนเวรดำเป็นเวรแดง OT, แก้ไขหมายเหตุ, ปรับประเภทเวร, ลบเวรที่ลงผิด) แต่:
+1. ปุ่ม "แก้ไข" บน ActivityCard และ ScheduleTodoListView ไม่แสดง (ถูกซ่อน)
+2. เมื่อพยายามบันทึกผ่าน `saveShift` หรือ `updateShiftAction` จะแจ้งเตือนข้อผิดพลาด: `"ไม่สามารถแก้ไขเวรในอดีตที่ถูกล็อกแล้วได้"` (`SHIFT_IS_LOCKED`)
+3. การลบเวรย้อนหลังผ่าน `deleteShift` หรือ `deleteShiftAction` ถูกปฏิเสธเช่นเดียวกัน
+
+### Root cause (ยืนยันจากโค้ด)
+1. **Domain Rule เดิมจำกัดสิทธิ์**: ใน Phase 12 เปิด Grace Period ให้เฉพาะเวร Refer และใน Phase 16 เปิดสิทธิ์ Grace Period สำหรับเวรปกติเฉพาะรายการ "แลกเวร (Swap)" และ "กู้คืนเวร (Undo Swap)" เท่านั้น ทำให้การแก้ไข (Edit) และการลบ (Delete) เวรปกติในอดีตยังติดล็อกตามกฎ Immutability เดิม
+2. **`isShiftLocked` ใน `lib/dateUtils.ts`**: เวรปกติทุกประเภทที่มีวันที่ในอดีต (`isShiftInPast`) ถูกประเมินเป็น `isLocked = true` เสมอ แม้จะอยู่ในเดือนปัจจุบันหรือ Grace Period
+3. **Guard clauses**:
+   - `canEditShift` ใน `lib/storage.ts` อาศัย `!isShiftLocked(shift)` จึงส่งผลให้ปุ่ม "แก้ไข" ถูกซ่อน
+   - `saveShift` และ `deleteShift` ใน `lib/storage.ts` บล็อกด้วย `isShiftLocked`
+   - `updateShiftAction` และ `deleteShiftAction` ใน `app/actions/shiftActions.ts` บล็อกด้วย `SHIFT_IS_LOCKED` สำหรับเวรที่ไม่ใช่เวร Refer
+
+### แนวทางแก้ (Phase 18: Unified Retroactive Shift Edit & Delete)
+1. **`lib/dateUtils.ts`**:
+   - ปรับปรุง `isShiftLocked`: เวรในอดีตที่อยู่ภายใน Grace Period (`isDateWithinGracePeriod`: เดือนปัจจุบัน หรือ วันที่ 1–7 ของเดือนถัดไป) จะไม่ถูกล็อก
+   - เพิ่ม `isShiftEditable(shift, today)` และ `isShiftDeletable(shift, today)`
+2. **`lib/storage.ts`**:
+   - อัปเดต `canEditShift` ให้ใช้ `isShiftEditable`
+   - เพิ่ม `canDeleteShift` โดยใช้ `isShiftDeletable` (เวร `swapped_out`/`sold_out` ห้ามลบ ต้องใช้ Undo)
+   - ปรับ `saveShift` ส่งฟิลด์ `date` ไปยัง `updateShiftAction` และตรวจความถูกต้องหากมีการย้ายวันที่ไปยังอดีต
+   - ปรับ `deleteShift` รองรับการลบเวรใน Grace Period
+3. **`app/actions/shiftActions.ts`**:
+   - `updateShiftAction`: ปลดล็อกเวรใน Grace Period, เพิ่มพารามิเตอร์ `date?: string` และตรวจไม่ให้ย้ายไปยังวันที่นอก Grace Period
+   - `deleteShiftAction`: ปลดล็อกเวรใน Grace Period
+4. **`ModalEditShift.tsx` & UI Components**:
+   - แสดง Retroactive Warning Alert Banner เมื่อแก้ไขเวรย้อนหลัง
+   - เพิ่ม `min={getEarliestGracePeriodDate()}` บน Date Picker
+   - อัปเดตปุ่มลบเวรใน `ActivityCard.tsx` ให้เชื่อมโยงกับ `canDeleteShift`
+5. **Unit Tests**:
+   - เพิ่มการทดสอบครอบคลุมใน `lib/__tests__/shiftRetroactive.test.ts` และอัปเดต `lib/__tests__/referRetroactive.test.ts`
+
+### Acceptance criteria
+- [x] เวรปกติ (เช้า, บ่าย, ดึก ทั้งหมวดดำและแดง) ในเดือนปัจจุบัน สามารถกดแก้ไขและบันทึกย้อนหลังได้สำเร็จ
+- [x] เวรปกติในเดือนก่อนหน้า สามารถแก้ไขและลบได้หากวันปัจจุบันอยู่ในวันที่ 1–7 ของเดือน
+- [x] เวรที่อยู่นอก Grace Period (เช่น 2 เดือนก่อน หรือเดือนก่อนหน้าหลังจากวันที่ 7) จะถูกล็อกถาวร ไม่สามารถแก้ไขหรือลบได้
+- [x] `ModalEditShift` แสดงแถบเตือนสีส้มเมื่อแก้ไขเวรย้อนหลัง และจำกัด `min` วันที่ไม่ให้เลือกเกิน Grace Period
+- [x] เวรที่ถูกแลกออกไป (`swapped_out`) หรือขายออกไป (`sold_out`) ยังคงถูกห้ามลบโดยตรง (ต้องใช้ Undo)
+- [x] Unit tests ทั้งหมดผ่าน 100%
 
 ---
 

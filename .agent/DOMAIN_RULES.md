@@ -96,12 +96,16 @@
    - **Allowed**: อนุญาตให้แลกเวรประเภทเดียวกันในวันเดียวกันได้ เฉพาะกรณีที่เกิดการแปลงสถานะระหว่าง **เวรดำ (`black`) กับ เวรแดง (`red`)** เท่านั้น (เช่น เช้าดำ $\leftrightarrow$ เช้าแดง)
    - **Blocked**: การแลกเวรประเภทเดียวกันในวันเดียวกันที่เป็นหมวดเดียวกัน (เช่น เช้าดำ $\leftrightarrow$ เช้าดำ) จะถูกปฏิเสธ (`DUPLICATE_SHIFT`)
 7. **Duplicate Check**: พยาบาลคนเดิมไม่สามารถถือครองเวรประเภทเดียวกันในหมวดเดียวกันซ้ำซ้อนในวันเดียวกันได้
-8. **Unified Retroactive Shift Swap & Undo Swap (การผ่อนปรนแลกเวรและกู้คืนเวรย้อนหลัง - Phase 16)**:
-   - อนุญาตให้ทำรายการ **แลกเวร (Shift Swap)** และ **ยกเลิกการแลก/กู้คืนเวร (Undo Swap)** ย้อนหลังสำหรับ **เวรปกติทุกประเภท** (เช้า, บ่าย, ดึก ทั้งเวรดำและเวร OT) ภายใต้ Grace Period เดียวกัน:
-     - **Rule 1 (Current Month)**: ทั้งเวรเดิมและเวรใหม่ที่ได้รับมาอยู่ในเดือนเดียวกันกับเดือนปัจจุบัน (`YYYY-MM`)
-     - **Rule 2 (Previous Month Grace Window)**: หากวันปัจจุบันอยู่ในช่วงวันที่ 1–7 ของเดือน อนุญาตให้แลกข้ามไปยังเดือนก่อนหน้า (`YYYY-MM`) ได้
-     - **Rule 3 (Expired Months)**: นอกเหนือจากกรอบเวลาข้างต้น จะถูกล็อกตามกฎ Immutability เดิม
-   - **Security & Data Invariant**: การแก้ไขเวรทั่วไป (Edit) และการลบเวร (Delete) ในอดีตยังคงถูกล็อกตามเดิม เพื่อรักษาความถูกต้องของประวัติเวร
+8. **Unified Retroactive Shift Operations (การผ่อนปรนทำรายการเวรย้อนหลัง - Phase 16 & Phase 18)**:
+   - อนุญาตให้ทำรายการ **แลกเวร (Shift Swap)**, **ยกเลิกการแลก/กู้คืนเวร (Undo Swap)**, **แก้ไขเวร (Edit Shift)**, และ **ลบเวร (Delete Shift)** ย้อนหลังสำหรับ **เวรทุกประเภท** (เช้า, บ่าย, ดึก ทั้งเวรดำ, เวร OT, และเวร Refer) ภายใต้ Grace Period เดียวกัน:
+     - **Rule 1 (Current Month)**: เวรที่มีวันที่อยู่ในเดือนเดียวกันกับเดือนปัจจุบัน (`YYYY-MM`)
+     - **Rule 2 (Previous Month Grace Window)**: หากวันปัจจุบันอยู่ในช่วงวันที่ 1–7 ของเดือน อนุญาตให้ทำรายการย้อนหลังไปยังเดือนก่อนหน้า (`YYYY-MM`) ได้
+     - **Rule 3 (Expired Months)**: นอกเหนือจากกรอบเวลาข้างต้น จะถูกล็อกตามกฎ Immutability เดิม (`SHIFT_IS_LOCKED`) ทั้งฝั่ง Client และ Server
+   - **Invariants & Safety**:
+     - เวรที่อยู่ในสถานะ `swapped_out` หรือ `sold_out` ห้ามลบโดยตรงเด็ดขาด ต้องใช้คำสั่งยกเลิก/กู้คืนเวร (Undo Swap / Undo Sale)
+     - การแก้ไขวันหรือเวลาเวรย้อนหลัง ต้องตรวจสอบไม่ให้ชนเวรซ้ำในวันเดียวกัน (`DUPLICATE_SHIFT`) และไม่ชนเวลานัดหมายบริการลูกค้า (`findConflictingServices`)
+     - วันที่ปลายทางใหม่ (หากมีการเปลี่ยนวันขึ้นเวร) ต้องอยู่ภายในกรอบ Grace Period เดียวกัน ป้องกันการย้ายเวรไปวันที่หมดอายุย้อนหลัง
+     - หน้าจอแก้ไขเวร (`ModalEditShift`) แสดงแถบเตือนสีส้ม (Warning Alert Banner) เมื่อตรวจพบการทำรายการย้อนหลัง
 
 
 ### 2.4 Refer & OT Shift Transfer Rules (กฎการยกเวรและการส่งต่อเวร Refer & OT - Phase 11)
@@ -137,7 +141,7 @@
      - **Rule 3 (Expired Months & Non-Refer Shifts)**: หากเลยช่วงผ่อนปรน หรือเป็นเวรหมวดอื่น (เช่น เวรดำ, เวร OT) ยังคงถูกล็อกตามกฎ Immutability เดิม
 
 ### 2.5 Locking, Deletion & Rollback Rules (Human-in-the-Loop Operational Decision)
-1. **Immutability (Locked)**: เวรใดๆ ที่มี `shiftDate < CURRENT_DATE` จะถูกล็อกอัตโนมัติ (`isLocked: true`) ไม่สามารถแก้ไข หรือลบได้ เว้นแต่เป็นเวร Refer ที่อยู่ภายใต้ข้อกำหนด Grace Period (§2.4.7) หรือเป็นการแลกเวร/กู้คืนเวรภายใต้ Unified Grace Period (§2.3.8)
+1. **Immutability (Locked)**: เวรใดๆ ที่มี `shiftDate < CURRENT_DATE` จะถูกล็อกอัตโนมัติ (`isLocked: true`) ไม่สามารถแก้ไข หรือลบได้ เว้นแต่เป็นเวรที่อยู่ภายใต้ข้อกำหนด Grace Period (§2.3.8)
 2. **Deletion Restriction on Swapped & Sold Shifts**:
    - เวรที่อยู่ในสถานะ `swapped_out`, `sold_out`, เป็น `parentShiftId` หรือมีประวัติอ้างอิงใน `SwapTrailNode` **ห้ามลบเด็ดขาด (No Hard Delete)**
    - หากต้องการยกเลิก ต้องใช้คำสั่ง Rollback (Undo Swap / Undo Sale) เท่านั้น เพื่อป้องกันปัญหา `PARENT_SHIFT_NOT_FOUND`

@@ -11,6 +11,7 @@ import {
   Ambulance,
   Check,
   AlertCircle,
+  AlertTriangle,
   ShieldCheck,
   Flame,
   FileText,
@@ -21,6 +22,7 @@ import {
   ShiftType,
 } from "../../types/vendee";
 import { saveShift } from "../../lib/storage";
+import { isShiftInPast, getEarliestGracePeriodDate } from "../../lib/dateUtils";
 
 interface ModalEditShiftProps {
   shift: ShiftRecord | null;
@@ -54,6 +56,10 @@ export default function ModalEditShift({
   }, [shift, isOpen]);
 
   if (!isOpen || !shift) return null;
+
+  const isRetroactiveEdit =
+    isShiftInPast(shift.date || "") || (Boolean(shiftDate) && isShiftInPast(shiftDate));
+  const minShiftDate = getEarliestGracePeriodDate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +125,16 @@ export default function ModalEditShift({
           </div>
         )}
 
+        {/* Retroactive Warning Alert Banner */}
+        {isRetroactiveEdit && (
+          <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200 border border-amber-200 dark:border-amber-900/60">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <span>
+              คุณกำลังแก้ไขเวรย้อนหลัง โปรดตรวจสอบวันที่ ประเภทเวร และหมวดหมู่ให้ถูกต้อง
+            </span>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Shift Date */}
@@ -132,6 +148,7 @@ export default function ModalEditShift({
             <input
               type="date"
               required
+              min={minShiftDate}
               value={shiftDate}
               onChange={(e) => setShiftDate(e.target.value)}
               className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2.5 text-sm text-text-main outline-none focus:border-secondary focus:ring-2 focus:ring-secondary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"

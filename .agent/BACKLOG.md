@@ -376,8 +376,29 @@
 
 ---
 
+### Phase 18: Unified Retroactive Shift Edit & Delete (เปิดสิทธิ์แก้ไขและลบเวรปกติย้อนหลังภายใต้ Grace Period — ISSUE-4)
+- [x] **18.1 Core Domain & Grace Period Utilities (`lib/dateUtils.ts`, `.agent/DOMAIN_RULES.md`)**
+  - ปรับปรุง `isShiftLocked`: เวรในอดีตที่อยู่ภายใน Grace Period (`isDateWithinGracePeriod`: เดือนปัจจุบัน หรือ วันที่ 1–7 ของเดือนถัดไป) จะไม่ถูกล็อก
+  - เพิ่มฟังก์ชัน `isShiftEditable` และ `isShiftDeletable` ตรวจสอบสถานะ active และ Grace Period
+  - อัปเดตเอกสาร `.agent/DOMAIN_RULES.md` §2.3.8 และ §2.5 บันทึกกติกาการแก้ไข/ลบเวรย้อนหลัง
+- [x] **18.2 Client Storage & Deletion Rules (`lib/storage.ts`)**
+  - อัปเดต `canEditShift` และเพิ่ม `canDeleteShift` เชื่อมโยงกับ `isShiftEditable` และ `isShiftDeletable`
+  - ปรับ `saveShift` ให้ตรวจความถูกต้องของวันที่ปลายทาง (หากมีการเปลี่ยนวันขึ้นเวร) และส่งฟิลด์ `date` ไปยัง `updateShiftAction`
+  - ปรับ `deleteShift` ให้อนุญาตลบเวรในอดีตที่อยู่ใน Grace Period
+- [x] **18.3 Server Actions Enforcement (`app/actions/shiftActions.ts`)**
+  - `updateShiftAction`: อนุญาตแก้ไขเวรใน Grace Period, เพิ่มพารามิเตอร์ `date?: string` และตรวจไม่ให้ย้ายไปยังวันที่นอก Grace Period
+  - `deleteShiftAction`: อนุญาตลบเวรใน Grace Period
+- [x] **18.4 UI / UX & Modal Integration (`ModalEditShift.tsx`, `ActivityCard.tsx`)**
+  - `ModalEditShift.tsx`: แสดงกล่องเตือนสีส้ม (Retroactive Warning Alert Banner) เมื่อแก้ไขย้อนหลัง, เพิ่ม `min={getEarliestGracePeriodDate()}` บน Date Picker
+  - `ActivityCard.tsx`: ปรับปุ่มลบเวรให้ disabled พร้อม tooltip เมื่ออยู่นอก Grace Period ผ่าน `canDeleteShift`
+- [x] **18.5 Unit Tests & Verification (`lib/__tests__/shiftRetroactive.test.ts`, `lib/__tests__/referRetroactive.test.ts`)**
+  - เพิ่มชุดทดสอบ Unit Test ครอบคลุมการแก้ไขและลบเวรย้อนหลังใน Grace Period (เดือนปัจจุบัน, วันที่ 1–7 ของเดือนถัดไป, เกินกำหนด, สลับสถานะ)
+  - อัปเดตชุดทดสอบ `referRetroactive.test.ts` ให้สอดคล้องกับ Unified Grace Period
+
+---
+
 ## 📌 Task Status Summary
-- **Total Tasks**: 75
-- **Completed**: 64
+- **Total Tasks**: 80
+- **Completed**: 69
 - **In Progress**: 0
 - **Pending**: 11

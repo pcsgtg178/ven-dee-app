@@ -243,6 +243,7 @@ export async function createShiftAction(data: {
 export async function updateShiftAction(
   id: string,
   data: {
+    date?: string;
     shiftType?: ShiftType;
     category?: ShiftCategory;
     note?: string;
@@ -260,11 +261,9 @@ export async function updateShiftAction(
       .single();
 
     if (shiftRow && (shiftRow.is_locked || isShiftInPast(shiftRow.shift_date))) {
-      const isReferGrace =
-        isReferShift({ shiftType: shiftRow.shift_type, category: shiftRow.category }) &&
-        isReferShiftWithinGracePeriod(shiftRow.shift_date);
+      const isWithinGrace = isDateWithinGracePeriod(shiftRow.shift_date);
 
-      if (!isReferGrace) {
+      if (shiftRow.is_locked || !isWithinGrace) {
         return {
           success: false,
           error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถแก้ไขเวรในอดีตที่ถูกล็อกแล้วได้" },
@@ -272,7 +271,18 @@ export async function updateShiftAction(
       }
     }
 
+    // Check if new destination date is in the past outside grace period
+    if (data.date && data.date !== shiftRow?.shift_date) {
+      if (isShiftInPast(data.date) && !isDateWithinGracePeriod(data.date)) {
+        return {
+          success: false,
+          error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถย้ายเวรไปยังวันที่ในอดีตที่อยู่นอกช่วงเวลาผ่อนผันได้" },
+        };
+      }
+    }
+
     const updatePayload: Record<string, any> = {};
+    if (data.date !== undefined) updatePayload.shift_date = data.date;
     if (data.shiftType !== undefined) updatePayload.shift_type = data.shiftType;
     if (data.category !== undefined) updatePayload.category = data.category;
     if (data.note !== undefined) updatePayload.note = data.note;
@@ -851,11 +861,9 @@ export async function deleteShiftAction(id: string): Promise<ActionResult<{ dele
     }
 
     if (shift.is_locked || isShiftInPast(shift.shift_date)) {
-      const isReferGrace =
-        isReferShift({ shiftType: shift.shift_type, category: shift.category }) &&
-        isReferShiftWithinGracePeriod(shift.shift_date);
+      const isWithinGrace = isDateWithinGracePeriod(shift.shift_date);
 
-      if (!isReferGrace) {
+      if (shift.is_locked || !isWithinGrace) {
         return {
           success: false,
           error: { code: "SHIFT_IS_LOCKED", message: "ไม่สามารถลบเวรในอดีตที่ถูกล็อกแล้วได้" },

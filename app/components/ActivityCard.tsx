@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import {
   canEditShift,
+  canDeleteShift,
   canEditService,
   canDeleteService,
   canEditClinicLog,
@@ -205,6 +206,7 @@ export default function ActivityCard({
       shift.shiftType === "r2" ||
       shift.category === "green";
     const canEdit = canEditShift(shift);
+    const canDelete = canDeleteShift(shift);
     const code = SHIFT_CODE_MAP[shift.shiftType] || shift.shiftType;
 
     const ShiftIcon =
@@ -633,9 +635,20 @@ export default function ActivityCard({
             {!isGivenAway && (
               <button
                 type="button"
-                onClick={onDelete}
-                className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red transition-colors dark:hover:bg-zinc-800 cursor-pointer"
-                title="ลบ"
+                disabled={!canDelete}
+                onClick={() => {
+                  if (canDelete) onDelete();
+                }}
+                className={`rounded-lg p-1.5 transition-colors ${
+                  canDelete
+                    ? "text-text-muted hover:bg-rose-50 hover:text-shift-red dark:hover:bg-zinc-800 cursor-pointer"
+                    : "text-slate-300 dark:text-zinc-600 opacity-40 cursor-not-allowed"
+                }`}
+                title={
+                  canDelete
+                    ? "ลบ"
+                    : "ไม่สามารถลบได้เนื่องจากเวรอยู่นอกช่วงเวลาผ่อนผัน (Grace Period)"
+                }
               >
                 <Trash2 className="h-4 w-4" />
               </button>

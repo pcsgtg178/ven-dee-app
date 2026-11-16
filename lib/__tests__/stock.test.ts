@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { packsToUnits, formatOnHand, isLowStock, isNegativeStock, estimateFifoCost, isPackSizeUnset } from "../stock.ts";
+import { packsToUnits, formatOnHand, isLowStock, isNegativeStock, estimateFifoCost, isPackSizeUnset, sortStockMovements, resolveReceiveOccurredAt } from "../stock.ts";
 import { isWithinGracePeriod, canEditMedicationUsage } from "../dateUtils.ts";
 import type { StockLayer } from "../../types/vendee.ts";
 
@@ -99,4 +99,40 @@ test("isPackSizeUnset flags 1 pack = 1 unit only when purchase unit differs from
   assert.equal(isPackSizeUnset({ packSize: 200, unit: "ยูนิต", packUnit: "กล่อง" }), false);
   // 1 เข็ม = 1 เข็ม -> valid same-unit setup
   assert.equal(isPackSizeUnset({ packSize: 1, unit: "เข็ม", packUnit: "เข็ม" }), false);
+});
+
+test("sortStockMovements orders chronologically (desc default, asc optional) with createdAt and id tie-breakers", () => {
+  const input = [
+    { id: "m-old", occurredAt: "2026-11-10T03:00:00Z", createdAt: "2026-11-15T08:00:00Z" },
+    { id: "m-same-1", occurredAt: "2026-11-16T02:00:00Z", createdAt: "2026-11-16T11:46:00Z" },
+    { id: "m-same-2", occurredAt: "2026-11-16T02:00:00Z", createdAt: "2026-11-16T12:03:00Z" },
+    { id: "m-new", occurredAt: "2026-11-16T12:35:00Z", createdAt: "2026-11-16T12:35:00Z" },
+  ];
+  const originalOrder = input.map((i) => i.id);
+
+  const desc = sortStockMovements(input, "desc");
+  assert.deepEqual(
+    desc.map((i) => i.id),
+    ["m-new", "m-same-2", "m-same-1", "m-old"]
+  );
+
+  const asc = sortStockMovements(input, "asc");
+  assert.deepEqual(
+    asc.map((i) => i.id),
+    ["m-old", "m-same-1", "m-same-2", "m-new"]
+  );
+
+  // Does not mutate input
+  assert.deepEqual(
+    input.map((i) => i.id),
+    originalOrder
+  );
+});
+
+test("resolveReceiveOccurredAt uses real timestamp for today (Bangkok) and 09:00+07:00 for backdated dates", () => {
+  // 2026-11-16 19:35:00+07:00 -> 2026-11-16T12:35:00.000Z
+  const now = new Date("2026-11-16T12:35:00.000Z");
+  assert.equal(resolveReceiveOccurredAt("2026-11-16", now), "2026-11-16T12:35:00.000Z");
+  assert.equal(resolveReceiveOccurredAt("", now), "2026-11-16T12:35:00.000Z");
+  assert.equal(resolveReceiveOccurredAt("2026-11-15", now), "2026-11-15T09:00:00+07:00");
 });

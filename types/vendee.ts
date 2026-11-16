@@ -193,6 +193,15 @@ export interface StockLayer {
   createdAt?: string;
 }
 
+export interface StockMovementServiceSummary {
+  id: string;
+  customerId: string | null;
+  customerName: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  status: "upcoming" | "completed" | "cancelled";
+}
+
 export interface StockMovement {
   id: string;
   medicationId: string;
@@ -205,6 +214,7 @@ export interface StockMovement {
   supplier?: string | null;
   reason?: StockIssueReason | null;
   serviceId?: string | null;
+  service?: StockMovementServiceSummary | null;
   reversesMovementId?: string | null;
   reversed: boolean;
   occurredAt: string;

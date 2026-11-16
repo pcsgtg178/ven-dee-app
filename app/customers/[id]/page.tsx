@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import moment from "moment";
 import "moment/locale/th";
@@ -38,16 +38,57 @@ import {
   deleteService,
   subscribeToStorage,
   syncCustomersFromApi,
+  syncAllDataFromApi,
+  isDbSyncDisabled,
 } from "../../../lib/storage";
 
 export default function CustomerDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
+          <AppBar title="ข้อมูลลูกค้า" />
+          <main className="mx-auto flex w-full max-w-lg flex-1 items-center justify-center p-6 text-xs text-text-muted">
+            กำลังโหลดข้อมูลลูกค้า...
+          </main>
+        </div>
+      }
+    >
+      <CustomerDetailContent />
+    </Suspense>
+  );
+}
+
+function CustomerDetailContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const customerId = params?.id as string;
+  const tabParam = searchParams.get("tab");
+  const targetServiceId = searchParams.get("serviceId");
 
   const [customer, setCustomer] = useState<Customer | undefined>(undefined);
   const [services, setServices] = useState<CustomerServiceRecord[]>([]);
-  const [activeTab, setActiveTab] = useState<"upcoming" | "history">("upcoming");
+  const [tabOverride, setTabOverride] = useState<{
+    key: string;
+    tab: "upcoming" | "history";
+  } | null>(null);
+  const [isLoadingSync, setIsLoadingSync] = useState(() => !isDbSyncDisabled());
+  const scrolledServiceRef = useRef<string | null>(null);
+
+  const navKey = `${customerId}:${targetServiceId || ""}:${tabParam || ""}`;
+  const targetService = useMemo(
+    () => (targetServiceId ? services.find((s) => s.id === targetServiceId) : undefined),
+    [services, targetServiceId]
+  );
+  const autoTab: "upcoming" | "history" = targetService
+    ? targetService.status === "upcoming"
+      ? "upcoming"
+      : "history"
+    : tabParam === "history"
+      ? "history"
+      : "upcoming";
+  const activeTab = tabOverride?.key === navKey ? tabOverride.tab : autoTab;
 
   // Modals
   const [openAddModal, setOpenAddModal] = useState(false);
@@ -61,24 +102,16 @@ export default function CustomerDetailPage() {
     setOpenEditServiceModal(true);
   };
 
-  // Load customer detail from local storage or sync if missing
-  const loadLocalData = useCallback(async () => {
+  // Load customer detail from local storage immediately
+  const loadLocalData = useCallback(() => {
     if (!customerId) return;
-    let localCust = getCustomerById(customerId);
-    if (!localCust) {
-      try {
-        const res = await syncCustomersFromApi();
-        if (res.customers) {
-          localCust = res.customers.find((c) => c.id === customerId);
-        }
-      } catch {}
-    }
+    const localCust = getCustomerById(customerId);
     if (localCust) {
       setCustomer(localCust);
-      const allServices = getServices();
-      const customerServices = allServices.filter((s) => s.customerId === customerId);
-      setServices(customerServices);
     }
+    const allServices = getServices();
+    const customerServices = allServices.filter((s) => s.customerId === customerId);
+    setServices(customerServices);
   }, [customerId]);
 
   const loadData = useCallback(() => {
@@ -86,10 +119,29 @@ export default function CustomerDetailPage() {
   }, [loadLocalData]);
 
   useEffect(() => {
-    loadLocalData();
     const unsubscribe = subscribeToStorage(loadLocalData);
-    return () => unsubscribe();
-  }, [loadLocalData]);
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (!cancelled) loadLocalData();
+    });
+
+    if (!isDbSyncDisabled() && customerId) {
+      syncAllDataFromApi()
+        .catch(() => syncCustomersFromApi().catch(() => {}))
+        .finally(() => {
+          if (!cancelled) {
+            loadLocalData();
+            setIsLoadingSync(false);
+          }
+        });
+    }
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [customerId, loadLocalData]);
 
   // Upcoming appointments (status === 'upcoming' or future date)
   const upcomingServices = useMemo(() => {
@@ -102,16 +154,36 @@ export default function CustomerDetailPage() {
       });
   }, [services]);
 
-  // History services (status === 'completed' or sorted latest first)
+  // History services (status === 'completed' or targeted cancelled service from deep link)
   const historyServices = useMemo(() => {
     return services
-      .filter((s) => s.status === "completed")
+      .filter(
+        (s) =>
+          s.status === "completed" ||
+          (s.status === "cancelled" && Boolean(targetServiceId) && s.id === targetServiceId)
+      )
       .sort((a, b) => {
         const dateComp = b.date.localeCompare(a.date);
         if (dateComp !== 0) return dateComp;
         return b.time.localeCompare(a.time);
       });
-  }, [services]);
+  }, [services, targetServiceId]);
+
+  // Smooth scroll to the highlighted service card once visible in active tab
+  useEffect(() => {
+    if (!targetServiceId || scrolledServiceRef.current === targetServiceId) return;
+    const visibleList = activeTab === "upcoming" ? upcomingServices : historyServices;
+    if (!visibleList.some((s) => s.id === targetServiceId)) return;
+
+    const raf = window.requestAnimationFrame(() => {
+      const el = document.getElementById(`service-${targetServiceId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        scrolledServiceRef.current = targetServiceId;
+      }
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [targetServiceId, activeTab, upcomingServices, historyServices]);
 
   const handleDeleteService = async (serviceId: string) => {
     try {
@@ -138,6 +210,17 @@ export default function CustomerDetailPage() {
   };
 
   if (!customer) {
+    if (isLoadingSync) {
+      return (
+        <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
+          <AppBar title="ข้อมูลลูกค้า" />
+          <main className="mx-auto flex w-full max-w-lg flex-1 items-center justify-center p-6 text-xs text-text-muted">
+            กำลังโหลดข้อมูลลูกค้า...
+          </main>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
         <AppBar title="ข้อมูลลูกค้า" />
@@ -232,7 +315,7 @@ export default function CustomerDetailPage() {
         <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-surface-subtle p-1 dark:bg-zinc-800">
           <button
             type="button"
-            onClick={() => setActiveTab("upcoming")}
+            onClick={() => setTabOverride({ key: navKey, tab: "upcoming" })}
             className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all ${
               activeTab === "upcoming"
                 ? "bg-card-bg text-primary shadow-xs dark:bg-zinc-700 dark:text-primary-light"
@@ -244,7 +327,7 @@ export default function CustomerDetailPage() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("history")}
+            onClick={() => setTabOverride({ key: navKey, tab: "history" })}
             className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all ${
               activeTab === "history"
                 ? "bg-card-bg text-primary shadow-xs dark:bg-zinc-700 dark:text-primary-light"
@@ -282,6 +365,7 @@ export default function CustomerDetailPage() {
                 <ServiceDetailCard
                   key={srv.id}
                   service={srv}
+                  isHighlighted={srv.id === targetServiceId}
                   onToggleStatus={() => handleToggleStatus(srv)}
                   onDelete={() => handleDeleteService(srv.id)}
                   onEdit={() => handleEditService(srv)}
@@ -309,6 +393,7 @@ export default function CustomerDetailPage() {
                 <ServiceDetailCard
                   key={srv.id}
                   service={srv}
+                  isHighlighted={srv.id === targetServiceId}
                   onToggleStatus={() => handleToggleStatus(srv)}
                   onDelete={() => handleDeleteService(srv.id)}
                   onEdit={() => handleEditService(srv)}
@@ -378,6 +463,7 @@ export default function CustomerDetailPage() {
    ========================================================================== */
 interface ServiceDetailCardProps {
   service: CustomerServiceRecord;
+  isHighlighted?: boolean;
   onToggleStatus: () => void;
   onDelete: () => void;
   onEdit?: () => void;
@@ -385,24 +471,30 @@ interface ServiceDetailCardProps {
 
 function ServiceDetailCard({
   service,
+  isHighlighted = false,
   onToggleStatus,
   onDelete,
   onEdit,
 }: ServiceDetailCardProps) {
   const isCompleted = service.status === "completed";
+  const isCancelled = service.status === "cancelled";
   const canEdit = canEditService(service);
   const canDelete = canDeleteService(service);
 
   return (
     <div
+      id={`service-${service.id}`}
+      data-highlighted={isHighlighted ? "true" : undefined}
       className={`relative overflow-hidden rounded-2xl border p-4 shadow-xs transition-all ${
-        isCompleted
-          ? "border-primary/40 bg-primary-light/15 dark:border-emerald-900/50 dark:bg-emerald-950/20"
-          : "border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900"
+        isHighlighted
+          ? "border-sky-500 bg-sky-50/50 ring-2 ring-sky-400/70 dark:border-sky-500 dark:bg-sky-950/25 dark:ring-sky-500/60"
+          : isCompleted
+            ? "border-primary/40 bg-primary-light/15 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+            : "border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900"
       }`}
     >
-      {/* Color stripe left: Primary health green */}
-      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary" />
+      {/* Color stripe left: Primary health green (sky highlight when targeted) */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isHighlighted ? "bg-sky-500" : isCancelled ? "bg-slate-400" : "bg-primary"}`} />
 
       <div className="flex items-start justify-between gap-2 pl-2">
         <div className="space-y-2 flex-1">
@@ -412,9 +504,14 @@ function ServiceDetailCard({
               {moment(service.date).locale("th").format("ddd D MMMM YYYY")}
             </span>
             <span className="flex items-center gap-1 rounded-md bg-surface-subtle px-2 py-0.5 text-xs font-semibold text-text-main dark:bg-zinc-800 dark:text-zinc-200">
-              <Clock className="h-3 w-3 text-primary" />
+              <Clock className="h-3 w-3 text-primary" aria-hidden="true" />
               {service.time} น.
             </span>
+            {isHighlighted && (
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700 dark:bg-sky-900/60 dark:text-sky-300">
+                รายการที่เลือก
+              </span>
+            )}
             <button
               type="button"
               disabled={!canEdit}
@@ -424,20 +521,24 @@ function ServiceDetailCard({
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold transition-colors ${
                 canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-70"
               } ${
-                isCompleted
-                  ? "bg-primary-light text-primary-dark dark:bg-emerald-950/80 dark:text-emerald-300"
-                  : "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+                isCancelled
+                  ? "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400"
+                  : isCompleted
+                    ? "bg-primary-light text-primary-dark dark:bg-emerald-950/80 dark:text-emerald-300"
+                    : "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
               }`}
               title={
                 canEdit
                   ? isCompleted
                     ? "เปลี่ยนกลับเป็นรอดำเนินการ"
                     : "บันทึกเป็นบริการเสร็จสิ้น"
-                  : "ไม่สามารถเปลี่ยนสถานะได้เนื่องจากเกินระยะเวลาย้อนหลัง 1 เดือน"
+                  : isCancelled
+                    ? "บริการนี้ถูกยกเลิกแล้ว"
+                    : "ไม่สามารถเปลี่ยนสถานะได้เนื่องจากเกินระยะเวลาย้อนหลัง 1 เดือน"
               }
             >
-              <CheckCircle2 className="h-3 w-3" />
-              {isCompleted ? "บริการเสร็จสิ้น" : "รอดำเนินการ"}
+              <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+              {isCancelled ? "ยกเลิกแล้ว" : isCompleted ? "บริการเสร็จสิ้น" : "รอดำเนินการ"}
             </button>
           </div>
 

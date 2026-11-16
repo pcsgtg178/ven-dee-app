@@ -6,6 +6,7 @@ import type {
   StockIssueReason,
   StockLayer,
   StockMovement,
+  StockMovementServiceSummary,
   StockMovementType,
   StockWarning,
 } from "../../types/vendee";
@@ -35,6 +36,20 @@ function parseRpcError(err: { message?: string; code?: string }): { code: string
 }
 
 function mapRowToMovement(row: any): StockMovement {
+  const rawSvc = Array.isArray(row.customer_services)
+    ? row.customer_services[0]
+    : row.customer_services;
+  const service: StockMovementServiceSummary | null = rawSvc
+    ? {
+        id: rawSvc.id,
+        customerId: rawSvc.customer_id || null,
+        customerName: rawSvc.customer_name || "",
+        date: rawSvc.service_date || "",
+        time: (rawSvc.service_time || "09:00").slice(0, 5),
+        status: (rawSvc.status || "upcoming") as "upcoming" | "completed" | "cancelled",
+      }
+    : null;
+
   return {
     id: row.id,
     medicationId: row.medication_id,
@@ -50,6 +65,7 @@ function mapRowToMovement(row: any): StockMovement {
     supplier: row.supplier || null,
     reason: (row.reason as StockIssueReason) || null,
     serviceId: row.service_id || null,
+    service,
     reversesMovementId: row.reverses_movement_id || null,
     reversed: Boolean(row.reversed),
     occurredAt: row.occurred_at,
@@ -212,15 +228,16 @@ export async function reverseStockMovementAction(
 
 export async function getStockMovementsAction(
   medId?: string,
-  range?: { from?: string; to?: string; limit?: number }
+  range?: { from?: string; to?: string; limit?: number; ascending?: boolean }
 ): Promise<ActionResult<StockMovement[]>> {
   try {
     const supabase = await createClient();
+    const ascending = Boolean(range?.ascending);
     let query = supabase
       .from("stock_movements")
-      .select("*")
-      .order("occurred_at", { ascending: false })
-      .order("created_at", { ascending: false });
+      .select("*, customer_services(id, customer_id, customer_name, service_date, service_time, status)")
+      .order("occurred_at", { ascending })
+      .order("created_at", { ascending });
 
     if (medId) {
       query = query.eq("medication_id", medId);
@@ -231,7 +248,7 @@ export async function getStockMovementsAction(
     if (range?.to) {
       query = query.lte("occurred_at", range.to);
     }
-    query = query.limit(range?.limit ?? 200);
+    query = query.limit(range?.limit ?? 500);
 
     const { data, error } = await query;
     if (error) {

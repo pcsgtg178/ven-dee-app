@@ -1,4 +1,5 @@
-import type { Medications, StockLayer } from "../types/vendee";
+import type { Medications, StockLayer, StockMovement } from "../types/vendee";
+import { getBangkokDateParts } from "./dateUtils.ts";
 
 /**
  * Converts pack count to usage units (e.g. 2 bottles × 200u = 400u).
@@ -113,4 +114,39 @@ export function estimateFifoCost(
     unitCostSatang: Math.round(totalCost / needed),
     isEstimated,
   };
+}
+
+export type StockHistorySortOrder = "desc" | "asc";
+
+/**
+ * Sorts stock movements chronologically by occurredAt, breaking ties by createdAt then id.
+ */
+export function sortStockMovements<
+  T extends Pick<StockMovement, "id" | "occurredAt" | "createdAt">
+>(movements: T[], order: StockHistorySortOrder = "desc"): T[] {
+  const dir = order === "asc" ? 1 : -1;
+  return [...movements].sort((a, b) => {
+    const occA = Date.parse(a.occurredAt || "") || 0;
+    const occB = Date.parse(b.occurredAt || "") || 0;
+    if (occA !== occB) return (occA - occB) * dir;
+
+    const crtA = Date.parse(a.createdAt || "") || 0;
+    const crtB = Date.parse(b.createdAt || "") || 0;
+    if (crtA !== crtB) return (crtA - crtB) * dir;
+
+    return String(a.id).localeCompare(String(b.id)) * dir;
+  });
+}
+
+/**
+ * Resolves the occurredAt timestamp when receiving stock.
+ * If the chosen date is today (Asia/Bangkok) or empty, uses the real current timestamp
+ * so same-day movements stay in true chronological order; backdated entries default to 09:00 Bangkok time.
+ */
+export function resolveReceiveOccurredAt(dateStr?: string, now: Date = new Date()): string {
+  const todayStr = getBangkokDateParts(now).dateStr;
+  if (!dateStr || dateStr === todayStr) {
+    return now.toISOString();
+  }
+  return `${dateStr}T09:00:00+07:00`;
 }

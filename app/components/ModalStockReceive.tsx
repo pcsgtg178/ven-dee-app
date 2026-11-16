@@ -5,7 +5,7 @@ import { X, PackagePlus } from "lucide-react";
 import type { Medications } from "../../types/vendee";
 import { receiveStockAction } from "../actions/stockActions";
 import { unwrap } from "../../lib/actionHelper";
-import { packsToUnits, isPackSizeUnset } from "../../lib/stock";
+import { packsToUnits, isPackSizeUnset, resolveReceiveOccurredAt } from "../../lib/stock";
 import { getTodayDateStringBangkok } from "../../lib/dateUtils";
 import { updateLocalMedicationStock } from "../../lib/storage";
 
@@ -67,7 +67,7 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
 
     setIsSubmitting(true);
     try {
-      const occurredAt = date ? `${date}T09:00:00+07:00` : new Date().toISOString();
+      const occurredAt = resolveReceiveOccurredAt(date);
       const res = unwrap(
         await receiveStockAction({
           medId: medication.id,

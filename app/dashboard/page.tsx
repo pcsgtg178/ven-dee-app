@@ -390,7 +390,7 @@ export default function DashboardPage() {
   }, [periodServices, medCostMap, selectedCategory]);
 
   return (
-    <div className="min-h-screen bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen bg-ds-bg text-ds-text">
       {/* App Bar */}
       <AppBar
         title="แดชบอร์ดสรุปรายได้"
@@ -401,15 +401,15 @@ export default function DashboardPage() {
               type="button"
               onClick={syncData}
               disabled={isSyncing}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-slate-100 hover:text-text-main dark:hover:bg-zinc-800 transition-colors disabled:opacity-60 cursor-pointer"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-ds-icon-secondary hover:bg-ds-surface-elevated hover:text-ds-text transition-colors disabled:opacity-60 cursor-pointer"
               title="รีเฟรชและซิงค์ข้อมูลล่าสุด"
               aria-label="รีเฟรชข้อมูล"
             >
-              <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-sky-600 dark:text-sky-400" : ""}`} />
+              <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-ds-primary" : ""}`} />
             </button>
             <Link
               href="/settings"
-              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-slate-100 hover:text-text-main dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-ds-icon-secondary hover:bg-ds-surface-elevated hover:text-ds-text transition-colors cursor-pointer"
               title="การตั้งค่า"
               aria-label="การตั้งค่า"
             >
@@ -421,14 +421,14 @@ export default function DashboardPage() {
 
       <main className="mx-auto max-w-lg px-4 pt-3 space-y-4">
         {/* Period Selector Tabs (รายเดือน / รายสัปดาห์ / รายวัน) */}
-        <div className="flex rounded-2xl bg-slate-200/80 p-1 dark:bg-zinc-800/80 shadow-2xs">
+        <div className="flex rounded-2xl bg-ds-surface-variant p-1 border border-ds-border/60">
           <button
             type="button"
             onClick={() => setPeriodType("month")}
             className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all cursor-pointer ${
               periodType === "month"
-                ? "bg-white text-primary shadow-xs dark:bg-zinc-900 dark:text-primary-light"
-                : "text-text-muted hover:text-text-main dark:text-zinc-400"
+                ? "bg-ds-surface text-ds-primary shadow-ds-card"
+                : "text-ds-text-secondary hover:text-ds-text"
             }`}
           >
             รายเดือน
@@ -438,8 +438,8 @@ export default function DashboardPage() {
             onClick={() => setPeriodType("week")}
             className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all cursor-pointer ${
               periodType === "week"
-                ? "bg-white text-primary shadow-xs dark:bg-zinc-900 dark:text-primary-light"
-                : "text-text-muted hover:text-text-main dark:text-zinc-400"
+                ? "bg-ds-surface text-ds-primary shadow-ds-card"
+                : "text-ds-text-secondary hover:text-ds-text"
             }`}
           >
             รายสัปดาห์
@@ -449,8 +449,8 @@ export default function DashboardPage() {
             onClick={() => setPeriodType("day")}
             className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all cursor-pointer ${
               periodType === "day"
-                ? "bg-white text-primary shadow-xs dark:bg-zinc-900 dark:text-primary-light"
-                : "text-text-muted hover:text-text-main dark:text-zinc-400"
+                ? "bg-ds-surface text-ds-primary shadow-ds-card"
+                : "text-ds-text-secondary hover:text-ds-text"
             }`}
           >
             รายวัน
@@ -458,25 +458,25 @@ export default function DashboardPage() {
         </div>
 
         {/* Date Period Navigation Controls */}
-        <div className="flex items-center justify-between rounded-2xl border border-surface-subtle bg-white px-3.5 py-2.5 shadow-2xs dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex items-center justify-between rounded-2xl border border-ds-border bg-ds-surface px-3.5 py-2.5 shadow-ds-card">
           <button
             type="button"
             onClick={handlePrevPeriod}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 active:scale-95 transition-all dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 cursor-pointer"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-ds-surface-elevated border border-ds-border text-ds-icon-primary hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer"
             aria-label="ช่วงก่อนหน้า"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
 
           <div className="text-center">
-            <div className="flex items-center justify-center gap-1.5 text-xs font-extrabold text-text-main dark:text-white">
-              <Calendar className="h-3.5 w-3.5 text-primary" />
+            <div className="flex items-center justify-center gap-1.5 text-xs font-extrabold text-ds-text">
+              <Calendar className="h-3.5 w-3.5 text-ds-icon-secondary" />
               <span>{periodLabel}</span>
             </div>
             <button
               type="button"
               onClick={handleResetCurrent}
-              className="text-[10px] font-semibold text-text-muted hover:text-primary dark:text-zinc-400 dark:hover:text-primary-light mt-0.5 cursor-pointer underline underline-offset-2"
+              className="text-[10px] font-semibold text-ds-text-secondary hover:text-ds-primary mt-0.5 cursor-pointer underline underline-offset-2"
             >
               กลับช่วงปัจจุบัน
             </button>
@@ -485,56 +485,66 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={handleNextPeriod}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 active:scale-95 transition-all dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 cursor-pointer"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-ds-surface-elevated border border-ds-border text-ds-icon-primary hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer"
             aria-label="ช่วงถัดไป"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Main Financial KPI Card (Gradient Glassmorphic Hero) */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-700 to-sky-800 p-5 text-white shadow-xl shadow-emerald-900/15">
+        {/* Main Financial KPI Card (Clean Minimal Neutral Card) */}
+        <div className="rounded-3xl border border-ds-border bg-ds-surface p-5 shadow-ds-card">
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur-md">
-              <TrendingUp className="h-3.5 w-3.5" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-ds-surface-variant px-3 py-1 text-xs font-bold text-ds-text-secondary border border-ds-border/60">
+              <TrendingUp className="h-3.5 w-3.5 text-ds-icon-secondary" />
               <span>กำไรสุทธิ</span>
             </span>
 
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-xs font-extrabold text-emerald-200 border border-emerald-300/30">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-extrabold ${
+                financialSummary.netProfit >= 0
+                  ? "bg-ds-success-container text-ds-success"
+                  : "bg-ds-error-container text-ds-error"
+              }`}
+            >
               <Percent className="h-3 w-3" />
               <span>{financialSummary.profitMargin.toFixed(1)}%</span>
             </span>
           </div>
 
           <div className="mt-3.5">
-            <div className="text-3xl sm:text-4xl font-black tracking-tight flex items-baseline gap-1">
+            <div
+              className={`text-3xl sm:text-4xl font-black tracking-tight flex items-baseline gap-1 ${
+                financialSummary.netProfit >= 0 ? "text-ds-success" : "text-ds-error"
+              }`}
+            >
               <span>฿</span>
               <span>{financialSummary.netProfit.toLocaleString()}</span>
             </div>
-            <p className="text-xs text-emerald-100/80 mt-1">
+            <p className="text-xs text-ds-text-secondary mt-1">
               คำนวณจากรายได้บริการ {financialSummary.totalCases} เคส หักต้นทุนยาและค่าใช้จ่าย
             </p>
           </div>
 
           {/* Revenue vs Cost Sub-Grid */}
-          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/15 pt-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-ds-divider pt-4">
             <div className="space-y-0.5">
-              <span className="text-[11px] font-medium text-emerald-100/70">
-                💰 รายได้รวม
+              <span className="text-[11px] font-medium text-ds-text-secondary">
+                รายได้รวม
               </span>
-              <div className="text-lg font-extrabold text-white">
+              <div className="text-lg font-extrabold text-ds-text">
                 ฿{financialSummary.totalRevenue.toLocaleString()}
               </div>
             </div>
 
             <div className="space-y-0.5">
-              <span className="text-[11px] font-medium text-emerald-100/70">
-                📦 ต้นทุนรวม
+              <span className="text-[11px] font-medium text-ds-text-secondary">
+                ต้นทุนรวม
               </span>
-              <div className="text-lg font-extrabold text-amber-200">
+              <div className="text-lg font-extrabold text-ds-text-secondary">
                 ฿{financialSummary.totalCost.toLocaleString()}
               </div>
-              <div className="text-[10px] text-emerald-100/70">
+              <div className="text-[10px] text-ds-text-tertiary">
                 ค่ายาและเวชภัณฑ์
               </div>
             </div>
@@ -543,17 +553,17 @@ export default function DashboardPage() {
 
         {/* Phase 14.7 Stock & Inventory KPI Card */}
         {stockSummary && (
-          <div className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="rounded-3xl border border-ds-border bg-ds-surface p-4.5 shadow-ds-card space-y-3">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-ds-surface-elevated border border-ds-divider text-ds-icon-secondary">
                   <Package className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-text-main dark:text-white">
+                  <h3 className="font-extrabold text-sm text-ds-text">
                     สรุปสต็อกยาและเวชภัณฑ์
                   </h3>
-                  <p className="text-[11px] text-text-muted dark:text-zinc-400">
+                  <p className="text-[11px] text-ds-text-secondary">
                     ยอดซื้อและมูลค่าคงเหลือไม่นับเป็นค่าใช้จ่ายในกำไรสุทธิ
                   </p>
                 </div>
@@ -561,7 +571,11 @@ export default function DashboardPage() {
               {(stockSummary.lowStockCount > 0 || stockSummary.negativeStockCount > 0) && (
                 <Link
                   href="/medications"
-                  className="rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                    stockSummary.negativeStockCount > 0
+                      ? "bg-ds-error-container text-ds-error"
+                      : "bg-ds-warning-container text-ds-warning"
+                  }`}
                 >
                   {stockSummary.negativeStockCount > 0
                     ? `ติดลบ ${stockSummary.negativeStockCount}`
@@ -571,27 +585,27 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2.5 text-xs">
-              <div className="rounded-2xl bg-slate-50 p-3 dark:bg-zinc-800/60">
-                <span className="text-[11px] text-text-muted dark:text-zinc-400">มูลค่าสต็อกคงเหลือ</span>
-                <div className="mt-0.5 text-base font-extrabold text-slate-900 dark:text-white">
+              <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-3">
+                <span className="text-[11px] text-ds-text-secondary">มูลค่าสต็อกคงเหลือ</span>
+                <div className="mt-0.5 text-base font-extrabold text-ds-text">
                   ฿{(stockSummary.inventoryValueSatang / 100).toLocaleString()}
                 </div>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-3 dark:bg-zinc-800/60">
-                <span className="text-[11px] text-text-muted dark:text-zinc-400">ยอดซื้อยารับเข้า (ช่วงนี้)</span>
-                <div className="mt-0.5 text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+              <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-3">
+                <span className="text-[11px] text-ds-text-secondary">ยอดซื้อยารับเข้า (ช่วงนี้)</span>
+                <div className="mt-0.5 text-base font-extrabold text-ds-success">
                   ฿{(stockSummary.receivedCostSatang / 100).toLocaleString()}
                 </div>
               </div>
-              <div className="rounded-2xl bg-rose-50/70 p-3 dark:bg-rose-950/20">
-                <span className="text-[11px] text-rose-700/80 dark:text-rose-300/80">ยาสูญเสีย (Waste)</span>
-                <div className="mt-0.5 text-base font-extrabold text-rose-700 dark:text-rose-300">
+              <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-3">
+                <span className="text-[11px] text-ds-text-secondary">ยาสูญเสีย (Waste)</span>
+                <div className="mt-0.5 text-base font-extrabold text-ds-error">
                   -฿{(stockSummary.wasteCostSatang / 100).toLocaleString()}
                 </div>
               </div>
-              <div className="rounded-2xl bg-amber-50/70 p-3 dark:bg-amber-950/20">
-                <span className="text-[11px] text-amber-700/80 dark:text-amber-300/80">แจกฟรี / ใช้ส่วนตัว</span>
-                <div className="mt-0.5 text-base font-extrabold text-amber-700 dark:text-amber-300">
+              <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-3">
+                <span className="text-[11px] text-ds-text-secondary">แจกฟรี / ใช้ส่วนตัว</span>
+                <div className="mt-0.5 text-base font-extrabold text-ds-warning">
                   -฿{(stockSummary.giveawayCostSatang / 100).toLocaleString()}
                 </div>
               </div>
@@ -600,23 +614,23 @@ export default function DashboardPage() {
         )}
 
         {/* Product / Medication Breakdown Section */}
-        <div className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-3.5">
+        <div className="rounded-3xl border border-ds-border bg-ds-surface p-4.5 shadow-ds-card space-y-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-ds-surface-elevated border border-ds-divider text-ds-icon-secondary">
                 <Pill className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="font-extrabold text-sm text-text-main dark:text-white">
+                <h3 className="font-extrabold text-sm text-ds-text">
                   ตัวสินค้า/ตัวยาที่ลูกค้าเลือก
                 </h3>
-                <p className="text-[11px] text-text-muted dark:text-zinc-400">
+                <p className="text-[11px] text-ds-text-secondary">
                   สรุปความนิยมและยอดต้นทุนต่อรายการ
                 </p>
               </div>
             </div>
 
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700 dark:bg-zinc-800 dark:text-zinc-300">
+            <span className="rounded-full bg-ds-surface-variant px-2.5 py-0.5 text-xs font-bold text-ds-text-secondary border border-ds-border/60">
               {productBreakdown.length} ตัวยา
             </span>
           </div>
@@ -626,10 +640,10 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => setSelectedCategory("all")}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+              className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-all shrink-0 cursor-pointer border ${
                 selectedCategory === "all"
-                  ? "bg-purple-600 text-white shadow-2xs"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300"
+                  ? "border-transparent bg-ds-primary text-ds-on-primary shadow-2xs"
+                  : "border-ds-border bg-ds-surface-elevated text-ds-text-secondary hover:text-ds-text"
               }`}
             >
               ทั้งหมด
@@ -639,10 +653,10 @@ export default function DashboardPage() {
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-all shrink-0 cursor-pointer border ${
                   selectedCategory === cat
-                    ? "bg-purple-600 text-white shadow-2xs"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300"
+                    ? "border-transparent bg-ds-primary text-ds-on-primary shadow-2xs"
+                    : "border-ds-border bg-ds-surface-elevated text-ds-text-secondary hover:text-ds-text"
                 }`}
               >
                 {MEDICATION_CATEGORY_CONFIG[cat]?.label || cat}
@@ -651,12 +665,12 @@ export default function DashboardPage() {
           </div>
 
           {productBreakdown.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center dark:border-zinc-800">
-              <Package className="mx-auto h-8 w-8 text-slate-300 dark:text-zinc-600 mb-1.5" />
-              <p className="text-xs font-bold text-slate-600 dark:text-zinc-300">
+            <div className="rounded-2xl border border-dashed border-ds-border p-6 text-center">
+              <Package className="mx-auto h-8 w-8 text-ds-icon-disabled mb-1.5" />
+              <p className="text-xs font-bold text-ds-text-secondary">
                 ไม่มีการบันทึกรายการยาในช่วงเวลานี้
               </p>
-              <p className="text-[11px] text-text-muted dark:text-zinc-400 mt-0.5">
+              <p className="text-[11px] text-ds-text-tertiary mt-0.5">
                 เลือกช่วงเวลาอื่น หรือบันทึกเคสบริการลูกค้าที่มีการใช้ยา
               </p>
             </div>
@@ -670,11 +684,11 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={idx}
-                    className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 transition-all hover:bg-slate-50 dark:border-zinc-800/80 dark:bg-zinc-800/40"
+                    className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-3 transition-colors"
                   >
                     <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-bold text-text-main dark:text-white truncate">
+                        <span className="font-bold text-ds-text truncate">
                           {item.name}
                         </span>
                         <span
@@ -683,35 +697,41 @@ export default function DashboardPage() {
                           {catCfg.label}
                         </span>
                       </div>
-                      <span className="font-extrabold text-purple-700 dark:text-purple-300 shrink-0">
+                      <span className="font-extrabold text-ds-primary shrink-0">
                         {item.totalQuantity > 0 ? `${item.totalQuantity.toLocaleString()} ${item.unit}` : `${item.caseCount} ครั้ง`} ({item.caseCount} เคส)
                       </span>
                     </div>
 
                     {/* Progress bar representing share */}
-                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-700">
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ds-surface-variant">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                        className="h-full rounded-full bg-ds-primary"
                         style={{ width: `${Math.min(100, Math.max(8, item.pickPercentage))}%` }}
                       />
                     </div>
 
                     {/* Cost & Sub-info */}
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-text-muted dark:text-zinc-400">
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-ds-text-secondary">
                       <span>
                         ต้นทุนต่อหน่วย:{" "}
-                        <strong className="text-text-main dark:text-zinc-200">
+                        <strong className="text-ds-text">
                           {item.unitCost > 0 ? `฿${item.unitCost.toLocaleString()}` : "ไม่ระบุ"}
                         </strong>
                         /{item.unit}
                       </span>
 
-                      <span className="font-semibold text-amber-600 dark:text-amber-400">
+                      <span className="font-semibold text-ds-text">
                         ต้นทุนรวม: ฿{Math.round(item.totalCost).toLocaleString()}
                       </span>
                     </div>
                     {matchedMed && (
-                      <div className="mt-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      <div
+                        className={`mt-1 text-[11px] font-semibold ${
+                          (matchedMed.stockOnHand ?? 0) < 0
+                            ? "text-ds-error"
+                            : "text-ds-success"
+                        }`}
+                      >
                         คงเหลือในคลัง:{" "}
                         {formatOnHand(
                           matchedMed.stockOnHand ?? 0,
@@ -729,31 +749,31 @@ export default function DashboardPage() {
         </div>
 
         {/* Service Cases in Period */}
-        <div className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-3.5">
+        <div className="rounded-3xl border border-ds-border bg-ds-surface p-4.5 shadow-ds-card space-y-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-ds-surface-elevated border border-ds-divider text-ds-icon-secondary">
                 <Users className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="font-extrabold text-sm text-text-main dark:text-white">
+                <h3 className="font-extrabold text-sm text-ds-text">
                   รายการเคสบริการในช่วงนี้
                 </h3>
-                <p className="text-[11px] text-text-muted dark:text-zinc-400">
+                <p className="text-[11px] text-ds-text-secondary">
                   รายละเอียดรายรับ ต้นทุน และกำไรรายเคส
                 </p>
               </div>
             </div>
 
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700 dark:bg-zinc-800 dark:text-zinc-300">
+            <span className="rounded-full bg-ds-surface-variant px-2.5 py-0.5 text-xs font-bold text-ds-text-secondary border border-ds-border/60">
               {periodServices.length} เคส
             </span>
           </div>
 
           {periodServices.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center dark:border-zinc-800">
-              <Users className="mx-auto h-8 w-8 text-slate-300 dark:text-zinc-600 mb-1.5" />
-              <p className="text-xs font-bold text-slate-600 dark:text-zinc-300">
+            <div className="rounded-2xl border border-dashed border-ds-border p-6 text-center">
+              <Users className="mx-auto h-8 w-8 text-ds-icon-disabled mb-1.5" />
+              <p className="text-xs font-bold text-ds-text-secondary">
                 ไม่มีเคสบริการลูกค้าในช่วงเวลานี้
               </p>
             </div>
@@ -786,28 +806,28 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={srv.id}
-                    className="rounded-2xl border border-slate-100 bg-white p-3.5 shadow-2xs transition-all hover:border-slate-200 dark:border-zinc-800 dark:bg-zinc-800/40"
+                    className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-3.5 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-sm text-text-main dark:text-white">
+                          <span className="font-bold text-sm text-ds-text">
                             {srv.customerName}
                           </span>
                           <span
                             className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
                               srv.status === "completed"
-                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                                : "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300"
+                                ? "bg-ds-success-container text-ds-success"
+                                : "bg-ds-info-container text-ds-info"
                             }`}
                           >
                             {srv.status === "completed" ? "บริการแล้ว" : "นัดหมาย"}
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2 text-xs text-text-muted dark:text-zinc-400 mt-1">
+                        <div className="flex items-center gap-2 text-xs text-ds-text-secondary mt-1">
                           <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-sky-500" />
+                            <Clock className="h-3 w-3 text-ds-icon-secondary" />
                             <span>{srv.date} {srv.time} น.</span>
                           </span>
                         </div>
@@ -818,9 +838,9 @@ export default function DashboardPage() {
                             {srv.medicationUsages.map((u, uIdx) => (
                               <span
                                 key={uIdx}
-                                className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300"
+                                className="inline-flex items-center gap-1 rounded-md bg-ds-surface-variant px-2 py-0.5 text-[10px] font-bold text-ds-text-secondary border border-ds-border/60"
                               >
-                                <Pill className="h-2.5 w-2.5" />
+                                <Pill className="h-2.5 w-2.5 text-ds-icon-secondary" />
                                 <span>{u.name} ({u.quantity} {u.unit})</span>
                               </span>
                             ))}
@@ -830,9 +850,9 @@ export default function DashboardPage() {
                             {srv.medications.map((m, mIdx) => (
                               <span
                                 key={mIdx}
-                                className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300"
+                                className="inline-flex items-center gap-1 rounded-md bg-ds-surface-variant px-2 py-0.5 text-[10px] font-bold text-ds-text-secondary border border-ds-border/60"
                               >
-                                <Pill className="h-2.5 w-2.5" />
+                                <Pill className="h-2.5 w-2.5 text-ds-icon-secondary" />
                                 <span>{m}</span>
                               </span>
                             ))}
@@ -842,10 +862,10 @@ export default function DashboardPage() {
 
                       {/* Financial breakdown pill */}
                       <div className="text-right shrink-0 space-y-0.5">
-                        <div className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">
-                          +฿{srvProfit.toLocaleString()}
+                        <div className={`font-extrabold text-sm ${srvProfit >= 0 ? "text-ds-success" : "text-ds-error"}`}>
+                          {srvProfit >= 0 ? `+฿${srvProfit.toLocaleString()}` : `-฿${Math.abs(srvProfit).toLocaleString()}`}
                         </div>
-                        <div className="text-[10px] text-text-muted dark:text-zinc-400">
+                        <div className="text-[10px] text-ds-text-secondary">
                           รับ ฿{srvPrice.toLocaleString()} {pricing.hasDiscount ? `(ลด ฿${pricing.discount.toLocaleString()}) ` : ""}· ทุน ฿{srvCost.toLocaleString()}
                         </div>
                       </div>

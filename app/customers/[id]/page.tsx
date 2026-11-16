@@ -222,17 +222,17 @@ function CustomerDetailContent() {
     }
 
     return (
-      <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <div className="flex min-h-screen flex-col bg-ds-bg text-ds-text">
         <AppBar title="ข้อมูลลูกค้า" />
         <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center p-6 text-center">
-          <AlertCircle className="h-12 w-12 text-slate-400 mb-3" />
+          <AlertCircle className="h-12 w-12 text-ds-icon-disabled mb-3" />
           <h2 className="text-base font-bold">ไม่พบข้อมูลลูกค้า</h2>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-ds-text-secondary mt-1">
             ข้อมูลลูกค้าอาจถูกลบหรือไม่มีอยู่ในระบบ
           </p>
           <Link
             href="/customers"
-            className="mt-4 rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white hover:bg-teal-700"
+            className="mt-4 rounded-xl bg-ds-primary px-4 py-2 text-xs font-bold text-ds-on-primary hover:bg-ds-primary-hover"
           >
             กลับสู่หน้ารายชื่อลูกค้า
           </Link>
@@ -242,14 +242,14 @@ function CustomerDetailContent() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="flex min-h-screen flex-col bg-ds-bg text-ds-text">
       <AppBar
         title={customer.name}
         rightAction={
           <button
             type="button"
             onClick={() => setOpenAddModal(true)}
-            className="flex items-center gap-1 rounded-full bg-gradient-to-r from-sky-500 to-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all"
+            className="flex items-center gap-1 rounded-full bg-ds-primary px-3 py-1.5 text-xs font-bold text-ds-on-primary shadow-xs hover:bg-ds-primary-hover active:scale-95 transition-all cursor-pointer"
           >
             <CalendarPlus className="h-3.5 w-3.5" />
             <span>+ นัดหมาย</span>
@@ -260,40 +260,36 @@ function CustomerDetailContent() {
       {/* Main Container */}
       <main className="mx-auto w-full max-w-lg flex-1 p-4 space-y-4">
         {/* Customer Profile Banner */}
-        <div className="rounded-3xl border border-surface-subtle bg-card-bg p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-start gap-3.5">
+        <div className="rounded-3xl border border-ds-border bg-ds-surface p-4 shadow-ds-card">
+          <div className="flex items-center gap-3.5">
             {/* Avatar */}
-            <div
-              className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-bold text-white shadow-xs ${
-                customer.avatarColor || "bg-primary"
-              }`}
-            >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-ds-border bg-ds-surface-elevated text-base font-bold text-ds-text">
               {customer.name.substring(0, 2)}
             </div>
 
-            <div className="flex-1 space-y-1.5 min-w-0">
-              <h2 className="text-base font-bold text-text-main dark:text-white truncate">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base font-bold text-ds-text truncate">
                 {customer.name}
               </h2>
             </div>
           </div>
 
           {/* Quick Actions Row: Edit + Delete + Add Appointment */}
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-surface-subtle pt-3 dark:border-zinc-800">
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ds-divider pt-3">
             <button
               type="button"
               onClick={() => setOpenEditCustomerModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-surface-subtle px-3 py-2 text-xs font-bold text-text-main hover:bg-slate-200 active:scale-95 dark:bg-zinc-800 dark:text-zinc-200 transition-all border border-surface-subtle dark:border-zinc-700"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-surface-elevated px-3 py-2 text-xs font-bold text-ds-text hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer"
               title="แก้ไขข้อมูลลูกค้า"
             >
-              <Pencil className="h-3.5 w-3.5 text-secondary" />
+              <Pencil className="h-3.5 w-3.5 text-ds-icon-secondary" />
               <span>แก้ไข</span>
             </button>
 
             <button
               type="button"
               onClick={() => setOpenDeleteModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100 active:scale-95 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-950/60 transition-all border border-rose-200/60 dark:border-rose-900/40"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-ds-error/30 bg-ds-error-container/70 px-3 py-2 text-xs font-bold text-ds-error hover:bg-ds-error-container active:scale-95 transition-all cursor-pointer"
               title="ลบข้อมูลลูกค้าและประวัติทั้งหมด"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -303,7 +299,7 @@ function CustomerDetailContent() {
             <button
               type="button"
               onClick={() => setOpenAddModal(true)}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all min-w-[130px]"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-ds-primary px-3.5 py-2 text-xs font-bold text-ds-on-primary shadow-xs hover:bg-ds-primary-hover active:scale-95 transition-all min-w-[130px] cursor-pointer"
             >
               <CalendarPlus className="h-3.5 w-3.5" />
               <span>+ นัดหมายบริการ</span>
@@ -312,14 +308,14 @@ function CustomerDetailContent() {
         </div>
 
         {/* Tab Switcher: [ นัดหมายล่วงหน้า (Upcoming) ] | [ ประวัติบริการ (History) ] */}
-        <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-surface-subtle p-1 dark:bg-zinc-800">
+        <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-ds-surface-variant p-1 border border-ds-border/60">
           <button
             type="button"
             onClick={() => setTabOverride({ key: navKey, tab: "upcoming" })}
-            className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer ${
               activeTab === "upcoming"
-                ? "bg-card-bg text-primary shadow-xs dark:bg-zinc-700 dark:text-primary-light"
-                : "text-text-muted hover:text-text-main dark:text-zinc-400 dark:hover:text-white"
+                ? "bg-ds-surface text-ds-primary shadow-ds-card"
+                : "text-ds-text-secondary hover:text-ds-text"
             }`}
           >
             <CalendarDays className="h-4 w-4" />
@@ -328,10 +324,10 @@ function CustomerDetailContent() {
           <button
             type="button"
             onClick={() => setTabOverride({ key: navKey, tab: "history" })}
-            className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer ${
               activeTab === "history"
-                ? "bg-card-bg text-primary shadow-xs dark:bg-zinc-700 dark:text-primary-light"
-                : "text-text-muted hover:text-text-main dark:text-zinc-400 dark:hover:text-white"
+                ? "bg-ds-surface text-ds-primary shadow-ds-card"
+                : "text-ds-text-secondary hover:text-ds-text"
             }`}
           >
             <History className="h-4 w-4" />
@@ -343,18 +339,18 @@ function CustomerDetailContent() {
         {activeTab === "upcoming" && (
           <div className="space-y-3">
             {upcomingServices.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white/60 p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/40">
-                <Calendar className="h-10 w-10 text-slate-300 dark:text-zinc-600 mb-2" />
-                <h3 className="font-semibold text-slate-700 dark:text-zinc-300 text-sm">
+              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-ds-border bg-ds-surface p-8 text-center">
+                <Calendar className="h-10 w-10 text-ds-icon-disabled mb-2" />
+                <h3 className="font-semibold text-ds-text text-sm">
                   ไม่มีนัดหมายล่วงหน้า
                 </h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                <p className="text-xs text-ds-text-secondary mt-1 max-w-xs">
                   แตะปุ่มด้านล่างเพื่อเพิ่มนัดหมายบริการใหม่ให้กับลูกค้ารายนี้
                 </p>
                 <button
                   type="button"
                   onClick={() => setOpenAddModal(true)}
-                  className="mt-4 flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-teal-700"
+                  className="mt-4 flex items-center gap-1.5 rounded-xl bg-ds-primary px-4 py-2 text-xs font-bold text-ds-on-primary shadow-xs hover:bg-ds-primary-hover cursor-pointer"
                 >
                   <CalendarPlus className="h-3.5 w-3.5" />
                   <span>+ เพิ่มนัดหมายใหม่</span>
@@ -379,12 +375,12 @@ function CustomerDetailContent() {
         {activeTab === "history" && (
           <div className="space-y-3">
             {historyServices.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white/60 p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/40">
-                <FileText className="h-10 w-10 text-slate-300 dark:text-zinc-600 mb-2" />
-                <h3 className="font-semibold text-slate-700 dark:text-zinc-300 text-sm">
+              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-ds-border bg-ds-surface p-8 text-center">
+                <FileText className="h-10 w-10 text-ds-icon-disabled mb-2" />
+                <h3 className="font-semibold text-ds-text text-sm">
                   ยังไม่มีประวัติการรับบริการที่เสร็จสิ้น
                 </h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                <p className="text-xs text-ds-text-secondary mt-1 max-w-xs">
                   เมื่อให้บริการตามนัดหมายเสร็จสิ้น สามารถแตะเครื่องหมายถูกเพื่อบันทึกเป็นประวัติ
                 </p>
               </div>
@@ -485,30 +481,38 @@ function ServiceDetailCard({
     <div
       id={`service-${service.id}`}
       data-highlighted={isHighlighted ? "true" : undefined}
-      className={`relative overflow-hidden rounded-2xl border p-4 shadow-xs transition-all ${
+      className={`relative overflow-hidden rounded-2xl border p-4 shadow-ds-card transition-all ${
         isHighlighted
-          ? "border-sky-500 bg-sky-50/50 ring-2 ring-sky-400/70 dark:border-sky-500 dark:bg-sky-950/25 dark:ring-sky-500/60"
-          : isCompleted
-            ? "border-primary/40 bg-primary-light/15 dark:border-emerald-900/50 dark:bg-emerald-950/20"
-            : "border-surface-subtle bg-card-bg dark:border-zinc-800 dark:bg-zinc-900"
+          ? "border-ds-info bg-ds-surface ring-2 ring-ds-info/30"
+          : "border-ds-border bg-ds-surface"
       }`}
     >
-      {/* Color stripe left: Primary health green (sky highlight when targeted) */}
-      <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isHighlighted ? "bg-sky-500" : isCancelled ? "bg-slate-400" : "bg-primary"}`} />
+      {/* Subtle left indicator */}
+      <div
+        className={`absolute left-0 top-0 bottom-0 w-1 ${
+          isHighlighted
+            ? "bg-ds-info"
+            : isCancelled
+              ? "bg-ds-text-disabled"
+              : isCompleted
+                ? "bg-ds-success"
+                : "bg-ds-border"
+        }`}
+      />
 
       <div className="flex items-start justify-between gap-2 pl-2">
         <div className="space-y-2 flex-1">
           {/* Date & Time Header */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-text-main dark:text-white">
+            <span className="text-xs font-bold text-ds-text">
               {moment(service.date).locale("th").format("ddd D MMMM YYYY")}
             </span>
-            <span className="flex items-center gap-1 rounded-md bg-surface-subtle px-2 py-0.5 text-xs font-semibold text-text-main dark:bg-zinc-800 dark:text-zinc-200">
-              <Clock className="h-3 w-3 text-primary" aria-hidden="true" />
+            <span className="flex items-center gap-1 rounded-md bg-ds-surface-elevated border border-ds-divider px-2 py-0.5 text-xs font-semibold text-ds-text">
+              <Clock className="h-3 w-3 text-ds-icon-secondary" aria-hidden="true" />
               {service.time} น.
             </span>
             {isHighlighted && (
-              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700 dark:bg-sky-900/60 dark:text-sky-300">
+              <span className="rounded-full bg-ds-info-container px-2 py-0.5 text-[10px] font-bold text-ds-info">
                 รายการที่เลือก
               </span>
             )}
@@ -522,10 +526,10 @@ function ServiceDetailCard({
                 canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-70"
               } ${
                 isCancelled
-                  ? "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400"
+                  ? "bg-ds-surface-variant text-ds-text-tertiary"
                   : isCompleted
-                    ? "bg-primary-light text-primary-dark dark:bg-emerald-950/80 dark:text-emerald-300"
-                    : "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+                    ? "bg-ds-success-container text-ds-success"
+                    : "bg-ds-warning-container text-ds-warning"
               }`}
               title={
                 canEdit
@@ -559,20 +563,20 @@ function ServiceDetailCard({
               );
             })}
             {service.otherServiceText && (
-              <span className="text-xs text-text-muted">
+              <span className="text-xs text-ds-text-secondary">
                 ({service.otherServiceText})
               </span>
             )}
           </div>
 
-          {/* ตัวยาที่เคยทำ / ที่ต้องฉีด (Highlight for History & Injection) */}
+          {/* ตัวยาที่เคยทำ / ที่ต้องฉีด */}
           {service.medications && service.medications.length > 0 && (
-            <div className="rounded-xl bg-primary-light/40 p-2.5 text-xs text-primary-dark dark:bg-emerald-950/40 dark:text-emerald-200 border border-primary/20 dark:border-emerald-800">
-              <div className="font-bold flex items-center gap-1 text-primary-dark dark:text-emerald-300 mb-1">
-                <Syringe className="h-3.5 w-3.5 text-primary" />
+            <div className="rounded-xl border border-ds-border bg-ds-surface-elevated p-2.5 text-xs text-ds-text">
+              <div className="font-bold flex items-center gap-1 text-ds-text mb-1">
+                <Syringe className="h-3.5 w-3.5 text-ds-icon-secondary" />
                 <span>ตัวยาที่ใช้ ({service.medications.length} ตัวยา):</span>
               </div>
-              <ul className="list-inside list-disc space-y-0.5 text-xs pl-1">
+              <ul className="list-inside list-disc space-y-0.5 text-xs text-ds-text-secondary pl-1">
                 {service.medications.map((med, idx) => (
                   <li key={idx} className="font-semibold">
                     {med}
@@ -583,22 +587,22 @@ function ServiceDetailCard({
           )}
 
           {/* Note & Price */}
-          <div className="flex flex-wrap items-center justify-between text-xs text-text-muted dark:text-zinc-400 pt-0.5 gap-2">
+          <div className="flex flex-wrap items-center justify-between text-xs text-ds-text-secondary pt-0.5 gap-2">
             {service.note && <span>📝 {service.note}</span>}
             {service.price !== undefined && service.price !== null ? (() => {
               const pricing = getServicePricingBreakdown(service);
               return (
-                <div className="font-bold text-primary dark:text-emerald-400 ml-auto">
+                <div className="font-bold text-ds-success ml-auto">
                   {pricing.hasDiscount ? (
                     <span className="inline-flex items-baseline gap-1.5">
                       <span>ค่าบริการ:</span>
-                      <strong className="text-sm font-extrabold text-emerald-600 dark:text-emerald-300">
+                      <strong className="text-sm font-extrabold text-ds-success">
                         ฿{pricing.netRevenue.toLocaleString()}
                       </strong>
-                      <span className="text-[11px] line-through text-text-muted dark:text-zinc-400">
+                      <span className="text-[11px] line-through text-ds-text-tertiary">
                         ฿{pricing.grossFee.toLocaleString()}
                       </span>
-                      <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                      <span className="rounded bg-ds-error-container px-1.5 py-0.5 text-[10px] font-bold text-ds-error">
                         (ลด ฿{pricing.discount.toLocaleString()})
                       </span>
                     </span>
@@ -617,7 +621,7 @@ function ServiceDetailCard({
             <button
               type="button"
               onClick={onEdit}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-teal-600 active:scale-95 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300 transition-all"
+              className="rounded-lg p-1.5 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text active:scale-95 transition-all cursor-pointer"
               title="แก้ไขนัดหมายนี้"
             >
               <Pencil className="h-4 w-4" />
@@ -631,8 +635,8 @@ function ServiceDetailCard({
             }}
             className={`rounded-lg p-1.5 transition-colors ${
               canDelete
-                ? "text-slate-400 hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-950/40 cursor-pointer"
-                : "text-slate-300 dark:text-zinc-600 opacity-40 cursor-not-allowed"
+                ? "text-ds-icon-secondary hover:bg-ds-error-container hover:text-ds-error active:scale-95 cursor-pointer"
+                : "text-ds-icon-disabled opacity-40 cursor-not-allowed"
             }`}
             title={
               canDelete

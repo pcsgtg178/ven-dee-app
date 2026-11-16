@@ -41,7 +41,7 @@ export default function AppBar({
 
   return (
     <header
-      className={`sticky top-0 left-0 right-0 z-40 border-b border-surface-subtle bg-white/90 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90 pt-safe ${className}`}
+      className={`sticky top-0 left-0 right-0 z-40 border-b border-ds-border bg-ds-surface/90 backdrop-blur-md pt-safe ${className}`}
     >
       <div className="flex h-14 items-center justify-between px-3">
         {/* Left: Action or spacer */}
@@ -52,12 +52,12 @@ export default function AppBar({
         {/* Center: Title */}
         {title && !hideTitle ? (
           <div className="flex-1 min-w-0 px-2 text-center flex items-center justify-center gap-1.5">
-            <h1 className="truncate text-base font-semibold text-text-main dark:text-gray-100">
+            <h1 className="truncate text-base font-semibold text-ds-text">
               {title}
             </h1>
             {isSyncing && (
-              <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-sky-50 px-1.5 py-0.5 text-[9px] font-semibold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/60 dark:border-sky-800/60 animate-pulse">
-                <RotateCw className="h-2 w-2 animate-spin text-sky-600 dark:text-sky-400" />
+              <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-ds-primary-container px-1.5 py-0.5 text-[9px] font-semibold text-ds-primary border border-ds-primary/30 animate-pulse">
+                <RotateCw className="h-2 w-2 animate-spin text-ds-primary" />
                 <span>ซิงค์...</span>
               </span>
             )}
@@ -74,8 +74,8 @@ export default function AppBar({
 
       {/* Animated bottom loading beam */}
       {isSyncing && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 overflow-hidden bg-sky-100/40 dark:bg-sky-950/40">
-          <div className="h-full w-full bg-gradient-to-r from-transparent via-sky-500 to-emerald-400 animate-sync-beam" />
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 overflow-hidden bg-ds-surface-variant">
+          <div className="h-full w-full bg-ds-primary animate-sync-beam" />
         </div>
       )}
     </header>

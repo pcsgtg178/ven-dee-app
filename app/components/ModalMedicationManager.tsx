@@ -158,24 +158,28 @@ export default function ModalMedicationManager({
     .sort((a, b) => (a.name || "").localeCompare(b.name || "", "th", { numeric: true }));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-      <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900 border border-surface-subtle dark:border-zinc-800">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="med-manager-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ds-overlay p-4 backdrop-blur-xs"
+    >
+      <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-ds-surface-elevated shadow-ds-popover border border-ds-border">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-surface-subtle px-5 py-4 dark:border-zinc-800 bg-surface-subtle/30 dark:bg-zinc-800/30">
+        <div className="flex items-center justify-between border-b border-ds-divider px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-light text-primary-dark dark:bg-primary-dark/30 dark:text-primary-light">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-ds-surface-variant text-ds-icon-primary">
               <Pill className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-text-main dark:text-white">
+                <h2 id="med-manager-title" className="text-base font-bold text-ds-text">
                   จัดการรายการยา
                 </h2>
                 {isSyncing && (
-                  <RotateCw className="h-3.5 w-3.5 animate-spin text-purple-600" />
+                  <RotateCw className="h-3.5 w-3.5 animate-spin text-ds-primary" />
                 )}
               </div>
-              
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -183,15 +187,16 @@ export default function ModalMedicationManager({
               type="button"
               onClick={() => loadData(true)}
               disabled={isSyncing}
-              className="rounded-full p-2 text-text-muted hover:bg-slate-200 dark:hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
+              className="rounded-full p-2 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer disabled:opacity-50"
               title="รีเฟรชข้อมูล"
             >
-              <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-purple-600" : ""}`} />
+              <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-ds-primary" : ""}`} />
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-2 text-text-muted hover:bg-slate-200 dark:hover:bg-zinc-800 cursor-pointer"
+              aria-label="ปิดหน้าต่าง"
+              className="rounded-full p-2 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
@@ -199,31 +204,31 @@ export default function ModalMedicationManager({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-4">
           {showForm ? (
             /* Add / Edit Form */
-            <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-primary/30 bg-primary-light/20 p-4 dark:bg-zinc-800/50">
+            <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-ds-border bg-ds-surface p-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-text-main dark:text-white">
+                <h3 className="text-sm font-bold text-ds-text">
                   {editingMedId ? "แก้ไขรายการยา" : "เพิ่มตัวยาใหม่"}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="text-xs text-text-muted hover:text-text-main"
+                  className="text-xs text-ds-text-secondary hover:text-ds-text cursor-pointer"
                 >
                   ยกเลิก
                 </button>
               </div>
 
               {errorMsg && (
-                <div className="rounded-lg bg-rose-50 p-2 text-xs font-semibold text-rose-600 dark:bg-rose-950/60 dark:text-rose-300">
+                <div className="rounded-lg bg-ds-error-container p-2 text-xs font-semibold text-ds-error">
                   {errorMsg}
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
                   ชื่อยา / รายการ *
                 </label>
                 <input
@@ -231,14 +236,14 @@ export default function ModalMedicationManager({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="เช่น Botox, Vitamin B12, Paracetamol"
-                  className="w-full rounded-xl border border-surface-subtle bg-white p-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                  className="w-full rounded-xl border border-ds-border bg-ds-surface-elevated p-2.5 text-xs text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none"
                   autoFocus
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                  <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
                     ขนาด
                   </label>
                   <input
@@ -246,12 +251,12 @@ export default function ModalMedicationManager({
                     value={size}
                     onChange={(e) => setSize(e.target.value)}
                     placeholder="เช่น 100, 50"
-                    className="w-full rounded-xl border border-surface-subtle bg-white p-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                    className="w-full rounded-xl border border-ds-border bg-ds-surface-elevated p-2.5 text-xs text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                  <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
                     หน่วย
                   </label>
                   <div className="relative">
@@ -260,13 +265,13 @@ export default function ModalMedicationManager({
                       value={unit}
                       onChange={(e) => setUnit(e.target.value)}
                       placeholder="เช่น ยูนิต"
-                      className="w-full rounded-xl border border-surface-subtle bg-white p-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                      className="w-full rounded-xl border border-ds-border bg-ds-surface-elevated p-2.5 text-xs text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                  <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
                     ราคา (บาท)
                   </label>
                   <div className="relative">
@@ -275,25 +280,25 @@ export default function ModalMedicationManager({
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
                       placeholder="เช่น 2500"
-                      className="w-full rounded-xl border border-surface-subtle bg-white pl-6 pr-2 py-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary"
+                      className="w-full rounded-xl border border-ds-border bg-ds-surface-elevated pl-6 pr-2 py-2.5 text-xs text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none"
                     />
-                    <DollarSign className="absolute left-2 top-3 h-3 w-3 text-text-muted" />
+                    <DollarSign className="absolute left-2 top-3 h-3 w-3 text-ds-icon-secondary" />
                   </div>
                 </div>
               </div>
 
               {/* Unit preset buttons */}
               <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-[11px] text-text-muted">หน่วยแนะนำ:</span>
+                <span className="text-[11px] text-ds-text-secondary">หน่วยแนะนำ:</span>
                 {["ยูนิต", "เข็ม", "ขวด", "ชุด", "แผง", "cc"].map((u) => (
                   <button
                     key={u}
                     type="button"
                     onClick={() => setUnit(u)}
-                    className={`rounded-lg px-2 py-0.5 text-[11px] font-medium transition-all ${
+                    className={`rounded-lg px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer ${
                       unit === u
-                        ? "bg-primary text-white"
-                        : "bg-surface-subtle/60 text-text-muted hover:bg-surface-subtle dark:bg-zinc-700 dark:text-zinc-300"
+                        ? "bg-ds-primary text-ds-on-primary"
+                        : "bg-ds-surface-variant text-ds-text-secondary hover:text-ds-text"
                     }`}
                   >
                     {u}
@@ -302,7 +307,7 @@ export default function ModalMedicationManager({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
                   หมวดหมู่
                 </label>
                 <div className="flex flex-wrap gap-1.5">
@@ -311,10 +316,10 @@ export default function ModalMedicationManager({
                       key={c}
                       type="button"
                       onClick={() => setCategory(c)}
-                      className={`rounded-lg px-2 py-0.5 text-[11px] font-medium transition-all ${
+                      className={`rounded-lg px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer ${
                         category === c
-                          ? "bg-primary text-white"
-                          : "bg-surface-subtle/60 text-text-muted hover:bg-surface-subtle dark:bg-zinc-700 dark:text-zinc-300"
+                          ? "bg-ds-primary text-ds-on-primary"
+                          : "bg-ds-surface-variant text-ds-text-secondary hover:text-ds-text"
                       }`}
                     >
                       {MEDICATION_CATEGORY_CONFIG[c].label}
@@ -324,7 +329,7 @@ export default function ModalMedicationManager({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 mb-1">
+                <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
                   รายละเอียด / ข้อกำหนด
                 </label>
                 <textarea
@@ -332,7 +337,7 @@ export default function ModalMedicationManager({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="เช่น นาบูตะ *นำเข้า, ผสม NSS 100ml"
-                  className="w-full rounded-xl border border-surface-subtle bg-white p-2.5 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-primary resize-none"
+                  className="w-full rounded-xl border border-ds-border bg-ds-surface-elevated p-2.5 text-xs text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none resize-none"
                 />
               </div>
 
@@ -341,14 +346,14 @@ export default function ModalMedicationManager({
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => setShowForm(false)}
-                  className="rounded-xl px-4 py-2 text-xs font-semibold text-text-muted hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                  className="rounded-xl border border-ds-border bg-ds-surface-elevated px-4 py-2 text-xs font-semibold text-ds-text-secondary hover:bg-ds-surface-variant hover:text-ds-text disabled:opacity-50 cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white hover:brightness-105 shadow-xs disabled:opacity-60 cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-xl bg-ds-primary px-4 py-2 text-xs font-bold text-ds-on-primary hover:bg-ds-primary-hover shadow-xs disabled:opacity-60 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <RotateCw className="h-3.5 w-3.5 animate-spin" />
@@ -367,14 +372,14 @@ export default function ModalMedicationManager({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="ค้นหาชื่อยา..."
-                  className="w-full rounded-xl border border-surface-subtle bg-card-bg pl-8 pr-3 py-2 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  className="w-full rounded-xl border border-ds-border bg-ds-surface pl-8 pr-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none"
                 />
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-text-muted" />
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-ds-icon-secondary" />
               </div>
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value as "all" | MedicationCategory)}
-                className="shrink-0 rounded-xl border border-surface-subtle bg-card-bg px-2 py-2 text-xs text-text-main dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="shrink-0 rounded-xl border border-ds-border bg-ds-surface px-2 py-2 text-xs text-ds-text focus:border-ds-primary focus:outline-none"
                 title="กรองตามหมวดหมู่"
               >
                 <option value="all">ทุกหมวด</option>
@@ -387,7 +392,7 @@ export default function ModalMedicationManager({
               <button
                 type="button"
                 onClick={handleOpenAdd}
-                className="flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white hover:brightness-105 shrink-0 shadow-xs"
+                className="flex items-center gap-1 rounded-xl bg-ds-primary px-3 py-2 text-xs font-bold text-ds-on-primary hover:bg-ds-primary-hover shrink-0 shadow-xs cursor-pointer"
               >
                 <Plus className="h-4 w-4" />
                 <span>เพิ่มตัวยา</span>
@@ -398,26 +403,26 @@ export default function ModalMedicationManager({
           {/* List of Medications */}
           <div className="space-y-2">
             {filteredMeds.length === 0 ? (
-              <div className="p-8 text-center text-xs text-text-muted dark:text-zinc-500">
+              <div className="p-8 text-center text-xs text-ds-text-tertiary">
                 {searchQuery ? "ไม่พบตัวยาที่ค้นหา" : "ยังไม่มีรายการยาในระบบ แตะปุ่ม + เพิ่มตัวยา เพื่อเริ่มต้น"}
               </div>
             ) : (
               filteredMeds.map((med) => (
                 <div
                   key={med.id}
-                  className="flex items-center justify-between rounded-xl border border-surface-subtle bg-card-bg p-3 dark:border-zinc-800 dark:bg-zinc-900/80 hover:border-primary/40 transition-all"
+                  className="flex items-center justify-between rounded-xl border border-ds-border bg-ds-surface p-3 hover:border-ds-text-tertiary/60 transition-all"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800 text-xs font-bold dark:bg-emerald-950/60 dark:text-emerald-300">
-                      💊
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-ds-surface-elevated text-ds-icon-secondary border border-ds-divider">
+                      <Pill className="h-3.5 w-3.5" />
                     </span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-xs text-text-main dark:text-white truncate">
+                        <span className="font-bold text-xs text-ds-text truncate">
                           {med.name}
                         </span>
                         {med.size && (
-                          <span className="rounded-md bg-secondary/15 px-1.5 py-0.2 text-[10px] font-semibold text-secondary dark:bg-secondary/25">
+                          <span className="rounded-md bg-ds-surface-variant px-1.5 py-0.5 text-[10px] font-semibold text-ds-text-secondary">
                             {med.size} {med.unit || ""}
                           </span>
                         )}
@@ -425,10 +430,10 @@ export default function ModalMedicationManager({
                           {MEDICATION_CATEGORY_CONFIG[resolveMedicationCategory(med.name, med.category)].label}
                         </span>
                       </div>
-                      <div className="text-[11px] text-text-muted dark:text-zinc-400">
+                      <div className="text-[11px] text-ds-text-secondary">
                         {med.price ? `฿${Number(med.price).toLocaleString()}` : "ไม่ระบุราคา"} {med.unit && !med.size ? `/ ${med.unit}` : ""}
                         {(med.description || med.note) && (
-                          <span className="text-text-muted/80 dark:text-zinc-500"> • {med.description || med.note}</span>
+                          <span className="text-ds-text-tertiary"> • {med.description || med.note}</span>
                         )}
                       </div>
                     </div>
@@ -442,7 +447,7 @@ export default function ModalMedicationManager({
                           onSelectMedication(med.name);
                           onClose();
                         }}
-                        className="rounded-lg bg-primary-light px-2.5 py-1 text-[11px] font-bold text-primary-dark hover:bg-emerald-200 dark:bg-primary-dark/30 dark:text-primary-light"
+                        className="rounded-lg bg-ds-primary-container px-2.5 py-1 text-[11px] font-bold text-ds-primary hover:opacity-90 cursor-pointer"
                       >
                         เลือก
                       </button>
@@ -450,7 +455,7 @@ export default function ModalMedicationManager({
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(med)}
-                      className="rounded-lg p-1.5 text-text-muted hover:bg-sky-50 hover:text-secondary dark:hover:bg-zinc-800"
+                      className="rounded-lg p-1.5 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer"
                       title="แก้ไข"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -458,7 +463,7 @@ export default function ModalMedicationManager({
                     <button
                       type="button"
                       onClick={() => handleDelete(med.id, med.name)}
-                      className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-zinc-800"
+                      className="rounded-lg p-1.5 text-ds-icon-secondary hover:bg-ds-error-container hover:text-ds-error cursor-pointer"
                       title="ลบ"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

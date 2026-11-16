@@ -88,17 +88,17 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
   };
 
   return (
-    <div className="space-y-2 rounded-2xl bg-primary-light/30 p-3.5 dark:bg-emerald-950/30 border border-primary/20">
+    <div className="space-y-2 rounded-2xl border border-ds-border bg-ds-surface-elevated p-3.5">
       <div className="flex items-center justify-between">
-        <label className="flex items-center gap-1.5 text-xs font-bold text-primary-dark dark:text-emerald-300">
-          <Syringe className="h-3.5 w-3.5 text-primary" />
+        <label className="flex items-center gap-1.5 text-xs font-bold text-ds-text">
+          <Syringe className="h-3.5 w-3.5 text-ds-icon-secondary" />
           <span>รายการยาที่ใช้</span>
         </label>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onOpenManager}
-            className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:underline"
+            className="flex items-center gap-1 text-[11px] font-bold text-ds-text-secondary hover:text-ds-text hover:underline cursor-pointer"
           >
             <Pill className="h-3 w-3" />
             <span>จัดการยา</span>
@@ -106,7 +106,7 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
           <button
             type="button"
             onClick={() => onChange([...rows, { medicationId: "", quantity: "" }])}
-            className="flex items-center gap-1 text-[11px] font-bold text-primary hover:underline dark:text-emerald-400"
+            className="flex items-center gap-1 text-[11px] font-bold text-ds-primary hover:underline cursor-pointer"
           >
             <Plus className="h-3 w-3" />
             <span>เพิ่มยา</span>
@@ -115,13 +115,13 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
       </div>
 
       {rows.length === 0 && (
-        <p className="text-[11px] text-text-muted dark:text-zinc-400">
+        <p className="text-[11px] text-ds-text-tertiary">
           ยังไม่ได้เลือกยา — แตะ “เพิ่มยา” เพื่อระบุยาและปริมาณที่ใช้
         </p>
       )}
 
       {legacyNames && legacyNames.length > 0 && rows.length === 0 && (
-        <p className="rounded-lg bg-white/70 px-2 py-1 text-[11px] text-text-muted dark:bg-zinc-800/60 dark:text-zinc-300">
+        <p className="rounded-lg bg-ds-surface px-2 py-1 text-[11px] text-ds-text-secondary border border-ds-divider">
           รายการเดิม (ไม่ระบุปริมาณ): {legacyNames.join(", ")}
         </p>
       )}
@@ -146,13 +146,13 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
           return (
             <div
               key={idx}
-              className="flex flex-col gap-1.5 rounded-xl border border-primary/20 bg-white/80 p-2 dark:border-emerald-800/60 dark:bg-zinc-800/60"
+              className="flex flex-col gap-1.5 rounded-xl border border-ds-border bg-ds-surface p-2"
             >
               <div className="flex items-center gap-1.5">
                 <select
                   value={row.medicationId}
                   onChange={(e) => update(idx, { medicationId: e.target.value, snapshot: undefined })}
-                  className="min-w-0 flex-1 truncate rounded-lg border border-primary/30 bg-white px-2 py-1.5 text-xs text-text-main dark:bg-zinc-900 dark:text-white"
+                  className="min-w-0 flex-1 truncate rounded-lg border border-ds-border bg-ds-surface-elevated px-2 py-1.5 text-xs text-ds-text focus:border-ds-primary focus:outline-none"
                 >
                   <option value="">-- เลือกจากคลังยา --</option>
                   {!hasMedOption && snap && <option value={snap.medicationId}>{snap.name} (เดิม)</option>}
@@ -169,7 +169,7 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
                 <button
                   type="button"
                   onClick={() => onChange(rows.filter((_, i) => i !== idx))}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-rose-500 transition-colors hover:bg-rose-100 dark:hover:bg-rose-950/50"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ds-icon-secondary transition-colors hover:bg-ds-error-container hover:text-ds-error cursor-pointer"
                   title="ลบรายการยานี้"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -184,18 +184,18 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
                   step="any"
                   value={row.quantity}
                   onChange={(e) => update(idx, { quantity: e.target.value })}
-                  className="w-20 rounded-lg border border-primary/20 bg-white px-2 py-1.5 text-xs text-text-main text-end outline-none focus:border-primary dark:bg-zinc-900 dark:text-white"
+                  className="w-20 rounded-lg border border-ds-border bg-ds-surface-elevated px-2 py-1.5 text-xs text-ds-text text-end outline-none focus:border-ds-primary"
                 />
-                <span className="text-xs font-semibold text-text-muted dark:text-zinc-300">{unit || "หน่วย"}</span>
-                <span className="ml-auto text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                <span className="text-xs font-semibold text-ds-text-secondary">{unit || "หน่วย"}</span>
+                <span className="ml-auto text-xs font-bold text-ds-text">
                   {lineCost > 0 ? fmtBaht(lineCost) : "—"}
                   {fifoPreview?.isEstimated && lineCost > 0 && (
-                    <span className="ml-1 text-[10px] font-normal text-amber-600">(ประมาณ)</span>
+                    <span className="ml-1 text-[10px] font-normal text-ds-warning">(ประมาณ)</span>
                   )}
                 </span>
               </div>
               {isOverStock && (
-                <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                <p className="text-[11px] font-semibold text-ds-warning">
                   ⚠️ ใช้เกินสต็อกคงเหลือ ({onHand?.toLocaleString()} {unit}) — บันทึกได้แต่สต็อกจะติดลบ
                 </p>
               )}
@@ -204,9 +204,9 @@ export default function MedicationUsageEditor({ rows, onChange, masterMeds, onOp
         })}
       </div>
 
-      <div className="flex items-center justify-between border-t border-primary/20 pt-2 text-xs">
-        <span className="font-bold text-primary-dark dark:text-emerald-300">ต้นทุนยารวม</span>
-        <span className="text-sm font-extrabold text-emerald-700 dark:text-emerald-300">{fmtBaht(totalSatang)}</span>
+      <div className="flex items-center justify-between border-t border-ds-divider pt-2 text-xs">
+        <span className="font-bold text-ds-text-secondary">ต้นทุนยารวม</span>
+        <span className="text-sm font-extrabold text-ds-text">{fmtBaht(totalSatang)}</span>
       </div>
     </div>
   );

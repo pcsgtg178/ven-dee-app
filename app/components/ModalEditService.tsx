@@ -142,38 +142,44 @@ export default function ModalEditService({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-      <div className="flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900 border border-surface-subtle dark:border-zinc-800">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-service-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ds-overlay p-4 backdrop-blur-xs"
+    >
+      <div className="flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-3xl bg-ds-surface-elevated shadow-ds-popover border border-ds-border">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-surface-subtle px-5 py-4 dark:border-zinc-800 bg-surface-subtle/30 dark:bg-zinc-800/30">
+        <div className="flex items-center justify-between border-b border-ds-divider px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-ds-surface-variant text-ds-icon-primary">
               <Syringe className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-text-main dark:text-white">
+              <h2 id="edit-service-title" className="text-base font-bold text-ds-text">
                 {service.status === "completed" || isRetroactiveEdit
                   ? "แก้ไขข้อมูลบริการ"
                   : "แก้ไขนัดหมายบริการ"}
               </h2>
-              <p className="text-xs text-text-muted dark:text-zinc-400">
-                ลูกค้า: <strong className="text-primary-dark dark:text-primary-light">{service.customerName}</strong>
+              <p className="text-xs text-ds-text-secondary">
+                ลูกค้า: <strong className="text-ds-text">{service.customerName}</strong>
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-text-muted hover:bg-slate-200 dark:hover:bg-zinc-800"
+            aria-label="ปิดหน้าต่าง"
+            className="rounded-full p-2 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="overflow-y-auto overscroll-contain p-5 space-y-4">
           {errorMsg && (
-            <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-600 dark:bg-rose-950/60 dark:text-rose-300">
+            <div className="flex items-center gap-2 rounded-xl bg-ds-error-container p-3 text-xs font-semibold text-ds-error">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
@@ -181,8 +187,8 @@ export default function ModalEditService({
 
           {/* Retroactive Warning Alert Banner */}
           {isRetroactiveEdit && (
-            <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200 border border-amber-200 dark:border-amber-900/60">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <div className="flex items-start gap-2.5 rounded-2xl bg-ds-warning-container p-3 text-xs font-medium text-ds-warning">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
                 คุณกำลังแก้ไขข้อมูลบริการย้อนหลัง โปรดตรวจสอบวันที่ รายการยา และค่าบริการให้ถูกต้อง
               </span>
@@ -192,8 +198,8 @@ export default function ModalEditService({
           {/* Date & Time */}
           <div className="grid grid-cols-2 gap-3 items-end">
             <div className="flex flex-col">
-              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200 mb-1.5">
-                <Calendar className="h-3.5 w-3.5 text-primary" />
+              <label className="flex items-center gap-1.5 text-xs font-bold text-ds-text mb-1.5">
+                <Calendar className="h-3.5 w-3.5 text-ds-icon-secondary" />
                 <span>วันที่</span>
               </label>
               <input
@@ -202,12 +208,12 @@ export default function ModalEditService({
                 min={minServiceDate}
                 value={serviceDate}
                 onChange={(e) => setServiceDate(e.target.value)}
-                className="w-full h-11 min-h-[44px] rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white appearance-none box-border flex items-center"
+                className="w-full h-11 min-h-[44px] rounded-xl border border-ds-border bg-ds-surface px-3.5 text-xs text-ds-text outline-none focus:border-ds-primary appearance-none box-border flex items-center"
               />
             </div>
             <div className="flex flex-col">
-              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200 mb-1.5">
-                <Clock className="h-3.5 w-3.5 text-primary" />
+              <label className="flex items-center gap-1.5 text-xs font-bold text-ds-text mb-1.5">
+                <Clock className="h-3.5 w-3.5 text-ds-icon-secondary" />
                 <span>เวลา</span>
               </label>
               <input
@@ -215,7 +221,7 @@ export default function ModalEditService({
                 required
                 value={serviceTime}
                 onChange={(e) => setServiceTime(e.target.value)}
-                className="w-full h-11 min-h-[44px] rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white appearance-none box-border flex items-center"
+                className="w-full h-11 min-h-[44px] rounded-xl border border-ds-border bg-ds-surface px-3.5 text-xs text-ds-text outline-none focus:border-ds-primary appearance-none box-border flex items-center"
               />
             </div>
           </div>
@@ -231,8 +237,8 @@ export default function ModalEditService({
 
           {/* Service Note */}
           <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
-              <FileText className="h-3.5 w-3.5 text-primary" />
+            <label className="flex items-center gap-1.5 text-xs font-bold text-ds-text">
+              <FileText className="h-3.5 w-3.5 text-ds-icon-secondary" />
               <span>บริการ / รายละเอียด</span>
             </label>
             <input
@@ -240,15 +246,15 @@ export default function ModalEditService({
               value={serviceNote}
               onChange={(e) => setServiceNote(e.target.value)}
               placeholder="ระบุรายละเอียดเพิ่มเติม"
-              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+              className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
             />
           </div>
 
           {/* Price & Discount */}
           <div className="grid grid-cols-2 gap-3 items-start">
             <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
-                <DollarSign className="h-3.5 w-3.5 text-primary" />
+              <label className="flex items-center gap-1.5 text-xs font-bold text-ds-text">
+                <DollarSign className="h-3.5 w-3.5 text-ds-icon-secondary" />
                 <span>ค่าบริการ (บาท)</span>
               </label>
               <input
@@ -257,12 +263,12 @@ export default function ModalEditService({
                 value={servicePrice}
                 onChange={(e) => setServicePrice(e.target.value)}
                 placeholder="เช่น 1000"
-                className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+                className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
-                <DollarSign className="h-3.5 w-3.5 text-primary" />
+              <label className="flex items-center gap-1.5 text-xs font-bold text-ds-text">
+                <DollarSign className="h-3.5 w-3.5 text-ds-icon-secondary" />
                 <span>ส่วนลด (บาท)</span>
               </label>
               <input
@@ -271,7 +277,7 @@ export default function ModalEditService({
                 value={serviceDiscount}
                 onChange={(e) => setServiceDiscount(e.target.value)}
                 placeholder="เช่น 100"
-                className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3 py-2 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+                className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
               />
             </div>
           </div>
@@ -282,10 +288,10 @@ export default function ModalEditService({
             const disc = Math.max(0, Number(serviceDiscount) || 0);
             const net = Math.max(0, gross - disc);
             return (
-              <div className="rounded-xl bg-emerald-50/80 px-3 py-2 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-900/60">
-                ยอดสุทธิ: <strong className="font-extrabold text-sm text-emerald-700 dark:text-emerald-300">฿{net.toLocaleString()}</strong>
+              <div className="rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs font-semibold text-ds-text">
+                ยอดสุทธิ: <strong className="font-extrabold text-sm text-ds-success">฿{net.toLocaleString()}</strong>
                 {disc > 0 && (
-                  <span className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 ml-1.5 font-normal">
+                  <span className="text-[11px] text-ds-text-secondary ml-1.5 font-normal">
                     (จากราคา ฿{gross.toLocaleString()} ส่วนลด ฿{disc.toLocaleString()})
                   </span>
                 )}
@@ -294,23 +300,23 @@ export default function ModalEditService({
           })()}
 
           {/* Actions */}
-          <div className="flex items-center gap-2 pt-2 border-t border-surface-subtle dark:border-zinc-800">
+          <div className="flex items-center gap-2 pt-2 border-t border-ds-divider">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-surface-subtle bg-surface-subtle py-2.5 text-xs font-bold text-text-main hover:bg-slate-200 active:scale-95 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 transition-all"
+              className="flex-1 rounded-xl border border-ds-border bg-ds-surface py-2.5 text-xs font-bold text-ds-text hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-600 py-2.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-ds-primary py-2.5 text-xs font-bold text-ds-on-primary shadow-xs hover:bg-ds-primary-hover active:scale-95 transition-all cursor-pointer ${
                 isSubmitting ? "opacity-60 cursor-not-allowed" : ""
               }`}
             >
               {isSubmitting ? (
-                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
               ) : (
                 <Check className="h-4 w-4" />
               )}

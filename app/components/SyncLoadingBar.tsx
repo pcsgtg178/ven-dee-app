@@ -47,11 +47,11 @@ export default function SyncLoadingBar() {
       className="fixed top-0 left-0 right-0 z-[9999] pointer-events-none h-1 overflow-hidden"
     >
       {isSyncing ? (
-        <div className="relative h-full w-full bg-sky-100/30 dark:bg-sky-950/30">
-          <div className="absolute inset-y-0 w-full bg-gradient-to-r from-transparent via-sky-500 to-emerald-400 animate-sync-beam shadow-[0_0_10px_rgba(56,189,248,0.7)]" />
+        <div className="relative h-full w-full bg-ds-surface-variant/60">
+          <div className="absolute inset-y-0 w-full bg-ds-primary animate-sync-beam" />
         </div>
       ) : (
-        <div className="h-full w-full bg-emerald-500 opacity-90 transition-opacity duration-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+        <div className="h-full w-full bg-ds-success opacity-90 transition-opacity duration-500" />
       )}
     </div>
   );

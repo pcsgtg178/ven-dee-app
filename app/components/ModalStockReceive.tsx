@@ -90,35 +90,43 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white p-5 shadow-2xl dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800">
-        <div className="flex shrink-0 items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="stock-receive-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ds-overlay p-4 backdrop-blur-xs animate-in fade-in duration-150"
+    >
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-ds-surface-elevated p-5 shadow-ds-popover border border-ds-border">
+        <div className="flex shrink-0 items-center justify-between pb-3 border-b border-ds-divider">
           <div className="flex items-center gap-2">
-            <PackagePlus className="h-5 w-5 text-emerald-600" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ds-surface-variant text-ds-icon-primary">
+              <PackagePlus className="h-4 w-4" />
+            </div>
+            <h3 id="stock-receive-title" className="text-sm font-bold text-ds-text">
               รับเข้าสต็อก: {medication.name}
             </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800"
+            aria-label="ปิดหน้าต่าง"
+            className="rounded-lg p-1 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 flex-1 overflow-y-auto space-y-3 pr-1">
+        <form onSubmit={handleSubmit} className="mt-4 flex-1 overflow-y-auto overscroll-contain space-y-3 pr-1">
           {errorMsg && (
-            <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+            <div className="rounded-xl bg-ds-error-container px-3 py-2 text-xs font-semibold text-ds-error">
               {errorMsg}
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                จำนวน ({packUnit}) <span className="text-rose-500">*</span>
+              <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
+                จำนวน ({packUnit}) <span className="text-ds-error">*</span>
               </label>
               <input
                 type="number"
@@ -128,12 +136,12 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
                 value={packs}
                 onChange={(e) => setPacks(e.target.value)}
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                ราคาต่อ{packUnit} (บาท) <span className="text-rose-500">*</span>
+              <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
+                ราคาต่อ{packUnit} (บาท) <span className="text-ds-error">*</span>
               </label>
               <input
                 type="number"
@@ -143,26 +151,26 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
                 value={packCostThb}
                 onChange={(e) => setPackCostThb(e.target.value)}
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
               />
             </div>
           </div>
 
           {packSizeUnset && (
-            <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            <div className="rounded-xl bg-ds-warning-container px-3 py-2 text-xs font-semibold text-ds-warning">
               ⚠️ ตัวยานี้ยังตั้งไว้ว่า 1 {packUnit} = 1 {unit} — ถ้า 1 {packUnit} มีหลาย{unit} (เช่น 200 {unit})
               กรุณาไปแก้ &quot;ขนาดบรรจุ&quot; ในหน้าแก้ไขตัวยาก่อนรับเข้า ไม่งั้นยอดสต็อกและต้นทุนต่อ{unit}จะผิด
             </div>
           )}
 
           {packsNum > 0 && (
-            <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 space-y-0.5">
+            <div className="rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs font-semibold text-ds-success space-y-0.5">
               <div>
                 {packsNum.toLocaleString()} {packUnit} × {packSize.toLocaleString()} {unit} = รับเข้า{" "}
                 {totalUnits.toLocaleString()} {unit}
               </div>
               {packCostNum > 0 && (
-                <div className="font-medium text-emerald-700 dark:text-emerald-300">
+                <div className="font-medium text-ds-text-secondary">
                   รวม ฿{totalCostThb.toLocaleString("th-TH", { maximumFractionDigits: 2 })} · เฉลี่ย ฿
                   {unitCostThb.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{unit}
                 </div>
@@ -172,7 +180,7 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+              <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
                 ร้านที่ซื้อ / Supplier
               </label>
               <input
@@ -180,24 +188,24 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
                 placeholder="เช่น บริษัท A"
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+              <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
                 วันที่รับเข้า
               </label>
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text outline-none focus:border-ds-primary"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+            <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
               หมายเหตุ
             </label>
             <input
@@ -205,7 +213,7 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
               placeholder="เลข Lot หรือรายละเอียดเพิ่มเติม"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
             />
           </div>
 
@@ -213,14 +221,14 @@ export default function ModalStockReceive({ isOpen, medication, onClose, onSucce
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="rounded-xl border border-ds-border bg-ds-surface px-4 py-2 text-xs font-semibold text-ds-text-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer transition-colors"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="rounded-xl bg-ds-primary px-4 py-2 text-xs font-bold text-ds-on-primary hover:bg-ds-primary-hover active:bg-ds-primary-pressed disabled:opacity-50 cursor-pointer transition-colors"
             >
               {isSubmitting ? "กำลังบันทึก..." : "ยืนยันรับเข้า"}
             </button>

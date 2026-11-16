@@ -82,33 +82,41 @@ export default function ModalStockIssue({ isOpen, medication, onClose, onSuccess
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white p-5 shadow-2xl dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800">
-        <div className="flex shrink-0 items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="stock-issue-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ds-overlay p-4 backdrop-blur-xs animate-in fade-in duration-150"
+    >
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-ds-surface-elevated p-5 shadow-ds-popover border border-ds-border">
+        <div className="flex shrink-0 items-center justify-between pb-3 border-b border-ds-divider">
           <div className="flex items-center gap-2">
-            <PackageMinus className="h-5 w-5 text-amber-600" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ds-surface-variant text-ds-icon-primary">
+              <PackageMinus className="h-4 w-4" />
+            </div>
+            <h3 id="stock-issue-title" className="text-sm font-bold text-ds-text">
               ตัดสต็อกออก: {medication.name}
             </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800"
+            aria-label="ปิดหน้าต่าง"
+            className="rounded-lg p-1 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 flex-1 overflow-y-auto space-y-3 pr-1">
+        <form onSubmit={handleSubmit} className="mt-4 flex-1 overflow-y-auto overscroll-contain space-y-3 pr-1">
           {errorMsg && (
-            <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+            <div className="rounded-xl bg-ds-error-container px-3 py-2 text-xs font-semibold text-ds-error">
               {errorMsg}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
+            <label className="block text-xs font-semibold text-ds-text-secondary mb-1.5">
               ประเภทการตัดออก
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -118,10 +126,10 @@ export default function ModalStockIssue({ isOpen, medication, onClose, onSuccess
                   setType("waste");
                   setReason("expired");
                 }}
-                className={`rounded-xl px-3 py-2 text-xs font-bold border ${
+                className={`rounded-xl px-3 py-2 text-xs font-bold border cursor-pointer transition-colors ${
                   type === "waste"
-                    ? "border-rose-500 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
-                    : "border-slate-200 text-slate-600 dark:border-zinc-700 dark:text-zinc-300"
+                    ? "border-ds-error/60 bg-ds-error-container text-ds-error"
+                    : "border-ds-border bg-ds-surface text-ds-text-secondary hover:text-ds-text"
                 }`}
               >
                 ทิ้ง / เสีย / หมดอายุ
@@ -132,10 +140,10 @@ export default function ModalStockIssue({ isOpen, medication, onClose, onSuccess
                   setType("giveaway");
                   setReason("free");
                 }}
-                className={`rounded-xl px-3 py-2 text-xs font-bold border ${
+                className={`rounded-xl px-3 py-2 text-xs font-bold border cursor-pointer transition-colors ${
                   type === "giveaway"
-                    ? "border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                    : "border-slate-200 text-slate-600 dark:border-zinc-700 dark:text-zinc-300"
+                    ? "border-ds-warning/60 bg-ds-warning-container text-ds-warning"
+                    : "border-ds-border bg-ds-surface text-ds-text-secondary hover:text-ds-text"
                 }`}
               >
                 ใช้ส่วนตัว / แจกฟรี
@@ -145,8 +153,8 @@ export default function ModalStockIssue({ isOpen, medication, onClose, onSuccess
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                ปริมาณ ({unit}) <span className="text-rose-500">*</span>
+              <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
+                ปริมาณ ({unit}) <span className="text-ds-error">*</span>
               </label>
               <input
                 type="number"
@@ -156,17 +164,17 @@ export default function ModalStockIssue({ isOpen, medication, onClose, onSuccess
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-amber-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+              <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
                 เหตุผล
               </label>
               <select
                 value={reason}
                 onChange={(e) => setReason(e.target.value as StockIssueReason)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-amber-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text outline-none focus:border-ds-primary"
               >
                 {REASON_OPTIONS.map((r) => (
                   <option key={r.value} value={r.value}>
@@ -178,7 +186,7 @@ export default function ModalStockIssue({ isOpen, medication, onClose, onSuccess
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+            <label className="block text-xs font-semibold text-ds-text-secondary mb-1">
               หมายเหตุ
             </label>
             <input
@@ -186,7 +194,7 @@ export default function ModalStockIssue({ isOpen, medication, onClose, onSuccess
               placeholder="รายละเอียดเพิ่มเติม"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-amber-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
             />
           </div>
 
@@ -194,14 +202,14 @@ export default function ModalStockIssue({ isOpen, medication, onClose, onSuccess
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="rounded-xl border border-ds-border bg-ds-surface px-4 py-2 text-xs font-semibold text-ds-text-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer transition-colors"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+              className="rounded-xl bg-ds-primary px-4 py-2 text-xs font-bold text-ds-on-primary hover:bg-ds-primary-hover active:bg-ds-primary-pressed disabled:opacity-50 cursor-pointer transition-colors"
             >
               {isSubmitting ? "กำลังบันทึก..." : "ยืนยันตัดออก"}
             </button>

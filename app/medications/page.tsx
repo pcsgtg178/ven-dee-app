@@ -95,6 +95,17 @@ export default function MedicationsPage() {
     return () => unsub();
   }, [loadData]);
 
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isSubmitting) {
+        setIsModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModalOpen, isSubmitting]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
@@ -234,15 +245,15 @@ export default function MedicationsPage() {
   }, [medications, searchQuery, categoryFilter, stockFilter]);
 
   return (
-    <div className="min-h-screen bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen bg-ds-bg text-ds-text">
       {/* App Bar */}
       <AppBar title="คลังตัวยาและเวชภัณฑ์" />
 
       {/* Toast Banner */}
       {toastMessage && (
         <div className="sticky top-14 z-50 mx-auto max-w-lg px-4 py-2">
-          <div className="flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
-            <Check className="h-4 w-4 shrink-0" />
+          <div className="flex items-center gap-2 rounded-xl border border-ds-primary/40 bg-ds-surface-elevated px-4 py-2.5 text-xs font-bold text-ds-text shadow-ds-popover animate-in fade-in slide-in-from-top-2 duration-200">
+            <Check className="h-4 w-4 shrink-0 text-ds-primary" />
             <span>{toastMessage}</span>
           </div>
         </div>
@@ -253,15 +264,13 @@ export default function MedicationsPage() {
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-extrabold tracking-tight text-text-main dark:text-white flex items-center gap-1.5">
+              <h1 className="text-lg font-extrabold tracking-tight text-ds-text flex items-center gap-1.5">
                 <span>รายการตัวยา</span>
-                <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
+                <span className="rounded-full bg-ds-surface-variant px-2 py-0.5 text-xs font-bold text-ds-text-secondary border border-ds-border/60">
                   {medications.length} รายการ
                 </span>
               </h1>
             </div>
-
-            
           </div>
 
           <div className="flex items-center gap-2">
@@ -269,17 +278,17 @@ export default function MedicationsPage() {
               type="button"
               onClick={() => loadData(true)}
               disabled={isSyncing}
-              className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-surface-subtle bg-white px-3 py-2 text-xs font-semibold text-text-muted hover:text-text-main hover:bg-slate-50 active:scale-95 transition-all dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800 cursor-pointer disabled:opacity-60"
+              className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-ds-border bg-ds-surface-elevated px-3 py-2 text-xs font-semibold text-ds-text-secondary hover:text-ds-text hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer disabled:opacity-60"
               title="รีเฟรชข้อมูล"
             >
-              <RotateCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin text-purple-600" : ""}`} />
+              <RotateCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin text-ds-primary" : ""}`} />
               <span>รีเฟรช</span>
             </button>
 
             <button
               type="button"
               onClick={handleOpenAdd}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-purple-600/20 hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-ds-primary px-3.5 py-2 text-xs font-bold text-ds-on-primary shadow-ds-card hover:bg-ds-primary-hover active:bg-ds-primary-pressed active:scale-95 transition-all cursor-pointer"
             >
               <Plus className="h-4 w-4" />
               <span>เพิ่มตัวยา</span>
@@ -294,14 +303,15 @@ export default function MedicationsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="ค้นหาชื่อตัวยา หรือหน่วยนับ..."
-            className="w-full rounded-2xl border border-surface-subtle bg-white pl-11 pr-10 py-3 text-sm text-text-main placeholder:text-text-muted shadow-2xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
+            className="w-full rounded-2xl border border-ds-border bg-ds-surface-elevated pl-11 pr-10 py-3 text-sm text-ds-text placeholder:text-ds-text-tertiary shadow-2xs focus:border-ds-primary focus:outline-none"
           />
-          <Search className="pointer-events-none absolute left-3.5 top-3.5 h-4 w-4 text-text-muted" />
+          <Search className="pointer-events-none absolute left-3.5 top-3.5 h-4 w-4 text-ds-icon-secondary" />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-main dark:hover:text-white cursor-pointer"
+              aria-label="ล้างคำค้นหา"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-ds-icon-secondary hover:text-ds-text cursor-pointer"
             >
               <X className="h-4 w-4" />
             </button>
@@ -320,14 +330,14 @@ export default function MedicationsPage() {
               key={f.id}
               type="button"
               onClick={() => setStockFilter(f.id)}
-              className={`rounded-full px-3 py-1 text-[11px] font-bold transition-all cursor-pointer ${
+              className={`rounded-full px-3 py-1 text-[11px] font-bold transition-all cursor-pointer border ${
                 stockFilter === f.id
                   ? f.id === "negative"
-                    ? "bg-rose-600 text-white"
+                    ? "border-ds-error/40 bg-ds-error-container text-ds-error"
                     : f.id === "low"
-                      ? "bg-amber-500 text-white"
-                      : "bg-slate-800 text-white dark:bg-zinc-200 dark:text-zinc-900"
-                  : "bg-white text-text-muted border border-surface-subtle hover:bg-slate-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-300"
+                      ? "border-ds-warning/40 bg-ds-warning-container text-ds-warning"
+                      : "border-transparent bg-ds-primary text-ds-on-primary"
+                  : "border-ds-border bg-ds-surface text-ds-text-secondary hover:bg-ds-surface-elevated"
               }`}
             >
               {f.label}
@@ -342,10 +352,10 @@ export default function MedicationsPage() {
               key={c}
               type="button"
               onClick={() => setCategoryFilter(c)}
-              className={`rounded-full px-3 py-1 text-[11px] font-bold transition-all cursor-pointer ${
+              className={`rounded-full px-3 py-1 text-[11px] font-bold transition-all cursor-pointer border ${
                 categoryFilter === c
-                  ? "bg-purple-600 text-white shadow-xs"
-                  : "bg-white text-text-muted border border-surface-subtle hover:bg-purple-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-300"
+                  ? "border-transparent bg-ds-primary text-ds-on-primary shadow-xs"
+                  : "border-ds-border bg-ds-surface text-ds-text-secondary hover:bg-ds-surface-elevated"
               }`}
             >
               {c === "all" ? "ทั้งหมด" : MEDICATION_CATEGORY_CONFIG[c].label}
@@ -356,12 +366,12 @@ export default function MedicationsPage() {
         {/* Medication Cards List */}
         <div className="space-y-2.5">
           {filteredMeds.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-surface-subtle bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
-              <Pill className="mx-auto h-10 w-10 text-purple-300 dark:text-purple-700 mb-2" />
-              <p className="text-sm font-bold text-text-main dark:text-white">
+            <div className="rounded-2xl border border-dashed border-ds-border bg-ds-surface p-8 text-center">
+              <Pill className="mx-auto h-10 w-10 text-ds-icon-disabled mb-2" />
+              <p className="text-sm font-bold text-ds-text">
                 {searchQuery ? "ไม่พบตัวยาที่ตรงกับคำค้นหา" : "ยังไม่มีรายการตัวยาในระบบ"}
               </p>
-              <p className="text-xs text-text-muted dark:text-zinc-400 mt-1">
+              <p className="text-xs text-ds-text-secondary mt-1">
                 {searchQuery
                   ? "ลองเปลี่ยนคำค้นหา หรือกดล้างการค้นหา"
                   : "กดปุ่ม 'เพิ่มตัวยา' ด้านบนเพื่อเริ่มต้นสร้างฐานข้อมูลตัวยา"}
@@ -382,27 +392,27 @@ export default function MedicationsPage() {
               return (
                 <div
                   key={med.id}
-                  className="group relative flex flex-col gap-2.5 rounded-2xl border border-purple-100 bg-white p-3.5 shadow-2xs transition-all hover:border-purple-300 hover:shadow-xs dark:border-zinc-800 dark:bg-zinc-900"
+                  className="group relative flex flex-col gap-3 rounded-2xl border border-ds-border bg-ds-surface p-4 shadow-ds-card transition-colors hover:border-ds-text-tertiary/60"
                 >
                   <div className="flex items-start justify-between gap-2">
                     {/* Left Pill Icon & Details */}
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-300">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ds-surface-elevated text-ds-icon-secondary border border-ds-divider">
                         <Pill className="h-5 w-5" />
                       </div>
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-sm text-text-main dark:text-white truncate">
+                          <span className="font-bold text-sm text-ds-text truncate">
                             {med.name}
                           </span>
                           {(med.packSize || med.size || med.unit) && (
-                            <span className="shrink-0 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60">
+                            <span className="shrink-0 rounded-md bg-ds-surface-variant px-2 py-0.5 text-[10px] font-bold text-ds-text-secondary border border-ds-border/60">
                               1 {med.packUnit || "ขวด"} = {(med.packSize ?? (Number(med.size) || 1)).toLocaleString()} {med.unit || "ยูนิต"}
                             </span>
                           )}
                           {isPackSizeUnset(med) && (
-                            <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                            <span className="shrink-0 rounded-md bg-ds-warning-container px-2 py-0.5 text-[10px] font-bold text-ds-warning">
                               ยังไม่ตั้งขนาดบรรจุ
                             </span>
                           )}
@@ -415,28 +425,28 @@ export default function MedicationsPage() {
                             );
                           })()}
                           {neg && (
-                            <span className="shrink-0 rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                            <span className="shrink-0 rounded-md bg-ds-error-container px-2 py-0.5 text-[10px] font-bold text-ds-error">
                               ติดลบ
                             </span>
                           )}
                           {!neg && low && (
-                            <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                            <span className="shrink-0 rounded-md bg-ds-warning-container px-2 py-0.5 text-[10px] font-bold text-ds-warning">
                               สต็อกต่ำ
                             </span>
                           )}
                           {med.isArchived && (
-                            <span className="shrink-0 rounded-md bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-zinc-700 dark:text-zinc-300">
+                            <span className="shrink-0 rounded-md bg-ds-surface-variant px-2 py-0.5 text-[10px] font-bold text-ds-text-tertiary">
                               เก็บถาวร
                             </span>
                           )}
                         </div>
 
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                          <span className={`font-bold ${neg ? "text-rose-600" : low ? "text-amber-600" : "text-emerald-600 dark:text-emerald-400"}`}>
+                          <span className={`font-bold ${neg ? "text-ds-error" : low ? "text-ds-warning" : "text-ds-success"}`}>
                             คงเหลือ: {onHandText}
                           </span>
                           {refCostThb > 0 && (
-                            <span className="text-[11px] text-text-muted dark:text-zinc-400">
+                            <span className="text-[11px] text-ds-text-secondary">
                               ต้นทุนอ้างอิง ฿{refCostThb.toLocaleString()}/{med.packUnit || "ขวด"}
                             </span>
                           )}
@@ -449,62 +459,65 @@ export default function MedicationsPage() {
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(med)}
-                        className="rounded-lg p-1.5 text-text-muted hover:bg-purple-50 hover:text-purple-600 dark:hover:bg-purple-950/40 dark:hover:text-purple-300 cursor-pointer"
+                        className="rounded-lg p-1.5 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer transition-colors"
                         title="แก้ไขข้อมูลตัวยา"
+                        aria-label={`แก้ไข ${med.name}`}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleToggleArchive(med)}
-                        className="rounded-lg p-1.5 text-text-muted hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-zinc-800 cursor-pointer"
+                        className="rounded-lg p-1.5 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer transition-colors"
                         title={med.isArchived ? "นำกลับมาใช้งาน" : "เก็บถาวร (Archive)"}
+                        aria-label={med.isArchived ? `นำ ${med.name} กลับมาใช้งาน` : `เก็บถาวร ${med.name}`}
                       >
                         {med.isArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(med)}
-                        className="rounded-lg p-1.5 text-text-muted hover:bg-rose-50 hover:text-shift-red dark:hover:bg-rose-950/40 cursor-pointer"
+                        className="rounded-lg p-1.5 text-ds-icon-secondary hover:bg-ds-error-container hover:text-ds-error cursor-pointer transition-colors"
                         title="ลบตัวยานี้"
+                        aria-label={`ลบ ${med.name}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Stock Action Buttons */}
-                  <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-slate-100 dark:border-zinc-800">
+                  {/* Stock Action Buttons — Neutral surface with muted icons */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-2 border-t border-ds-divider">
                     <button
                       type="button"
                       onClick={() => setStockModal({ type: "receive", med })}
-                      className="flex items-center justify-center gap-1 rounded-xl bg-emerald-50 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 cursor-pointer"
+                      className="flex items-center justify-center gap-1 rounded-xl border border-ds-border bg-ds-surface-elevated py-2 text-[11px] font-semibold text-ds-text hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer"
                     >
-                      <PackagePlus className="h-3.5 w-3.5" />
+                      <PackagePlus className="h-3.5 w-3.5 text-ds-icon-secondary" />
                       <span>รับเข้า</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setStockModal({ type: "issue", med })}
-                      className="flex items-center justify-center gap-1 rounded-xl bg-amber-50 py-1.5 text-[11px] font-bold text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 cursor-pointer"
+                      className="flex items-center justify-center gap-1 rounded-xl border border-ds-border bg-ds-surface-elevated py-2 text-[11px] font-semibold text-ds-text hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer"
                     >
-                      <PackageMinus className="h-3.5 w-3.5" />
+                      <PackageMinus className="h-3.5 w-3.5 text-ds-icon-secondary" />
                       <span>ตัดออก</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setStockModal({ type: "count", med })}
-                      className="flex items-center justify-center gap-1 rounded-xl bg-sky-50 py-1.5 text-[11px] font-bold text-sky-700 hover:bg-sky-100 dark:bg-sky-950/40 dark:text-sky-300 cursor-pointer"
+                      className="flex items-center justify-center gap-1 rounded-xl border border-ds-border bg-ds-surface-elevated py-2 text-[11px] font-semibold text-ds-text hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer"
                     >
-                      <ClipboardCheck className="h-3.5 w-3.5" />
+                      <ClipboardCheck className="h-3.5 w-3.5 text-ds-icon-secondary" />
                       <span>นับสต็อก</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setStockModal({ type: "history", med })}
-                      className="flex items-center justify-center gap-1 rounded-xl bg-purple-50 py-1.5 text-[11px] font-bold text-purple-700 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 cursor-pointer"
+                      className="flex items-center justify-center gap-1 rounded-xl border border-ds-border bg-ds-surface-elevated py-2 text-[11px] font-semibold text-ds-text hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer"
                     >
-                      <History className="h-3.5 w-3.5" />
+                      <History className="h-3.5 w-3.5 text-ds-icon-secondary" />
                       <span>ประวัติ</span>
                     </button>
                   </div>
@@ -517,31 +530,37 @@ export default function MedicationsPage() {
 
       {/* Add / Edit Medication Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900 border border-surface-subtle dark:border-zinc-800">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="med-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ds-overlay p-4 backdrop-blur-xs animate-in fade-in duration-150"
+        >
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-ds-surface-elevated shadow-ds-popover border border-ds-border">
             {/* Modal Header */}
-            <div className="flex shrink-0 items-center justify-between border-b border-surface-subtle px-5 py-4 dark:border-zinc-800 bg-surface-subtle/30 dark:bg-zinc-800/30">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300">
+            <div className="flex shrink-0 items-center justify-between border-b border-ds-divider px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ds-surface-variant text-ds-icon-primary">
                   <Pill className="h-4 w-4" />
                 </div>
-                <h3 className="font-extrabold text-base text-text-main dark:text-white">
+                <h3 id="med-modal-title" className="font-extrabold text-base text-ds-text">
                   {editingMed ? "แก้ไขข้อมูลตัวยา" : "เพิ่มตัวยาใหม่"}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-full p-1.5 text-text-muted hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                aria-label="ปิดหน้าต่าง"
+                className="rounded-full p-1.5 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-4">
               {errorMsg && (
-                <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-shift-red dark:bg-rose-950/40 dark:text-rose-300">
+                <div className="flex items-center gap-2 rounded-xl bg-ds-error-container p-3 text-xs font-semibold text-ds-error">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{errorMsg}</span>
                 </div>
@@ -549,8 +568,8 @@ export default function MedicationsPage() {
 
               {/* Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-main dark:text-zinc-200">
-                  ชื่อตัวยา / เวชภัณฑ์ <span className="text-shift-red">*</span>
+                <label className="text-xs font-bold text-ds-text">
+                  ชื่อตัวยา / เวชภัณฑ์ <span className="text-ds-error">*</span>
                 </label>
                 <input
                   type="text"
@@ -558,19 +577,19 @@ export default function MedicationsPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="เช่น Botox, Vitamin B12, NSS 100ml"
-                  className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3.5 py-2.5 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900"
+                  className="w-full rounded-xl border border-ds-border bg-ds-surface px-3.5 py-2.5 text-sm text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none"
                 />
               </div>
 
               {/* Units & Packaging */}
-              <div className="space-y-3 rounded-2xl border border-purple-100 bg-purple-50/40 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
-                <div className="text-xs font-extrabold text-text-main dark:text-zinc-100">
+              <div className="space-y-3 rounded-2xl border border-ds-border bg-ds-surface p-3.5">
+                <div className="text-xs font-extrabold text-ds-text">
                   หน่วยนับ & บรรจุภัณฑ์
                 </div>
 
                 {/* Usage unit */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                  <label className="text-xs font-bold text-ds-text-secondary">
                     หน่วยที่ใช้กับลูกค้า
                   </label>
                   <input
@@ -578,7 +597,7 @@ export default function MedicationsPage() {
                     value={unit}
                     onChange={(e) => setUnit(e.target.value)}
                     placeholder="เช่น ยูนิต, cc, เข็ม"
-                    className="w-full rounded-xl border border-surface-subtle bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 font-semibold"
+                    className="w-full rounded-xl border border-ds-border bg-ds-surface-elevated px-3 py-2 text-sm text-ds-text focus:border-ds-primary focus:outline-none font-semibold"
                   />
                   <div className="flex flex-wrap gap-1.5">
                     {["ยูนิต", "cc", "เข็ม", "ชิ้น", "เม็ด"].map((u) => (
@@ -586,10 +605,10 @@ export default function MedicationsPage() {
                         key={u}
                         type="button"
                         onClick={() => setUnit(u)}
-                        className={`rounded-lg px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                        className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all cursor-pointer ${
                           unit === u
-                            ? "bg-purple-600 text-white"
-                            : "bg-white text-text-muted hover:bg-purple-100 hover:text-purple-700 dark:bg-zinc-800 dark:text-zinc-300"
+                            ? "bg-ds-primary text-ds-on-primary"
+                            : "bg-ds-surface-variant text-ds-text-secondary hover:text-ds-text"
                         }`}
                       >
                         {u}
@@ -600,7 +619,7 @@ export default function MedicationsPage() {
 
                 {/* Purchase unit */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                  <label className="text-xs font-bold text-ds-text-secondary">
                     หน่วยที่ซื้อ / รับเข้า
                   </label>
                   <input
@@ -608,7 +627,7 @@ export default function MedicationsPage() {
                     value={packUnit}
                     onChange={(e) => setPackUnit(e.target.value)}
                     placeholder="เช่น กล่อง, ขวด"
-                    className="w-full rounded-xl border border-surface-subtle bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 font-semibold"
+                    className="w-full rounded-xl border border-ds-border bg-ds-surface-elevated px-3 py-2 text-sm text-ds-text focus:border-ds-primary focus:outline-none font-semibold"
                   />
                   <div className="flex flex-wrap gap-1.5">
                     {["กล่อง", "ขวด", "แพ็ค", "ชุด", "แผง", "กระปุก"].map((u) => (
@@ -616,10 +635,10 @@ export default function MedicationsPage() {
                         key={u}
                         type="button"
                         onClick={() => setPackUnit(u)}
-                        className={`rounded-lg px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                        className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all cursor-pointer ${
                           packUnit === u
-                            ? "bg-purple-600 text-white"
-                            : "bg-white text-text-muted hover:bg-purple-100 hover:text-purple-700 dark:bg-zinc-800 dark:text-zinc-300"
+                            ? "bg-ds-primary text-ds-on-primary"
+                            : "bg-ds-surface-variant text-ds-text-secondary hover:text-ds-text"
                         }`}
                       >
                         {u}
@@ -630,10 +649,10 @@ export default function MedicationsPage() {
 
                 {/* Conversion: 1 packUnit = N unit */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                  <label className="text-xs font-bold text-ds-text-secondary">
                     ขนาดบรรจุ
                   </label>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-text-main dark:text-zinc-100">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-ds-text">
                     <span className="shrink-0">1 {packUnit || "ขวด"} =</span>
                     <input
                       type="number"
@@ -643,12 +662,12 @@ export default function MedicationsPage() {
                       onChange={(e) => setPackSize(e.target.value)}
                       placeholder="200"
                       aria-label="ขนาดบรรจุ"
-                      className="w-24 rounded-xl border border-surface-subtle bg-white px-2.5 py-2 text-sm focus:border-purple-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 font-semibold"
+                      className="w-24 rounded-xl border border-ds-border bg-ds-surface-elevated px-2.5 py-2 text-sm text-ds-text focus:border-ds-primary focus:outline-none font-semibold"
                     />
                     <span className="shrink-0">{unit || "ยูนิต"}</span>
                   </div>
                   {isPackSizeUnset({ packSize: Number(packSize) || 1, unit, packUnit }) && (
-                    <div className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                    <div className="rounded-lg bg-ds-warning-container px-2.5 py-1.5 text-[11px] font-semibold text-ds-warning">
                       ⚠️ ตอนนี้ 1 {packUnit || "ขวด"} = 1 {unit || "ยูนิต"} — ถ้า 1 {packUnit || "ขวด"} มีหลาย{unit || "ยูนิต"} (เช่น 200) กรุณาแก้ให้ถูก ไม่งั้นยอดสต็อกและต้นทุนต่อ{unit || "ยูนิต"}จะผิด
                     </div>
                   )}
@@ -656,7 +675,7 @@ export default function MedicationsPage() {
                     <button
                       type="button"
                       onClick={() => setPackSize(String(legacySizeHint))}
-                      className="text-[11px] font-bold text-purple-700 underline hover:text-purple-900 dark:text-purple-300 cursor-pointer"
+                      className="text-[11px] font-bold text-ds-primary underline hover:text-ds-primary-hover cursor-pointer"
                     >
                       ข้อมูลเดิมระบุขนาด {legacySizeHint} — ใช้ค่านี้
                     </button>
@@ -666,7 +685,7 @@ export default function MedicationsPage() {
 
               {/* Category */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-main dark:text-zinc-200">หมวดหมู่ตัวยา</label>
+                <label className="text-xs font-bold text-ds-text">หมวดหมู่ตัวยา</label>
                 <div className="flex flex-wrap gap-1.5">
                   {MEDICATION_CATEGORIES.map((c) => (
                     <button
@@ -675,8 +694,8 @@ export default function MedicationsPage() {
                       onClick={() => setCategory(c)}
                       className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all cursor-pointer ${
                         category === c
-                          ? "bg-purple-600 text-white"
-                          : "bg-surface-subtle text-text-muted hover:bg-purple-100 hover:text-purple-700 dark:bg-zinc-800 dark:text-zinc-300"
+                          ? "bg-ds-primary text-ds-on-primary"
+                          : "bg-ds-surface-variant text-ds-text-secondary hover:text-ds-text"
                       }`}
                     >
                       {MEDICATION_CATEGORY_CONFIG[c].label}
@@ -687,7 +706,7 @@ export default function MedicationsPage() {
 
               {/* Reference cost per pack */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                <label className="text-xs font-bold text-ds-text">
                   ต้นทุนอ้างอิง ต่อ{packUnit || "ขวด"} (บาท)
                 </label>
                 <input
@@ -697,17 +716,17 @@ export default function MedicationsPage() {
                   value={refCostPerPackThb}
                   onChange={(e) => setRefCostPerPackThb(e.target.value)}
                   placeholder="เช่น 2500"
-                  className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
+                  className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none font-semibold"
                 />
                 {Number(refCostPerPackThb) > 0 && (Number(packSize) || 1) > 0 && (
-                  <p className="text-[11px] text-text-muted dark:text-zinc-400">
+                  <p className="text-[11px] text-ds-text-secondary">
                     ≈ ฿{(Number(refCostPerPackThb) / (Number(packSize) || 1)).toLocaleString("th-TH", { maximumFractionDigits: 2 })} ต่อ{unit || "ยูนิต"} · ใช้เมื่อยังไม่มีล็อตรับเข้า
                   </p>
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                <label className="text-xs font-bold text-ds-text">
                   แจ้งเตือนเมื่อเหลือต่ำกว่า ({packUnit || "ขวด"}) — 0 = ไม่เตือน
                 </label>
                 <input
@@ -717,13 +736,13 @@ export default function MedicationsPage() {
                   value={reorderPointPacks}
                   onChange={(e) => setReorderPointPacks(e.target.value)}
                   placeholder="1"
-                  className="w-full rounded-xl border border-surface-subtle bg-slate-50 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 font-semibold"
+                  className="w-full rounded-xl border border-ds-border bg-ds-surface px-3 py-2 text-xs text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none font-semibold"
                 />
               </div>
 
               {/* Description */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-main dark:text-zinc-200">
+                <label className="text-xs font-bold text-ds-text">
                   รายละเอียด / คุณสมบัติ
                 </label>
                 <textarea
@@ -731,7 +750,7 @@ export default function MedicationsPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="เช่น นาบูตะ *นำเข้า, เก็บในอุณหภูมิห้อง 2-8°C..."
-                  className="w-full rounded-xl border border-surface-subtle bg-slate-50 p-3 text-sm focus:border-purple-500 focus:bg-white focus:outline-none dark:border-zinc-800 dark:bg-zinc-800 dark:focus:bg-zinc-900"
+                  className="w-full rounded-xl border border-ds-border bg-ds-surface p-3 text-sm text-ds-text placeholder:text-ds-text-tertiary focus:border-ds-primary focus:outline-none"
                 />
               </div>
 
@@ -741,14 +760,14 @@ export default function MedicationsPage() {
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-ds-border bg-ds-surface py-2.5 text-xs font-bold text-ds-text hover:bg-ds-surface-variant cursor-pointer disabled:opacity-50 transition-colors"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 py-2.5 text-xs font-bold text-white shadow-md shadow-purple-600/25 hover:brightness-105 active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+                  className="flex-1 rounded-xl bg-ds-primary py-2.5 text-xs font-bold text-ds-on-primary hover:bg-ds-primary-hover active:bg-ds-primary-pressed active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
                 >
                   {isSubmitting && <RotateCw className="h-3.5 w-3.5 animate-spin" />}
                   <span>{isSubmitting ? "กำลังบันทึก..." : editingMed ? "บันทึกการแก้ไข" : "เพิ่มตัวยา"}</span>

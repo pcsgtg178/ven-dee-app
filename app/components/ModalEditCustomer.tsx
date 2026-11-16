@@ -55,20 +55,21 @@ export default function ModalEditCustomer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md rounded-3xl bg-card-bg p-5 sm:p-6 shadow-2xl border border-surface-subtle dark:bg-zinc-900 dark:border-zinc-800 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-customer-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ds-overlay backdrop-blur-xs animate-in fade-in duration-200"
+    >
+      <div className="relative w-full max-w-md rounded-3xl bg-ds-surface-elevated p-5 sm:p-6 shadow-ds-popover border border-ds-border space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-surface-subtle pb-3 dark:border-zinc-800">
+        <div className="flex items-center justify-between border-b border-ds-divider pb-3">
           <div className="flex items-center gap-2.5">
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-xs ${
-                customer.avatarColor || "bg-primary"
-              }`}
-            >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-ds-border bg-ds-surface font-bold text-ds-text">
               {customer.name.substring(0, 2)}
             </div>
             <div>
-              <h2 className="text-base font-bold text-text-main dark:text-white">
+              <h2 id="edit-customer-title" className="text-base font-bold text-ds-text">
                 แก้ไขข้อมูลลูกค้า
               </h2>
             </div>
@@ -76,7 +77,8 @@ export default function ModalEditCustomer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-text-muted hover:bg-surface-subtle hover:text-text-main dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"
+            aria-label="ปิดหน้าต่าง"
+            className="rounded-full p-1.5 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -84,8 +86,8 @@ export default function ModalEditCustomer({
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
+          <div className="flex items-center gap-2 rounded-xl bg-ds-error-container p-3 text-xs font-semibold text-ds-error">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
@@ -94,9 +96,9 @@ export default function ModalEditCustomer({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Full Name */}
           <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-text-main dark:text-zinc-200">
-              <User className="h-3.5 w-3.5 text-primary" />
-              <span>ชื่อ <strong className="text-rose-500">*</strong></span>
+            <label className="flex items-center gap-1.5 text-xs font-bold text-ds-text">
+              <User className="h-3.5 w-3.5 text-ds-icon-secondary" />
+              <span>ชื่อ <strong className="text-ds-error">*</strong></span>
             </label>
             <input
               type="text"
@@ -104,22 +106,22 @@ export default function ModalEditCustomer({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="ระบุชื่อจริง นามสกุล หรือชื่อเรียก"
-              className="w-full rounded-xl border border-surface-subtle bg-surface-subtle/40 px-3.5 py-2.5 text-sm text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary-light dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-white"
+              className="w-full rounded-xl border border-ds-border bg-ds-surface px-3.5 py-2.5 text-sm text-ds-text placeholder:text-ds-text-tertiary outline-none focus:border-ds-primary"
             />
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 pt-2 border-t border-surface-subtle dark:border-zinc-800">
+          <div className="flex items-center gap-2 pt-2 border-t border-ds-divider">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-surface-subtle bg-surface-subtle py-2.5 text-xs font-bold text-text-main hover:bg-slate-200 active:scale-95 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 transition-all"
+              className="flex-1 rounded-xl border border-ds-border bg-ds-surface py-2.5 text-xs font-bold text-ds-text hover:bg-ds-surface-variant active:scale-95 transition-all cursor-pointer"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-600 py-2.5 text-xs font-bold text-white shadow-xs hover:brightness-105 active:scale-95 transition-all"
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-ds-primary py-2.5 text-xs font-bold text-ds-on-primary shadow-xs hover:bg-ds-primary-hover active:scale-95 transition-all cursor-pointer"
             >
               <Check className="h-4 w-4" />
               <span>บันทึกการแก้ไข</span>
@@ -127,11 +129,11 @@ export default function ModalEditCustomer({
           </div>
 
           {/* Danger zone: ลบลูกค้า */}
-          <div className="pt-2 border-t border-surface-subtle dark:border-zinc-800 flex justify-center">
+          <div className="pt-2 border-t border-ds-divider flex justify-center">
             <button
               type="button"
               onClick={() => setOpenDeleteModal(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline dark:text-rose-400 py-1 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-ds-error hover:underline py-1 transition-colors cursor-pointer"
             >
               <Trash2 className="h-3.5 w-3.5" />
               <span>ลบลูกค้ารายนี้และประวัติทั้งหมด</span>

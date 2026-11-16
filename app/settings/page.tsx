@@ -216,14 +216,14 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-app-bg text-text-main dark:bg-zinc-950 dark:text-zinc-100 flex flex-col">
+    <div className="min-h-screen bg-ds-bg text-ds-text flex flex-col">
       {/* App Bar */}
       <AppBar
         title="การตั้งค่า"
         leftAction={
           <Link
             href="/"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-text-muted hover:bg-slate-100 hover:text-text-main dark:hover:bg-zinc-800 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-ds-icon-secondary hover:bg-ds-surface-elevated hover:text-ds-text transition-colors"
             aria-label="กลับหน้าหลัก"
             title="กลับหน้าหลัก"
           >
@@ -236,15 +236,16 @@ export default function SettingsPage() {
       <main className="mx-auto w-full max-w-lg flex-1 px-4 py-4 space-y-4">
         {/* Toast / Sync Feedback */}
         {syncMessage && (
-          <div className="rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg animate-in fade-in flex items-center justify-between">
+          <div className="rounded-2xl border border-ds-primary/40 bg-ds-surface-elevated px-4 py-2.5 text-xs font-bold text-ds-text shadow-ds-popover animate-in fade-in flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Check className="h-4 w-4 shrink-0" />
+              <Check className="h-4 w-4 shrink-0 text-ds-primary" />
               <span>{syncMessage}</span>
             </div>
             <button
               type="button"
               onClick={() => setSyncMessage(null)}
-              className="text-white/80 hover:text-white"
+              aria-label="ปิดการแจ้งเตือน"
+              className="text-ds-icon-secondary hover:text-ds-text cursor-pointer"
             >
               ✕
             </button>
@@ -252,16 +253,16 @@ export default function SettingsPage() {
         )}
 
         {/* 1. THEME SETTINGS (PROJECT_RULES.md §3: Light / Dark / System) */}
-        <section className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-3.5">
+        <section className="rounded-3xl border border-ds-border bg-ds-surface p-4.5 shadow-ds-card space-y-3.5">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-ds-surface-elevated border border-ds-divider text-ds-icon-secondary">
               <Sun className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="text-sm font-extrabold text-text-main dark:text-white">
+              <h2 className="text-sm font-extrabold text-ds-text">
                 ธีมและการแสดงผล
               </h2>
-              <p className="text-[11px] text-text-muted dark:text-zinc-400">
+              <p className="text-[11px] text-ds-text-secondary">
                 เลือกรูปแบบสีที่สบายตาสำหรับการใช้งาน
               </p>
             </div>
@@ -275,22 +276,22 @@ export default function SettingsPage() {
               onClick={() => applyTheme("light")}
               className={`flex flex-col items-center justify-center gap-2 rounded-2xl border p-3.5 text-center transition-all cursor-pointer ${
                 theme === "light"
-                  ? "border-sky-500 bg-sky-50/80 ring-2 ring-sky-500/30 text-sky-900 dark:border-sky-400 dark:bg-sky-950/40 dark:text-sky-200"
-                  : "border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-300 dark:hover:bg-zinc-800/80"
+                  ? "border-ds-primary bg-ds-primary-container/50 ring-2 ring-ds-primary/25 text-ds-text"
+                  : "border-ds-border bg-ds-surface-elevated hover:bg-ds-surface-variant text-ds-text-secondary"
               }`}
             >
               <div
                 className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
                   theme === "light"
-                    ? "bg-sky-600 text-white shadow-2xs"
-                    : "bg-white text-amber-500 dark:bg-zinc-800 shadow-2xs"
+                    ? "bg-ds-primary text-ds-on-primary shadow-2xs"
+                    : "bg-ds-surface text-ds-icon-secondary border border-ds-divider"
                 }`}
               >
                 <Sun className="h-5 w-5" />
               </div>
               <div className="space-y-0.5">
                 <span className="block text-xs font-bold leading-tight">สว่าง</span>
-                <span className="block text-[10px] text-text-muted dark:text-zinc-400">Light</span>
+                <span className="block text-[10px] text-ds-text-tertiary">Light</span>
               </div>
             </button>
 
@@ -300,22 +301,22 @@ export default function SettingsPage() {
               onClick={() => applyTheme("dark")}
               className={`flex flex-col items-center justify-center gap-2 rounded-2xl border p-3.5 text-center transition-all cursor-pointer ${
                 theme === "dark"
-                  ? "border-indigo-500 bg-indigo-50/80 ring-2 ring-indigo-500/30 text-indigo-900 dark:border-indigo-400 dark:bg-indigo-950/40 dark:text-indigo-200"
-                  : "border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-300 dark:hover:bg-zinc-800/80"
+                  ? "border-ds-primary bg-ds-primary-container/50 ring-2 ring-ds-primary/25 text-ds-text"
+                  : "border-ds-border bg-ds-surface-elevated hover:bg-ds-surface-variant text-ds-text-secondary"
               }`}
             >
               <div
                 className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
                   theme === "dark"
-                    ? "bg-indigo-600 text-white shadow-2xs"
-                    : "bg-white text-indigo-500 dark:bg-zinc-800 shadow-2xs"
+                    ? "bg-ds-primary text-ds-on-primary shadow-2xs"
+                    : "bg-ds-surface text-ds-icon-secondary border border-ds-divider"
                 }`}
               >
                 <Moon className="h-5 w-5" />
               </div>
               <div className="space-y-0.5">
                 <span className="block text-xs font-bold leading-tight">มืด</span>
-                <span className="block text-[10px] text-text-muted dark:text-zinc-400">Dark</span>
+                <span className="block text-[10px] text-ds-text-tertiary">Dark</span>
               </div>
             </button>
 
@@ -325,30 +326,30 @@ export default function SettingsPage() {
               onClick={() => applyTheme("system")}
               className={`flex flex-col items-center justify-center gap-2 rounded-2xl border p-3.5 text-center transition-all cursor-pointer ${
                 theme === "system"
-                  ? "border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/30 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-200"
-                  : "border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 text-slate-700 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-300 dark:hover:bg-zinc-800/80"
+                  ? "border-ds-primary bg-ds-primary-container/50 ring-2 ring-ds-primary/25 text-ds-text"
+                  : "border-ds-border bg-ds-surface-elevated hover:bg-ds-surface-variant text-ds-text-secondary"
               }`}
             >
               <div
                 className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
                   theme === "system"
-                    ? "bg-emerald-600 text-white shadow-2xs"
-                    : "bg-white text-emerald-600 dark:bg-zinc-800 shadow-2xs"
+                    ? "bg-ds-primary text-ds-on-primary shadow-2xs"
+                    : "bg-ds-surface text-ds-icon-secondary border border-ds-divider"
                 }`}
               >
                 <Laptop className="h-5 w-5" />
               </div>
               <div className="space-y-0.5">
                 <span className="block text-xs font-bold leading-tight">ตามระบบ</span>
-                <span className="block text-[10px] text-text-muted dark:text-zinc-400">System</span>
+                <span className="block text-[10px] text-ds-text-tertiary">System</span>
               </div>
             </button>
           </div>
 
           {theme === "system" && mounted && (
-            <div className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-600 dark:bg-zinc-800/60 dark:text-zinc-300 flex items-center justify-between">
+            <div className="rounded-xl border border-ds-divider bg-ds-surface-elevated px-3 py-2 text-[11px] text-ds-text-secondary flex items-center justify-between">
               <span>สถานะระบบอุปกรณ์:</span>
-              <strong className="font-bold text-text-main dark:text-white">
+              <strong className="font-bold text-ds-text">
                 {systemIsDark ? "โหมดมืด (Dark)" : "โหมดสว่าง (Light)"}
               </strong>
             </div>
@@ -356,17 +357,17 @@ export default function SettingsPage() {
         </section>
 
         {/* 2. DATA SYNCHRONIZATION (PROJECT_RULES.md §3) */}
-        <section className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-3.5">
-          <div className="flex items-center justify-between">
+        <section className="rounded-3xl border border-ds-border bg-ds-surface p-4.5 shadow-ds-card space-y-3.5">
+          <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
-                <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-sky-600" : ""}`} />
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-ds-surface-elevated border border-ds-divider text-ds-icon-secondary">
+                <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-ds-primary" : ""}`} />
               </div>
               <div>
-                <h2 className="text-sm font-extrabold text-text-main dark:text-white">
+                <h2 className="text-sm font-extrabold text-ds-text">
                   การซิงก์ข้อมูลคลาวด์
                 </h2>
-                <p className="text-[11px] text-text-muted dark:text-zinc-400">
+                <p className="text-[11px] text-ds-text-secondary">
                   เชื่อมต่อฐานข้อมูล Supabase และสำรองข้อมูลอัตโนมัติ
                 </p>
               </div>
@@ -374,28 +375,28 @@ export default function SettingsPage() {
 
             {/* Online / Offline / Test Mode Status Badge */}
             {isDevTestMode ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-extrabold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ds-warning-container px-2.5 py-1 text-[10px] font-extrabold text-ds-warning">
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
                 <ShieldCheck className="h-3 w-3" />
                 <span>โหมดทดสอบในเครื่อง</span>
               </span>
             ) : (
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
                   isOnline
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300"
-                    : "bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300"
+                    ? "bg-ds-success-container text-ds-success"
+                    : "bg-ds-error-container text-ds-error"
                 }`}
               >
                 {isOnline ? (
                   <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
                     <Wifi className="h-3 w-3" />
                     <span>ออนไลน์</span>
                   </>
                 ) : (
                   <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
                     <WifiOff className="h-3 w-3" />
                     <span>ออฟไลน์</span>
                   </>
@@ -406,34 +407,34 @@ export default function SettingsPage() {
 
           {/* Test Mode Notice Banner */}
           {isDevTestMode && (
-            <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200 space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
-                <ShieldCheck className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="rounded-2xl border border-ds-warning/30 bg-ds-warning-container p-3 text-xs text-ds-warning space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
                 <span>เปิดโหมดทดสอบในเครื่อง (Local Test Only)</span>
               </div>
-              <p className="text-[11px] leading-relaxed text-amber-700/90 dark:text-amber-300/80">
+              <p className="text-[11px] leading-relaxed opacity-90">
                 ระบบจะไม่ซิงก์ข้อมูลหรือบันทึกข้อมูลใดๆ ลงฐานข้อมูล Supabase ขณะทดสอบ (ข้อมูลจะถูกจัดเก็บใน localStorage ภายในเครื่องเท่านั้น)
               </p>
             </div>
           )}
 
           {/* Sync Time Status Bar */}
-          <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/40 space-y-2">
+          <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-3.5 space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-text-muted dark:text-zinc-400">ซิงก์ล่าสุด:</span>
-              <span className="font-bold text-text-main dark:text-zinc-200">
+              <span className="text-ds-text-secondary">ซิงก์ล่าสุด:</span>
+              <span className="font-bold text-ds-text">
                 {isDevTestMode ? "ปิดการซิงก์ (โหมดทดสอบ)" : lastSyncTime || "ยังไม่มีข้อมูลบันทึก"}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-text-muted dark:text-zinc-400">สถานะการทำงาน:</span>
+              <span className="text-ds-text-secondary">สถานะการทำงาน:</span>
               <span
                 className={`font-extrabold ${
                   isDevTestMode
-                    ? "text-amber-600 dark:text-amber-400"
+                    ? "text-ds-warning"
                     : isSyncing
-                    ? "text-sky-600 dark:text-sky-400 animate-pulse"
-                    : "text-emerald-600 dark:text-emerald-400"
+                    ? "text-ds-info animate-pulse"
+                    : "text-ds-success"
                 }`}
               >
                 {isDevTestMode
@@ -450,7 +451,7 @@ export default function SettingsPage() {
             type="button"
             onClick={handleManualSync}
             disabled={isSyncing}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-600 to-emerald-600 py-3 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-60 cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-ds-primary py-3 text-xs font-bold text-ds-on-primary shadow-ds-card hover:bg-ds-primary-hover active:scale-[0.98] transition-all disabled:opacity-60 cursor-pointer"
           >
             <RotateCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
             <span>{isSyncing ? "กำลังซิงก์ข้อมูล..." : "ซิงก์ข้อมูลทันที (Sync Now)"}</span>
@@ -458,90 +459,90 @@ export default function SettingsPage() {
         </section>
 
         {/* 3. STORED DATA SUMMARY */}
-        <section className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-3">
+        <section className="rounded-3xl border border-ds-border bg-ds-surface p-4.5 shadow-ds-card space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ds-surface-elevated border border-ds-divider text-ds-icon-secondary">
                 <Briefcase className="h-3.5 w-3.5" />
               </div>
-              <h3 className="text-xs font-extrabold text-text-main dark:text-white">
+              <h3 className="text-xs font-extrabold text-ds-text">
                 สรุปข้อมูลที่บันทึกในเครื่อง
               </h3>
             </div>
             <button
               type="button"
               onClick={refreshCounts}
-              className="text-[11px] text-sky-600 dark:text-sky-400 hover:underline font-bold"
+              className="text-[11px] text-ds-primary hover:underline font-bold cursor-pointer"
             >
               รีเฟรชยอด
             </button>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-0.5">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-zinc-800/80 dark:bg-zinc-800/30">
-              <span className="flex items-center gap-1 text-[10px] text-text-muted dark:text-zinc-400 font-semibold">
-                <CalendarDays className="h-3 w-3 text-sky-500" /> เวรโรงพยาบาล
+            <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-2.5">
+              <span className="flex items-center gap-1 text-[10px] text-ds-text-secondary font-semibold">
+                <CalendarDays className="h-3 w-3 text-ds-icon-secondary" /> เวรโรงพยาบาล
               </span>
-              <div className="text-base font-black text-text-main dark:text-white mt-0.5">
-                {counts.shifts} <span className="text-[10px] font-normal text-text-muted">เวร</span>
+              <div className="text-base font-black text-ds-text mt-0.5">
+                {counts.shifts} <span className="text-[10px] font-normal text-ds-text-tertiary">เวร</span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-zinc-800/80 dark:bg-zinc-800/30">
-              <span className="flex items-center gap-1 text-[10px] text-text-muted dark:text-zinc-400 font-semibold">
-                <HeartHandshake className="h-3 w-3 text-emerald-500" /> บริการลูกค้า
+            <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-2.5">
+              <span className="flex items-center gap-1 text-[10px] text-ds-text-secondary font-semibold">
+                <HeartHandshake className="h-3 w-3 text-ds-icon-secondary" /> บริการลูกค้า
               </span>
-              <div className="text-base font-black text-text-main dark:text-white mt-0.5">
-                {counts.services} <span className="text-[10px] font-normal text-text-muted">เคส</span>
+              <div className="text-base font-black text-ds-text mt-0.5">
+                {counts.services} <span className="text-[10px] font-normal text-ds-text-tertiary">เคส</span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-zinc-800/80 dark:bg-zinc-800/30">
-              <span className="flex items-center gap-1 text-[10px] text-text-muted dark:text-zinc-400 font-semibold">
-                <Users className="h-3 w-3 text-purple-500" /> ลูกค้า
+            <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-2.5">
+              <span className="flex items-center gap-1 text-[10px] text-ds-text-secondary font-semibold">
+                <Users className="h-3 w-3 text-ds-icon-secondary" /> ลูกค้า
               </span>
-              <div className="text-base font-black text-text-main dark:text-white mt-0.5">
-                {counts.customers} <span className="text-[10px] font-normal text-text-muted">คน</span>
+              <div className="text-base font-black text-ds-text mt-0.5">
+                {counts.customers} <span className="text-[10px] font-normal text-ds-text-tertiary">คน</span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-zinc-800/80 dark:bg-zinc-800/30">
-              <span className="flex items-center gap-1 text-[10px] text-text-muted dark:text-zinc-400 font-semibold">
-                <Pill className="h-3 w-3 text-indigo-500" /> คลังยา/เวชภัณฑ์
+            <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-2.5">
+              <span className="flex items-center gap-1 text-[10px] text-ds-text-secondary font-semibold">
+                <Pill className="h-3 w-3 text-ds-icon-secondary" /> คลังยา/เวชภัณฑ์
               </span>
-              <div className="text-base font-black text-text-main dark:text-white mt-0.5">
-                {counts.medications} <span className="text-[10px] font-normal text-text-muted">รายการ</span>
+              <div className="text-base font-black text-ds-text mt-0.5">
+                {counts.medications} <span className="text-[10px] font-normal text-ds-text-tertiary">รายการ</span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-zinc-800/80 dark:bg-zinc-800/30">
-              <span className="flex items-center gap-1 text-[10px] text-text-muted dark:text-zinc-400 font-semibold">
-                <CalendarCheck className="h-3 w-3 text-amber-500" /> งานคลินิก
+            <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-2.5">
+              <span className="flex items-center gap-1 text-[10px] text-ds-text-secondary font-semibold">
+                <CalendarCheck className="h-3 w-3 text-ds-icon-secondary" /> งานคลินิก
               </span>
-              <div className="text-base font-black text-text-main dark:text-white mt-0.5">
-                {counts.clinicLogs} <span className="text-[10px] font-normal text-text-muted">บันทึก</span>
+              <div className="text-base font-black text-ds-text mt-0.5">
+                {counts.clinicLogs} <span className="text-[10px] font-normal text-ds-text-tertiary">บันทึก</span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-zinc-800/80 dark:bg-zinc-800/30">
-              <span className="flex items-center gap-1 text-[10px] text-text-muted dark:text-zinc-400 font-semibold">
-                <Sparkles className="h-3 w-3 text-rose-500" /> ธุระส่วนตัว
+            <div className="rounded-2xl border border-ds-divider bg-ds-surface-elevated p-2.5">
+              <span className="flex items-center gap-1 text-[10px] text-ds-text-secondary font-semibold">
+                <Sparkles className="h-3 w-3 text-ds-icon-secondary" /> ธุระส่วนตัว
               </span>
-              <div className="text-base font-black text-text-main dark:text-white mt-0.5">
-                {counts.personalEvents} <span className="text-[10px] font-normal text-text-muted">รายการ</span>
+              <div className="text-base font-black text-ds-text mt-0.5">
+                {counts.personalEvents} <span className="text-[10px] font-normal text-ds-text-tertiary">รายการ</span>
               </div>
             </div>
           </div>
         </section>
 
         {/* 4. ABOUT / APP INFORMATION */}
-        <section className="rounded-3xl border border-surface-subtle bg-white p-4.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-2.5 text-xs text-text-muted dark:text-zinc-400">
+        <section className="rounded-3xl border border-ds-border bg-ds-surface p-4.5 shadow-ds-card space-y-2.5 text-xs text-ds-text-secondary">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 font-bold text-text-main dark:text-white">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+            <div className="flex items-center gap-1.5 font-bold text-ds-text">
+              <ShieldCheck className="h-4 w-4 text-ds-icon-secondary" />
               <span>VenDee Care Companion</span>
             </div>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-zinc-800 dark:text-zinc-300">
+            <span className="rounded-full bg-ds-surface-variant px-2 py-0.5 text-[10px] font-bold text-ds-text-secondary border border-ds-border/60">
               v1.2.0
             </span>
           </div>

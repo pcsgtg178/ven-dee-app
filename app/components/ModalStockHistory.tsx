@@ -16,12 +16,12 @@ interface Props {
 }
 
 const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
-  receive: { label: "รับเข้า", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
-  use: { label: "ใช้บริการ", cls: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" },
-  waste: { label: "สูญเสีย", cls: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" },
-  giveaway: { label: "แจกฟรี", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" },
-  adjust: { label: "ปรับยอด", cls: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300" },
-  reversal: { label: "กลับรายการ", cls: "bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300" },
+  receive: { label: "รับเข้า", cls: "bg-ds-success-container text-ds-success" },
+  use: { label: "ใช้บริการ", cls: "bg-ds-info-container text-ds-info" },
+  waste: { label: "สูญเสีย", cls: "bg-ds-error-container text-ds-error" },
+  giveaway: { label: "แจกฟรี", cls: "bg-ds-warning-container text-ds-warning" },
+  adjust: { label: "ปรับยอด", cls: "bg-ds-primary-container text-ds-primary" },
+  reversal: { label: "กลับรายการ", cls: "bg-ds-surface-variant text-ds-text-tertiary" },
 };
 
 export default function ModalStockHistory({ isOpen, medication, onClose, onSuccess }: Props) {
@@ -75,12 +75,19 @@ export default function ModalStockHistory({ isOpen, medication, onClose, onSucce
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-      <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-3xl bg-white p-5 shadow-2xl dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800">
-        <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-zinc-800">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="stock-history-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ds-overlay p-4 backdrop-blur-xs"
+    >
+      <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-3xl bg-ds-surface-elevated p-5 shadow-ds-popover border border-ds-border">
+        <div className="flex items-center justify-between gap-2 pb-3 border-b border-ds-divider">
           <div className="flex items-center gap-2 min-w-0">
-            <History className="h-5 w-5 shrink-0 text-purple-600" aria-hidden="true" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-ds-surface-variant text-ds-icon-primary">
+              <History className="h-4 w-4" aria-hidden="true" />
+            </div>
+            <h3 id="stock-history-title" className="text-sm font-bold text-ds-text truncate">
               ประวัติสต็อก: {medication.name}
             </h3>
           </div>
@@ -88,7 +95,7 @@ export default function ModalStockHistory({ isOpen, medication, onClose, onSucce
             <button
               type="button"
               onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
-              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 cursor-pointer"
+              className="inline-flex items-center gap-1 rounded-xl border border-ds-border bg-ds-surface px-2.5 py-1 text-[11px] font-bold text-ds-text-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer transition-colors"
               title="สลับการเรียงตามวันที่"
               aria-label={sortOrder === "desc" ? "เรียงจากล่าสุดก่อน กดเพื่อสลับเป็นเก่าสุดก่อน" : "เรียงจากเก่าสุดก่อน กดเพื่อสลับเป็นล่าสุดก่อน"}
             >
@@ -99,7 +106,7 @@ export default function ModalStockHistory({ isOpen, medication, onClose, onSucce
               type="button"
               onClick={onClose}
               aria-label="ปิดประวัติสต็อก"
-              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+              className="rounded-lg p-1 text-ds-icon-secondary hover:bg-ds-surface-variant hover:text-ds-text cursor-pointer"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -107,16 +114,16 @@ export default function ModalStockHistory({ isOpen, medication, onClose, onSucce
         </div>
 
         {errorMsg && (
-          <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+          <div className="mt-3 rounded-xl bg-ds-error-container px-3 py-2 text-xs font-semibold text-ds-error">
             {errorMsg}
           </div>
         )}
 
-        <div className="mt-3 flex-1 overflow-y-auto space-y-2 pr-1">
+        <div className="mt-3 flex-1 overflow-y-auto overscroll-contain space-y-2 pr-1">
           {isLoading ? (
-            <p className="py-8 text-center text-xs text-slate-400">กำลังโหลด...</p>
+            <p className="py-8 text-center text-xs text-ds-text-tertiary">กำลังโหลด...</p>
           ) : sortedMovements.length === 0 ? (
-            <p className="py-8 text-center text-xs text-slate-400">ยังไม่มีประวัติเคลื่อนไหวสต็อก</p>
+            <p className="py-8 text-center text-xs text-ds-text-tertiary">ยังไม่มีประวัติเคลื่อนไหวสต็อก</p>
           ) : (
             sortedMovements.map((mv) => {
               const badge = TYPE_BADGE[mv.type] || TYPE_BADGE.reversal;
@@ -139,8 +146,8 @@ export default function ModalStockHistory({ isOpen, medication, onClose, onSucce
                   key={mv.id}
                   className={`rounded-2xl border p-3 text-xs ${
                     mv.reversed
-                      ? "border-slate-100 bg-slate-50/60 opacity-60 dark:border-zinc-800 dark:bg-zinc-900/40"
-                      : "border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-800/40"
+                      ? "border-ds-divider bg-ds-surface/50 opacity-60"
+                      : "border-ds-border bg-ds-surface"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -150,28 +157,28 @@ export default function ModalStockHistory({ isOpen, medication, onClose, onSucce
                       </span>
                       <span
                         className={`font-bold ${
-                          mv.quantity >= 0 ? "text-emerald-600" : "text-rose-600"
+                          mv.quantity >= 0 ? "text-ds-success" : "text-ds-error"
                         }`}
                       >
                         {mv.quantity >= 0 ? `+${mv.quantity}` : mv.quantity} {unit}
                       </span>
                       {mv.isEstimatedCost && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                        <span className="rounded bg-ds-warning-container px-1.5 py-0.5 text-[10px] font-semibold text-ds-warning">
                           ต้นทุนประมาณ
                         </span>
                       )}
                       {mv.reversed && (
-                        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600 dark:bg-zinc-700 dark:text-zinc-300">
+                        <span className="rounded bg-ds-surface-variant px-1.5 py-0.5 text-[10px] text-ds-text-tertiary">
                           ถูกกลับรายการแล้ว
                         </span>
                       )}
                     </div>
-                    <span className="font-semibold text-slate-700 dark:text-zinc-200">
+                    <span className="font-semibold text-ds-text">
                       ฿{costBaht}
                     </span>
                   </div>
 
-                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400">
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-ds-text-secondary">
                     <div className="truncate">
                       <span>{new Date(mv.occurredAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}</span>
                       {mv.service?.customerName && <span> · {mv.service.customerName}</span>}
@@ -183,7 +190,7 @@ export default function ModalStockHistory({ isOpen, medication, onClose, onSucce
                         <Link
                           href={serviceHref}
                           onClick={onClose}
-                          className="inline-flex items-center gap-0.5 text-sky-600 hover:underline dark:text-sky-400"
+                          className="inline-flex items-center gap-0.5 font-semibold text-ds-primary hover:underline"
                           title={mv.service?.customerName ? `ไปที่งานบริการของ ${mv.service.customerName}` : "ไปที่งานบริการ"}
                         >
                           <span>งานบริการ</span>
@@ -195,7 +202,7 @@ export default function ModalStockHistory({ isOpen, medication, onClose, onSucce
                           type="button"
                           disabled={reversingId === mv.id}
                           onClick={() => handleReverse(mv.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-0.5 text-[10px] font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-400"
+                          className="inline-flex items-center gap-1 rounded-lg border border-ds-error/40 px-2 py-0.5 text-[10px] font-bold text-ds-error hover:bg-ds-error-container cursor-pointer transition-colors"
                         >
                           <RotateCcw className="h-3 w-3" aria-hidden="true" />
                           <span>{reversingId === mv.id ? "กำลังกลับ..." : "กลับรายการ"}</span>

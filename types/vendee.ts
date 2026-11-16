@@ -82,13 +82,16 @@ export type MedicationCategory = "botox" | "meso" | "vitamin" | "meso_fat" | "fi
 export const MEDICATION_CATEGORIES: MedicationCategory[] = ["botox", "meso", "vitamin", "meso_fat", "filler", "other"];
 
 // หมวดหมู่ตัวยา (DOMAIN_RULES.md §3.4)
+const NEUTRAL_CATEGORY_BADGE =
+  "bg-ds-surface-variant text-ds-text-secondary border border-ds-border/60";
+
 export const MEDICATION_CATEGORY_CONFIG: Record<MedicationCategory, { label: string; badge: string }> = {
-  botox: { label: "Botox", badge: "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300" },
-  meso: { label: "Meso", badge: "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300" },
-  vitamin: { label: "Vitamin", badge: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" },
-  meso_fat: { label: "MesoFat", badge: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300" },
-  filler: { label: "Filler", badge: "bg-pink-100 text-pink-800 dark:bg-pink-950/60 dark:text-pink-300" },
-  other: { label: "อื่นๆ", badge: "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-zinc-300" },
+  botox: { label: "Botox", badge: NEUTRAL_CATEGORY_BADGE },
+  meso: { label: "Meso", badge: NEUTRAL_CATEGORY_BADGE },
+  vitamin: { label: "Vitamin", badge: NEUTRAL_CATEGORY_BADGE },
+  meso_fat: { label: "MesoFat", badge: NEUTRAL_CATEGORY_BADGE },
+  filler: { label: "Filler", badge: NEUTRAL_CATEGORY_BADGE },
+  other: { label: "อื่นๆ", badge: NEUTRAL_CATEGORY_BADGE },
 };
 
 /** Infer category for legacy rows without one (Botox → botox, else other). */
@@ -137,12 +140,15 @@ export interface MedicationUsageLine {
 
 export type ServiceType = "injection" | "dressing" | "consult" | "vital_signs" | "other";
 
+const NEUTRAL_SERVICE_BADGE =
+  "bg-ds-surface-variant text-ds-text-secondary border border-ds-border/60";
+
 export const SERVICE_CONFIG: Record<ServiceType, { label: string; icon: string; bg: string }> = {
-  injection: { label: "ฉีดยา", icon: "💉", bg: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300" },
-  dressing: { label: "ทำแผล", icon: "🩹", bg: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" },
-  consult: { label: "ปรึกษา", icon: "💬", bg: "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300" },
-  vital_signs: { label: "วัดสัญญาณชีพ", icon: "🫀", bg: "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300" },
-  other: { label: "บริการอื่น", icon: "✨", bg: "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-zinc-300" },
+  injection: { label: "ฉีดยา", icon: "💉", bg: NEUTRAL_SERVICE_BADGE },
+  dressing: { label: "ทำแผล", icon: "🩹", bg: NEUTRAL_SERVICE_BADGE },
+  consult: { label: "ปรึกษา", icon: "💬", bg: NEUTRAL_SERVICE_BADGE },
+  vital_signs: { label: "วัดสัญญาณชีพ", icon: "🫀", bg: NEUTRAL_SERVICE_BADGE },
+  other: { label: "บริการอื่น", icon: "✨", bg: NEUTRAL_SERVICE_BADGE },
 };
 
 export interface CustomerServiceRecord {

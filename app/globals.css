@@ -5,8 +5,46 @@
 @import "@fullcalendar/react/themes/monarch/palettes/blue.css";
 
 :root {
+  color-scheme: light;
   --background: #f8faf6;
   --foreground: #0f172a;
+
+  /* Design System Tokens — Calm Minimal Light */
+  --ds-color-background: #f8faf6;
+  --ds-color-surface: #ffffff;
+  --ds-color-surface-elevated: #f3f6f2;
+  --ds-color-surface-variant: #ebefea;
+
+  --ds-color-border: #dce3da;
+  --ds-color-divider: #e6ece4;
+
+  --ds-color-primary: #15803d;
+  --ds-color-primary-hover: #166534;
+  --ds-color-primary-pressed: #14532d;
+  --ds-color-primary-container: #dcfce7;
+  --ds-color-on-primary: #ffffff;
+
+  --ds-color-text-primary: #0f172a;
+  --ds-color-text-secondary: #475569;
+  --ds-color-text-tertiary: #64748b;
+  --ds-color-text-disabled: #94a3b8;
+
+  --ds-color-success: #15803d;
+  --ds-color-success-container: #dcfce7;
+  --ds-color-warning: #b45309;
+  --ds-color-warning-container: #fef3c7;
+  --ds-color-error: #b91c1c;
+  --ds-color-error-container: #fee2e2;
+  --ds-color-info: #0369a1;
+  --ds-color-info-container: #e0f2fe;
+
+  --ds-color-icon-primary: #334155;
+  --ds-color-icon-secondary: #64748b;
+  --ds-color-icon-disabled: #94a3b8;
+  --ds-color-overlay: rgb(15 23 42 / 48%);
+
+  --ds-shadow-card: 0 2px 8px rgb(15 23 42 / 5%);
+  --ds-shadow-popover: 0 8px 24px rgb(15 23 42 / 14%);
 
   /* FullCalendar Monarch - Permanent Crisp White Theme for Maximum Badge Contrast */
   --fc-monarch-primary: #0284c7;
@@ -25,8 +63,83 @@
 }
 
 .dark {
-  --background: #090d16;
-  --foreground: #f1f5f9;
+  color-scheme: dark;
+  --background: #101114;
+  --foreground: #f1f1f3;
+
+  /* Design System Tokens — Modern Minimal Dark */
+  --ds-color-background: #101114;
+  --ds-color-surface: #1a1b20;
+  --ds-color-surface-elevated: #22242a;
+  --ds-color-surface-variant: #282930;
+
+  --ds-color-border: #303139;
+  --ds-color-divider: #292a30;
+
+  --ds-color-primary: #a78bfa;
+  --ds-color-primary-hover: #b9a5fc;
+  --ds-color-primary-pressed: #8b6de0;
+  --ds-color-primary-container: #30234b;
+  --ds-color-on-primary: #171020;
+
+  --ds-color-text-primary: #f1f1f3;
+  --ds-color-text-secondary: #a1a1aa;
+  --ds-color-text-tertiary: #777881;
+  --ds-color-text-disabled: #62636d;
+
+  --ds-color-success: #6eba99;
+  --ds-color-success-container: #1c3029;
+  --ds-color-warning: #d6a45f;
+  --ds-color-warning-container: #352819;
+  --ds-color-error: #e47782;
+  --ds-color-error-container: #3a2027;
+  --ds-color-info: #79b8d9;
+  --ds-color-info-container: #1d2d39;
+
+  --ds-color-icon-primary: #d4d4d8;
+  --ds-color-icon-secondary: #a1a1aa;
+  --ds-color-icon-disabled: #62636d;
+  --ds-color-overlay: rgb(0 0 0 / 50%);
+
+  --ds-shadow-card: 0 2px 8px rgb(0 0 0 / 16%);
+  --ds-shadow-popover: 0 8px 24px rgb(0 0 0 / 28%);
+}
+
+@theme inline {
+  --color-ds-bg: var(--ds-color-background);
+  --color-ds-surface: var(--ds-color-surface);
+  --color-ds-surface-elevated: var(--ds-color-surface-elevated);
+  --color-ds-surface-variant: var(--ds-color-surface-variant);
+  --color-ds-border: var(--ds-color-border);
+  --color-ds-divider: var(--ds-color-divider);
+
+  --color-ds-primary: var(--ds-color-primary);
+  --color-ds-primary-hover: var(--ds-color-primary-hover);
+  --color-ds-primary-pressed: var(--ds-color-primary-pressed);
+  --color-ds-primary-container: var(--ds-color-primary-container);
+  --color-ds-on-primary: var(--ds-color-on-primary);
+
+  --color-ds-text: var(--ds-color-text-primary);
+  --color-ds-text-secondary: var(--ds-color-text-secondary);
+  --color-ds-text-tertiary: var(--ds-color-text-tertiary);
+  --color-ds-text-disabled: var(--ds-color-text-disabled);
+
+  --color-ds-success: var(--ds-color-success);
+  --color-ds-success-container: var(--ds-color-success-container);
+  --color-ds-warning: var(--ds-color-warning);
+  --color-ds-warning-container: var(--ds-color-warning-container);
+  --color-ds-error: var(--ds-color-error);
+  --color-ds-error-container: var(--ds-color-error-container);
+  --color-ds-info: var(--ds-color-info);
+  --color-ds-info-container: var(--ds-color-info-container);
+
+  --color-ds-icon-primary: var(--ds-color-icon-primary);
+  --color-ds-icon-secondary: var(--ds-color-icon-secondary);
+  --color-ds-icon-disabled: var(--ds-color-icon-disabled);
+  --color-ds-overlay: var(--ds-color-overlay);
+
+  --shadow-ds-card: var(--ds-shadow-card);
+  --shadow-ds-popover: var(--ds-shadow-popover);
 }
 
 @theme {
@@ -72,6 +185,16 @@ body {
 /* Touch manipulation: removes 300ms double-tap delay */
 button, a, input, select, textarea, [role="button"] {
   touch-action: manipulation;
+}
+
+/* Accessible focus-visible indicator for interactive controls */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ds-color-primary);
+  outline-offset: 2px;
+}
+
+[role="dialog"] {
+  overscroll-behavior: contain;
 }
 
 /* iOS Safe Area Inset Helpers */
